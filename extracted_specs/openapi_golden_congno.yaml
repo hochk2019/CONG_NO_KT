@@ -1,0 +1,166 @@
+openapi: 3.0.3
+info:
+  title: Cong No Golden API
+  version: "1.0.0"
+servers:
+  - url: http://server1:8080/api
+tags:
+  - name: Auth
+  - name: Customers
+  - name: Imports
+  - name: Invoices
+  - name: Advances
+  - name: Receipts
+  - name: Reports
+  - name: Health
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string }
+                password: { type: string }
+      responses:
+        "200":
+          description: OK
+  /customers:
+    get:
+      tags: [Customers]
+      summary: List customers
+      parameters:
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: owner
+          schema: { type: string, description: userId }
+        - in: query
+          name: status
+          schema: { type: string, enum: [ACTIVE, INACTIVE] }
+      responses:
+        "200": { description: OK }
+    post:
+      tags: [Customers]
+      summary: Create customer
+      responses:
+        "200": { description: OK }
+  /imports/upload:
+    post:
+      tags: [Imports]
+      summary: Upload excel to staging
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [type, file]
+              properties:
+                type:
+                  type: string
+                  enum: [INVOICE, ADVANCE, RECEIPT]
+                fromDate: { type: string, format: date }
+                toDate: { type: string, format: date }
+                file:
+                  type: string
+                  format: binary
+      responses:
+        "200": { description: OK }
+  /imports/{batchId}/preview:
+    get:
+      tags: [Imports]
+      summary: Preview staging rows with validations
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /imports/{batchId}/commit:
+    post:
+      tags: [Imports]
+      summary: Commit staging to main tables
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                idempotency_key:
+                  type: string
+                  format: uuid
+      responses:
+        "200": { description: OK }
+  /invoices:
+    get:
+      tags: [Invoices]
+      summary: List invoices
+      responses:
+        "200": { description: OK }
+  /advances/{id}/approve:
+    post:
+      tags: [Advances]
+      summary: Approve advance
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /receipts:
+    post:
+      tags: [Receipts]
+      summary: Create receipt draft
+      responses:
+        "200": { description: OK }
+  /receipts/{id}/approve:
+    post:
+      tags: [Receipts]
+      summary: Approve receipt
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { description: OK }
+  /reports/summary:
+    get:
+      tags: [Reports]
+      summary: Summary report
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: groupBy
+          schema:
+            type: string
+            enum: [customer, owner, seller, period]
+      responses:
+        "200": { description: OK }
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: Readiness check (DB connection)
+      responses:
+        "200": { description: OK }

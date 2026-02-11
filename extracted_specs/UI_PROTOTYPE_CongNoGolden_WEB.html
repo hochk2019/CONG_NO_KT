@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Công nợ Golden — UI Prototype (WEB)</title>
+  <style>
+    :root{
+      --bg:#0b1220;
+      --panel:#0f1a2e;
+      --card:#111f36;
+      --muted:#93a4c7;
+      --text:#e8eefc;
+      --accent:#6ea8fe;
+      --good:#34d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+      --line:rgba(255,255,255,.08);
+      --shadow: 0 12px 30px rgba(0,0,0,.35);
+      --radius:16px;
+      --radius2:22px;
+      --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      font-family:var(--font);
+      color:var(--text);
+      background:radial-gradient(1200px 700px at 25% 10%, rgba(110,168,254,.25), transparent 60%),
+                 radial-gradient(900px 600px at 80% 30%, rgba(52,211,153,.18), transparent 55%),
+                 var(--bg);
+    }
+    .app{display:flex; min-height:100vh;}
+    .sidebar{
+      width:280px; padding:18px 16px;
+      border-right:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0));
+    }
+    .brand{
+      display:flex; gap:12px; align-items:center;
+      padding:12px 12px; border-radius:var(--radius2);
+      background:rgba(255,255,255,.03);
+      box-shadow:var(--shadow);
+    }
+    .logo{
+      width:38px; height:38px; border-radius:12px;
+      background:linear-gradient(135deg, var(--accent), rgba(110,168,254,.35));
+      display:grid; place-items:center; font-weight:900;
+    }
+    .brand h1{font-size:16px; margin:0}
+    .brand p{margin:2px 0 0; color:var(--muted); font-size:12px}
+    .nav{margin-top:18px; display:flex; flex-direction:column; gap:8px;}
+    .nav button{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      color:var(--text);
+      text-align:left;
+      padding:10px 12px;
+      border-radius:14px;
+      cursor:pointer;
+      display:flex; justify-content:space-between; align-items:center;
+    }
+    .nav button.active{
+      border-color:rgba(110,168,254,.5);
+      background:rgba(110,168,254,.12);
+    }
+    .pill{font-size:11px; padding:3px 8px; border-radius:999px; border:1px solid var(--line); color:var(--muted);}
+    .main{flex:1; padding:22px;}
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      gap:12px;
+      margin-bottom:18px;
+    }
+    .title h2{margin:0; font-size:20px}
+    .title small{color:var(--muted)}
+    .actions{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
+    .input, .select{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:14px;
+      outline:none;
+      min-width:220px;
+    }
+    .btn{
+      border:1px solid rgba(110,168,254,.5);
+      background:rgba(110,168,254,.14);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:14px;
+      cursor:pointer;
+      font-weight:700;
+    }
+    .btn.ghost{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      font-weight:700;
+    }
+    .grid{display:grid; gap:14px;}
+    .grid.cards{grid-template-columns:repeat(4, minmax(0, 1fr));}
+    @media (max-width:1200px){ .grid.cards{grid-template-columns:repeat(2,1fr);} }
+    @media (max-width:900px){ .sidebar{display:none;} .grid.cards{grid-template-columns:1fr;} .input,.select{min-width:150px;} }
+    .card{
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+      border-radius:var(--radius2);
+      box-shadow:var(--shadow);
+      padding:14px 14px;
+    }
+    .kpi{display:flex; justify-content:space-between; align-items:flex-start; gap:12px;}
+    .kpi .label{color:var(--muted); font-size:12px;}
+    .kpi .value{font-size:22px; font-weight:900; margin-top:6px;}
+    .tag{display:inline-flex; gap:6px; align-items:center; font-size:12px; padding:4px 10px; border-radius:999px; border:1px solid var(--line); color:var(--muted);}
+    .dot{width:8px; height:8px; border-radius:50%;}
+    .dot.good{background:var(--good)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+    .section{margin-top:14px;}
+    .section h3{margin:0 0 10px; font-size:14px; color:#d6e2ff}
+    table{width:100%; border-collapse:collapse;}
+    th,td{padding:10px 8px; border-bottom:1px solid var(--line); font-size:13px;}
+    th{color:var(--muted); font-weight:700; text-align:left;}
+    tr:hover td{background:rgba(255,255,255,.02)}
+    .link{color:var(--accent); cursor:pointer; font-weight:800;}
+    .muted{color:var(--muted)}
+    .row{display:flex; gap:10px; flex-wrap:wrap; align-items:center;}
+    .tabs{display:flex; gap:8px; margin:10px 0 0;}
+    .tab{padding:8px 10px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.02); cursor:pointer; color:var(--muted);}
+    .tab.active{border-color:rgba(110,168,254,.5); background:rgba(110,168,254,.12); color:var(--text);}
+    .notice{padding:12px; border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.02); color:var(--muted)}
+    .steps{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px;}
+    .step{padding:8px 10px; border-radius:999px; border:1px solid var(--line); color:var(--muted);}
+    .step.active{border-color:rgba(52,211,153,.5); background:rgba(52,211,153,.12); color:var(--text);}
+    .modal-backdrop{
+      position:fixed; inset:0; background:rgba(0,0,0,.55);
+      display:none; align-items:flex-start; justify-content:center; padding:40px 14px;
+    }
+    .modal{
+      width:min(980px, 100%);
+      border:1px solid var(--line);
+      background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border-radius:24px;
+      box-shadow:var(--shadow);
+      padding:14px;
+    }
+    .modal header{display:flex; justify-content:space-between; align-items:center; gap:12px; padding:6px 6px 12px;}
+    .modal header h4{margin:0}
+    .close{cursor:pointer; padding:8px 10px; border:1px solid var(--line); background:rgba(255,255,255,.02); border-radius:12px;}
+    .two-col{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+    @media(max-width:900px){ .two-col{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">G</div>
+      <div>
+        <h1>Công nợ Golden</h1>
+        <p>WEB • LAN • PostgreSQL</p>
+      </div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <button class="active" data-view="dashboard">Dashboard <span class="pill">Tổng quan</span></button>
+      <button data-view="customers">Khách hàng <span class="pill">MST / Công nợ</span></button>
+      <button data-view="import">Import Data <span class="pill">Staging</span></button>
+      <button data-view="advances">Trả hộ <span class="pill">Approve</span></button>
+      <button data-view="receipts">Thu tiền <span class="pill">Allocate</span></button>
+      <button data-view="reports">Báo cáo <span class="pill">Excel</span></button>
+      <button data-view="admin">Admin <span class="pill">Lock</span></button>
+    </nav>
+
+    <div class="section">
+      <div class="notice">
+        <b>Tip:</b> Khi triển khai thật, có thể “Install/Pin” như app (PWA).
+        <div class="muted" style="margin-top:8px">Prototype này minh hoạ UI + luồng thao tác.</div>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div class="title">
+        <h2 id="pageTitle">Dashboard</h2>
+        <small id="pageSub">Tổng quan công nợ theo kỳ và theo người phụ trách</small>
+      </div>
+      <div class="actions">
+        <select class="select">
+          <option>Tất cả seller</option>
+          <option>2300328765 • Hoàng Kim</option>
+          <option>2301098313 • Hoàng Minh</option>
+        </select>
+        <select class="select">
+          <option>Kỳ 2026-01</option>
+          <option>Kỳ 2025-12</option>
+          <option>Kỳ 2025-11</option>
+        </select>
+        <button class="btn">Xuất Excel</button>
+      </div>
+    </div>
+
+    <section id="view-dashboard">
+      <div class="grid cards">
+        <div class="card">
+          <div class="kpi">
+            <div>
+              <div class="label">Tổng công nợ cuối kỳ</div>
+              <div class="value">3,245,000,000</div>
+              <div class="tag"><span class="dot bad"></span>Nợ quá hạn: 920,000,000</div>
+            </div>
+            <div class="tag">+2.8%</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="kpi">
+            <div>
+              <div class="label">Thu trong kỳ (applied)</div>
+              <div class="value">1,120,000,000</div>
+              <div class="tag"><span class="dot good"></span>Đúng kỳ: 78%</div>
+            </div>
+            <div class="tag">Receipt</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="kpi">
+            <div>
+              <div class="label">Trả hộ đang mở</div>
+              <div class="value">245,000,000</div>
+              <div class="tag"><span class="dot warn"></span>Chờ duyệt: 12</div>
+            </div>
+            <div class="tag">Advance</div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="kpi">
+            <div>
+              <div class="label">Khách trả thừa (credit)</div>
+              <div class="value">65,000,000</div>
+              <div class="tag"><span class="dot good"></span>5 khách</div>
+            </div>
+            <div class="tag">Unallocated</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card section">
+        <h3>Top khách nợ</h3>
+        <table>
+          <thead>
+            <tr><th>Khách hàng</th><th>MST</th><th>Người phụ trách</th><th style="text-align:right">Dư nợ</th><th style="text-align:right">Quá hạn</th></tr>
+          </thead>
+          <tbody id="topDebt"></tbody>
+        </table>
+        <div class="muted" style="margin-top:10px">Click tên khách để mở chi tiết (modal).</div>
+      </div>
+    </section>
+
+    <section id="view-customers" style="display:none">
+      <div class="row">
+        <input class="input" placeholder="Tìm MST / tên khách..." />
+        <select class="select"><option>Tất cả kế toán</option><option>Kế toán A</option><option>Kế toán B</option></select>
+        <button class="btn">+ Thêm khách</button>
+      </div>
+
+      <div class="card section">
+        <h3>Danh sách khách hàng</h3>
+        <table>
+          <thead>
+            <tr><th>Khách hàng</th><th>MST</th><th>Kế toán</th><th style="text-align:right">Dư nợ</th><th style="text-align:right">Quá hạn</th><th>Trạng thái</th></tr>
+          </thead>
+          <tbody id="customerTable"></tbody>
+        </table>
+        <div class="muted" style="margin-top:10px">* App thật sẽ server-side paging/filter/sort.</div>
+      </div>
+    </section>
+
+    <section id="view-import" style="display:none">
+      <div class="card">
+        <h3>Import Data - Wizard</h3>
+        <div class="steps">
+          <span class="step active">B1 Upload</span>
+          <span class="step">B2 Preview</span>
+          <span class="step">B3 Commit</span>
+        </div>
+        <div class="two-col section">
+          <div class="notice">
+            <b>B1:</b> Chọn file Excel ReportDetail.
+            <div class="muted" style="margin-top:6px">Hệ thống tính file_hash và cảnh báo nếu đã import.</div>
+            <div class="row" style="margin-top:10px">
+              <button class="btn">Chọn file…</button>
+              <button class="btn ghost" id="btnToPreview">Xem Preview</button>
+            </div>
+          </div>
+          <div class="notice">
+            <b>Chính sách cảnh báo</b>
+            <ul class="muted">
+              <li>ERROR: thiếu MST/tên/số HĐ/ngày</li>
+              <li>WARN: trùng DB, lệch tổng tiền</li>
+              <li>OK: sẵn sàng commit</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="card section" id="previewBox" style="display:none">
+          <h3>B2 Preview — OK/WARN/ERROR</h3>
+          <div class="row">
+            <span class="tag"><span class="dot good"></span>OK: 124</span>
+            <span class="tag"><span class="dot warn"></span>WARN: 7</span>
+            <span class="tag"><span class="dot bad"></span>ERROR: 2</span>
+            <span class="muted">→ Commit chỉ khi ERROR = 0 (WARN cần confirm)</span>
+          </div>
+          <table class="section">
+            <thead><tr><th>Row</th><th>Khách</th><th>MST</th><th>Số HĐ</th><th style="text-align:right">Tổng</th><th>Trạng thái</th><th>Lý do</th></tr></thead>
+            <tbody>
+              <tr><td>12</td><td>Cty ABC</td><td>0101xxx</td><td>000123</td><td style="text-align:right">125,000,000</td><td><span class="tag"><span class="dot good"></span>OK</span></td><td class="muted">—</td></tr>
+              <tr><td>18</td><td>Cty XYZ</td><td>0109xxx</td><td>000124</td><td style="text-align:right">85,000,000</td><td><span class="tag"><span class="dot warn"></span>WARN</span></td><td class="muted">Trùng DB (gợi ý SKIP)</td></tr>
+              <tr><td>35</td><td class="muted">—</td><td class="muted">—</td><td>000130</td><td style="text-align:right">40,000,000</td><td><span class="tag"><span class="dot bad"></span>ERROR</span></td><td class="muted">Thiếu MST người mua</td></tr>
+            </tbody>
+          </table>
+          <div class="row">
+            <button class="btn ghost">Sửa lỗi</button>
+            <button class="btn">B3 Commit</button>
+          </div>
+        </div>
+      </div>
+    
+      <div class="card">
+        <h3>Import History</h3>
+        <div class="muted">Danh sách batch đã import: file_name, created_at, status, summary; có nút Xem chi tiết / Rollback (admin).</div>
+      </div>
+
+</section>
+
+    <section id="view-advances" style="display:none">
+      <div class="row">
+        <button class="btn">+ Tạo Trả hộ</button>
+        <button class="btn ghost">Import Advances</button>
+        <button class="btn ghost">Import Receipts</button>
+      </div>
+      <div class="card section">
+        <h3>Danh sách Trả hộ</h3>
+        <table>
+          <thead><tr><th>Ngày</th><th>Khách</th><th>MST</th><th style="text-align:right">Số tiền</th><th>Trạng thái</th><th>Hành động</th></tr></thead>
+          <tbody>
+            <tr><td>2026-01-03</td><td>Cty ABC</td><td>0101xxx</td><td style="text-align:right">15,000,000</td><td><span class="tag"><span class="dot warn"></span>DRAFT</span></td><td><span class="link">Duyệt</span> • <span class="link">Void</span></td></tr>
+            <tr><td>2026-01-02</td><td>Cty DEF</td><td>2300xxx</td><td style="text-align:right">25,000,000</td><td><span class="tag"><span class="dot good"></span>APPROVED</span></td><td><span class="link">Xem</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice">Luồng: DRAFT → APPROVED (ownership). APPROVED mới tính công nợ.</div>
+    </section>
+
+    <section id="view-receipts" style="display:none">
+      <div class="card">
+        <h3>Thu tiền — Phân bổ công nợ</h3>
+        <div class="row">
+          <select class="select">
+            <option>Khách: Cty ABC (0101xxx)</option>
+            <option>Khách: Cty DEF (2300xxx)</option>
+          </select>
+          <input class="input" value="2026-01-05" />
+          <select class="select">
+            <option>Applied kỳ: 2026-01</option>
+            <option>Applied kỳ: 2025-12</option>
+          </select>
+          <input class="input" value="120000000" />
+          <button class="btn">Tạo phiếu thu (DRAFT)</button>
+        </div>
+
+        <div class="tabs">
+          <div class="tab active">BY_PERIOD (Thu theo tháng)</div>
+          <div class="tab">BY_INVOICE (Chọn hóa đơn)</div>
+          <div class="tab">FIFO (Trừ nợ cũ nhất)</div>
+        </div>
+
+        <div class="section notice">
+          <b>Preview phân bổ</b> (trước khi duyệt): BY_PERIOD ưu tiên nợ tháng đó; dư → FIFO.
+        </div>
+
+        <div class="card section">
+          <table>
+            <thead><tr><th>Loại</th><th>Chứng từ</th><th>Ngày</th><th style="text-align:right">Còn phải thu</th><th style="text-align:right">Phân bổ</th></tr></thead>
+            <tbody>
+              <tr><td>HĐ</td><td>000145</td><td>2026-01-02</td><td style="text-align:right">50,000,000</td><td style="text-align:right">50,000,000</td></tr>
+              <tr><td>HĐ</td><td>000146</td><td>2026-01-04</td><td style="text-align:right">60,000,000</td><td style="text-align:right">60,000,000</td></tr>
+              <tr><td>Trả hộ</td><td>ADV-0031</td><td>2025-12-29</td><td style="text-align:right">20,000,000</td><td style="text-align:right">10,000,000</td></tr>
+            </tbody>
+          </table>
+          <div class="row" style="justify-content:space-between; margin-top:10px">
+            <div class="muted">Tổng phân bổ: 120,000,000 • Credit (nếu dư): 0</div>
+            <div class="row">
+              <button class="btn ghost">Chỉnh tay</button>
+              <button class="btn">Duyệt (APPROVE)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="notice">Sau approve: không sửa amount nếu đã allocate; chỉ VOID + đảo (reversal).</div>
+      </div>
+    </section>
+
+    <section id="view-reports" style="display:none">
+      <div class="row">
+        <select class="select"><option>Group by: Khách hàng</option><option>Group by: Kế toán</option><option>Group by: Seller</option></select>
+        <input class="input" value="2025-12-01" />
+        <input class="input" value="2025-12-31" />
+        <button class="btn">Tải Excel đối soát</button>
+      </div>
+      <div class="card section">
+        <h3>Tổng hợp</h3>
+        <table>
+          <thead><tr><th>Nhóm</th><th style="text-align:right">Phát sinh</th><th style="text-align:right">Thu</th><th style="text-align:right">Cuối kỳ</th></tr></thead>
+          <tbody>
+            <tr><td>Cty ABC</td><td style="text-align:right">320M</td><td style="text-align:right">120M</td><td style="text-align:right">200M</td></tr>
+            <tr><td>Cty DEF</td><td style="text-align:right">180M</td><td style="text-align:right">80M</td><td style="text-align:right">100M</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="notice">Xuất excel theo template nội bộ: Mau_DoiSoat_CongNo_Golden.xlsx</div>
+    </section>
+
+    <section id="view-admin" style="display:none">
+      <div class="card">
+        <h3>Admin</h3>
+        <div class="row">
+          <button class="btn">Quản lý Users/Roles</button>
+          <button class="btn ghost">Period Lock</button>
+          <button class="btn ghost">Audit Viewer</button>
+        </div>
+        <div class="section notice">
+          <b>Period Lock</b>: khoá kỳ thì không commit/approve vào kỳ đó (trừ override có lý do + audit).
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <header>
+      <div>
+        <h4>Chi tiết khách hàng</h4>
+        <div class="muted">Cty ABC • MST 0101xxx • Kế toán A</div>
+      </div>
+      <div class="close" id="modalClose">Đóng</div>
+    </header>
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div class="muted">Dư nợ hiện tại</div>
+          <div style="font-size:22px; font-weight:900; margin-top:6px">200,000,000</div>
+        </div>
+        <span class="tag"><span class="dot bad"></span>Quá hạn: 60,000,000</span>
+      </div>
+      <div class="tabs" style="margin-top:12px">
+        <div class="tab active">Invoices</div>
+        <div class="tab">Advances</div>
+        <div class="tab">Receipts</div>
+        <div class="tab">Statement</div>
+        <div class="tab">Audit</div>
+      </div>
+      <table class="section">
+        <thead><tr><th>Chứng từ</th><th>Ngày</th><th style="text-align:right">Còn lại</th></tr></thead>
+        <tbody>
+          <tr><td>000120</td><td>2025-12-10</td><td style="text-align:right">90,000,000</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const views = ['dashboard','customers','import','advances','receipts','reports','admin'];
+  const meta = {
+    dashboard: ['Dashboard','Tổng quan công nợ theo kỳ và theo người phụ trách'],
+    customers: ['Khách hàng','Tìm nhanh theo MST/tên, xem chi tiết và đối soát'],
+    import: ['Import Data','Staging -> Preview -> Commit, dedup warning'],
+    advances: ['Trả hộ','DRAFT → APPROVED theo ownership'],
+    receipts: ['Thu tiền','Phân bổ BY_PERIOD/BY_INVOICE/FIFO, preview trước khi duyệt'],
+    reports: ['Báo cáo','Tổng hợp/Statement/Aging và xuất Excel theo template'],
+    admin: ['Admin','Users/Roles, Period Lock, Audit Viewer']
+  };
+
+  const nav = document.getElementById('nav');
+  const title = document.getElementById('pageTitle');
+  const sub = document.getElementById('pageSub');
+
+  function show(view){
+    views.forEach(v=>{
+      document.getElementById('view-'+v).style.display = (v===view)?'block':'none';
+    });
+    [...nav.querySelectorAll('button')].forEach(b=>b.classList.toggle('active', b.dataset.view===view));
+    title.textContent = meta[view][0];
+    sub.textContent = meta[view][1];
+  }
+
+  nav.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-view]');
+    if(!btn) return;
+    show(btn.dataset.view);
+  });
+
+  const top = [
+    ['Cty ABC','0101xxx','Kế toán A','200,000,000','60,000,000'],
+    ['Cty DEF','2300xxx','Kế toán B','180,000,000','20,000,000'],
+    ['Cty MNO','0312xxx','Kế toán A','165,000,000','0'],
+    ['Cty PQR','0209xxx','Kế toán B','140,000,000','30,000,000'],
+  ];
+  const topBody = document.getElementById('topDebt');
+  top.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td class="link" data-open="1">${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td style="text-align:right">${r[3]}</td><td style="text-align:right">${r[4]}</td>`;
+    topBody.appendChild(tr);
+  });
+
+  const customers = [
+    ['Cty ABC','0101xxx','Kế toán A','200,000,000','60,000,000','ACTIVE'],
+    ['Cty DEF','2300xxx','Kế toán B','180,000,000','20,000,000','ACTIVE'],
+    ['Cty MNO','0312xxx','Kế toán A','165,000,000','0','ACTIVE'],
+    ['Cty PQR','0209xxx','Kế toán B','140,000,000','30,000,000','ACTIVE'],
+  ];
+  const cBody = document.getElementById('customerTable');
+  customers.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML = `<td><span class="link" data-open="1">${r[0]}</span></td><td>${r[1]}</td><td>${r[2]}</td><td style="text-align:right">${r[3]}</td><td style="text-align:right">${r[4]}</td><td><span class="tag"><span class="dot ${r[4] !== '0,000,000' ? 'bad':'good'}"></span>${r[5]}</span></td>`;
+    cBody.appendChild(tr);
+  });
+
+  // Modal
+  const modal = document.getElementById('modal');
+  const close = document.getElementById('modalClose');
+  function openModal(){ modal.style.display='flex'; }
+  function closeModal(){ modal.style.display='none'; }
+  close.addEventListener('click', closeModal);
+  document.addEventListener('click', (e)=>{
+    if(e.target.matches('[data-open]') || e.target.closest('[data-open]')) openModal();
+    if(e.target===modal) closeModal();
+  });
+
+  document.getElementById('btnToPreview').addEventListener('click', ()=>{
+    document.getElementById('previewBox').style.display='block';
+  });
+</script>
+</body>
+</html>

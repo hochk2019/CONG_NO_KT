@@ -1,0 +1,246 @@
+<Window x:Class="Ops.Launcher.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="CongNo Ops Launcher" Height="760" Width="1180"
+        Icon="Assets/ops-launcher.ico"
+        WindowStartupLocation="CenterScreen"
+        Background="#F5F7FB"
+        FontFamily="Bahnschrift">
+    <Window.Resources>
+        <Color x:Key="ColorSurface">#FFFFFF</Color>
+        <Color x:Key="ColorMuted">#64748B</Color>
+        <Color x:Key="ColorBorder">#E2E8F0</Color>
+        <Color x:Key="ColorPrimary">#6D28D9</Color>
+        <Color x:Key="ColorPrimaryDark">#5B21B6</Color>
+        <Color x:Key="ColorAccent">#F97316</Color>
+        <Color x:Key="ColorSuccess">#16A34A</Color>
+        <Color x:Key="ColorWarning">#F59E0B</Color>
+        <Color x:Key="ColorDanger">#DC2626</Color>
+        <Color x:Key="ColorText">#0F172A</Color>
+
+        <SolidColorBrush x:Key="BrushSurface" Color="{StaticResource ColorSurface}" />
+        <SolidColorBrush x:Key="BrushMuted" Color="{StaticResource ColorMuted}" />
+        <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource ColorBorder}" />
+        <SolidColorBrush x:Key="BrushPrimary" Color="{StaticResource ColorPrimary}" />
+        <SolidColorBrush x:Key="BrushPrimaryDark" Color="{StaticResource ColorPrimaryDark}" />
+        <SolidColorBrush x:Key="BrushAccent" Color="{StaticResource ColorAccent}" />
+        <SolidColorBrush x:Key="BrushSuccess" Color="{StaticResource ColorSuccess}" />
+        <SolidColorBrush x:Key="BrushWarning" Color="{StaticResource ColorWarning}" />
+        <SolidColorBrush x:Key="BrushDanger" Color="{StaticResource ColorDanger}" />
+        <SolidColorBrush x:Key="BrushText" Color="{StaticResource ColorText}" />
+
+        <Style TargetType="Button">
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="4,0" />
+            <Setter Property="Background" Value="{StaticResource BrushPrimary}" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="{StaticResource BrushPrimaryDark}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="MinWidth" Value="90" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.92" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.85" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SecondaryButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="#E2E8F0" />
+            <Setter Property="Foreground" Value="{StaticResource BrushText}" />
+            <Setter Property="BorderBrush" Value="#CBD5E1" />
+        </Style>
+        <Style x:Key="GhostButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="BorderBrush" Value="#FFFFFF" />
+            <Setter Property="MinWidth" Value="80" />
+        </Style>
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Background" Value="{StaticResource BrushDanger}" />
+            <Setter Property="BorderBrush" Value="#B91C1C" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BrushSurface}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="16" />
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="1" Opacity="0.08" />
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="StatusBadge" TargetType="Border">
+            <Setter Property="CornerRadius" Value="10" />
+            <Setter Property="Padding" Value="8,2" />
+            <Setter Property="Background" Value="#E2E8F0" />
+        </Style>
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="SubtleText" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource BrushMuted}" />
+            <Setter Property="FontSize" Value="12" />
+        </Style>
+        <Style x:Key="PathBox" TargetType="TextBox">
+            <Setter Property="Background" Value="#0B1220" />
+            <Setter Property="Foreground" Value="#E2E8F0" />
+            <Setter Property="BorderBrush" Value="#0F172A" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,4" />
+            <Setter Property="FontFamily" Value="Cascadia Mono" />
+            <Setter Property="IsReadOnly" Value="True" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Padding="18">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#4C1D95" Offset="0" />
+                    <GradientStop Color="#6D28D9" Offset="1" />
+                </LinearGradientBrush>
+            </Border.Background>
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="CongNo Ops" Foreground="White" FontSize="22" FontWeight="Bold" />
+                    <TextBlock Text="Launcher" Foreground="#E0E7FF" Margin="12,6,0,0" FontSize="12" />
+                    <Border Background="#312E81" CornerRadius="12" Padding="8,2" Margin="16,0,0,0">
+                        <TextBlock Name="TxtHeaderEnv" Text="Local" Foreground="#E0E7FF" FontSize="12" />
+                    </Border>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button Name="BtnRefresh" Content="Làm mới" Style="{StaticResource GhostButton}" />
+                    <StackPanel Orientation="Horizontal" Margin="12,0,0,0" VerticalAlignment="Center">
+                        <Ellipse Name="DotHeaderStatus" Width="8" Height="8" Fill="#F59E0B" Margin="0,0,6,0" />
+                        <TextBlock Name="TxtHeaderStatus" Foreground="#E0E7FF" VerticalAlignment="Center" />
+                    </StackPanel>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="18">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2*" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Margin="0,0,12,0">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Ops Agent Service" Style="{StaticResource SectionTitle}" />
+                            <Border Name="BadgeAgentStatus" Grid.Column="1" Style="{StaticResource StatusBadge}">
+                                <TextBlock Name="TxtAgentStatus" Text="--" FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Text="Service: CongNoOpsAgent" Style="{StaticResource SubtleText}" />
+                        <TextBlock Name="TxtAgentVersion" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Name="TxtAgentPath" Style="{StaticResource SubtleText}" TextWrapping="Wrap" />
+
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Name="BtnStartAgent" Content="Start" />
+                            <Button Name="BtnStopAgent" Content="Stop" Style="{StaticResource DangerButton}" />
+                            <Button Name="BtnRestartAgent" Content="Restart" Style="{StaticResource SecondaryButton}" />
+                            <Button Name="BtnOpenAgentLogs" Content="Mở logs" Style="{StaticResource SecondaryButton}" />
+                            <Button Name="BtnOpenAgentConfig" Content="Mở config" Style="{StaticResource SecondaryButton}" />
+                        </WrapPanel>
+                        <TextBlock Text="* Cần quyền Administrator để Start/Stop service." Style="{StaticResource SubtleText}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="Ops Console" Style="{StaticResource SectionTitle}" />
+                            <Border Name="BadgeConsoleStatus" Grid.Column="1" Style="{StaticResource StatusBadge}">
+                                <TextBlock Name="TxtConsoleStatus" Text="--" FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+
+                        <TextBlock Name="TxtConsoleVersion" FontSize="13" FontWeight="SemiBold" />
+                        <TextBlock Name="TxtConsolePath" Style="{StaticResource SubtleText}" TextWrapping="Wrap" />
+
+                        <WrapPanel Margin="0,10,0,0">
+                            <Button Name="BtnOpenConsole" Content="Mở Ops Console" />
+                            <Button Name="BtnOpenConsoleFolder" Content="Mở thư mục Console" Style="{StaticResource SecondaryButton}" />
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1">
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="Tác vụ nhanh" Style="{StaticResource SectionTitle}" />
+                        <WrapPanel>
+                            <Button Name="BtnOpenOpsFolder" Content="Mở thư mục Ops" Style="{StaticResource SecondaryButton}" />
+                            <Button Name="BtnOpenLogsFolder" Content="Mở logs" Style="{StaticResource SecondaryButton}" />
+                            <Button Name="BtnOpenDeployFolder" Content="Mở thư mục cài đặt" Style="{StaticResource SecondaryButton}" />
+                        </WrapPanel>
+                        <TextBlock Text="* Thư mục cài đặt mặc định: C:\\apps\\congno" Style="{StaticResource SubtleText}" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Text="Đường dẫn hệ thống" Style="{StaticResource SectionTitle}" />
+                        <TextBlock Text="Ops Root" Style="{StaticResource SubtleText}" />
+                        <TextBox Name="TxtOpsRoot" Style="{StaticResource PathBox}" />
+                        <TextBlock Text="Backend" Style="{StaticResource SubtleText}" />
+                        <TextBox Name="TxtBackendRoot" Style="{StaticResource PathBox}" />
+                        <TextBlock Text="Frontend" Style="{StaticResource SubtleText}" />
+                        <TextBox Name="TxtFrontendRoot" Style="{StaticResource PathBox}" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="2" Background="#EEF2FF" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" Padding="12">
+            <TextBlock Name="TxtStatus" Foreground="{StaticResource BrushText}" />
+        </Border>
+    </Grid>
+</Window>

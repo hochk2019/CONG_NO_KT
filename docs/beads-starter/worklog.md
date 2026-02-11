@@ -1,0 +1,25 @@
+# worklog.md (optional)
+
+- Mốc quan trọng / quyết định lớn
+- Link tới Beads ID liên quan
+- 2026-02-01 22:27: Thêm MCP server global 'openaiDeveloperDocs' trỏ tới https://developers.openai.com/mcp theo yêu cầu.
+- 2026-02-01 22:31: Người dùng xác nhận đã khởi động lại máy sau khi cài IIS trong phiên resume 019c0943-e03b-7211-932f-bc361b1853b7.
+- 2026-02-01 22:34: Người dùng xác nhận đã restart sau khi cài IIS và cần tiếp tục tạo site IIS cho frontend.
+- 2026-02-01 22:39: Lỗi Import-Module WebAdministration do chạy PowerShell 7.5; cần chạy Windows PowerShell 5.1 (powershell.exe) với quyền Admin.
+- 2026-02-01 22:43: Kiểm tra web.config hợp lệ; thiếu module IIS URL Rewrite (rewrite.dll không tồn tại), gây lỗi 500.19 0x8007000d. Cần cài URL Rewrite (và ARR nếu proxy).
+- 2026-02-01 22:56: Đã cài URL Rewrite; truy cập http://localhost:8081/login thành công và đăng nhập được.
+- 2026-02-01 23:09: Hoan thien ops admin console: them scripts publish/install agent va cap nhat huong dan deploy Ops Agent/Console.
+- 2026-02-02 19:18: Beads CLI da duoc cai trong WSL (Ubuntu-2204, user sam) tai /usr/local/bin/bd; khong co tren Windows PowerShell PATH nen 'bd' khong chay tren Windows. Can goi qua wsl hoac tao wrapper/ cai tren Windows.
+- 2026-02-02 19:25: Khoi dong Beads trong WSL, sua issues.jsonl, chay bd sync --import-only, tao wrapper bd.cmd va cap nhat AGENTS.md; dong bo task cng-4il.1 va tao/close bead cng-c6x.
+- 2026-02-02 20:40: Fix ops issues: backup/restore parse conn + env, update runner preserve + stop/start, service install env/urls, log tail streaming, DB probe + diagnostics, retention cleanup; tests dotnet test ops OK.
+- 2026-02-02 21:46: Chay full test sweep (bead cng-esk): backend unit+integration OK, frontend Vitest OK, Playwright e2e OK (2 skipped), IIS / và /login 200, backend /health + /health/ready OK, ops agent smoke endpoints OK (non-destructive).
+- 2026-02-02 22:04: Fix UpdateRunner preserve cross-drive (copy+delete) after destructive update test failure; ops tests OK; update endpoints re-tested OK. Backup/create/restore failed due to postgres password (Ops DB config needs real admin credentials).
+- 2026-02-02 22:09: Chay destructive ops test voi credentials Postgres@123: backup/create OK, createdb+restore+dropdb OK tren DB tam, update backend/frontend OK (preserve appsettings/logs/web.config).
+- 2026-02-02 22:18: Ra soat van hanh: phat hien JWT secret chua set (dang dung placeholder), backend log file chua duoc cau hinh/tao, ops agent chua cai service + agent-config con placeholder DB + chua set PgBinPath; can chay PowerShell elevated de doc IIS config.
+- 2026-02-02 22:30: Da them Serilog file logging (repo) + publish build staging; cap nhat appsettings.json (deploy) voi ConnectionStrings + Jwt secret + Serilog; tao thu muc logs; cap nhat ops agent-config (DB conn + PgBinPath + LogPath). Khong the set Machine env / restart service / doc IIS config do thieu quyen admin.
+- 2026-02-02 22:40: Kiem tra bd trong WSL (Ubuntu-2204) hoat dong; `bd ready` hien thi tasks; Windows PowerShell khong co bd.
+- 2026-02-02 22:41: Chay tests: Ops.Tests OK, backend unit+integration OK, frontend Vitest OK, Playwright e2e OK (2 skipped).
+- 2026-02-02 22:42: Xac nhan backend /health + /health/ready 200; IIS / va /login 200; proxy /api/health 200; DB psql OK.
+- 2026-02-02 22:43: Publish ops agent/console; fix loi quoting trong scripts/ops/install-agent.ps1; install-agent can chay PowerShell Admin (Access denied khi khong elevated).
+- 2026-02-02 22:44: Dong bo beads/task.md: close cng-4il (Phase 4) va cng-fsr (Phase 25) vi task.md da danh dau hoan thanh.
+- 2026-02-02 22:55: Them tab Endpoints trong Ops Console (Open Backend/Frontend, luu URL, quan ly IIS binding HTTP) + them frontend.publicUrl trong config; them endpoint /frontend/bindings trong Ops Agent; them tests IisBindingTests.

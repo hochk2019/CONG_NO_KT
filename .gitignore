@@ -1,0 +1,45 @@
+# System
+.DS_Store
+Thumbs.db
+*.log
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build Artifacts
+bin/
+obj/
+dist/
+release/
+node_modules/
+*.exe
+*.dll
+*.pdb
+
+# User Specific
+*.user
+*.suo
+
+# Project Specific
+tmp/
+.agent/
+.beads/
+.codex/
+.dotnet/
+.kiro/
+.shared/
+backups/
+test-results/
+playwright-report/
+
+# Temp files
+tmp_*
+api_run.*
+congno_report_export*.xlsx
+invoice_template*.xlsx
+ReportDetail.xlsx
+screenshot_*.png
+CongNoGolden_Spec_PostgreSQL_WEB_Windows_FULL.zip

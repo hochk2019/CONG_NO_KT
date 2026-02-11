@@ -1,0 +1,9 @@
+Tính năng APP sẽ là:
+Chạy để nhiều người cùng theo dõi, tương tác.  => dự kiến sẽ chạy trên cơ sở dữ liệu của máy chủ: Server1
+- Import dữ liệu từ file excel (chứa các thông tin liên quan đến hóa đơn: Mã số thuế, tên công ty, số hóa đơn, tiền trước thuế, tiền thuế VAT), có cơ chế cảnh báo dữ liệu đã import để người dùng kiểm tra lại.
+- Có phân quyền (admin, người nhập liệu / sửa / xóa, người xem) để hạn chế can thiệp vào dữ liệu.
+- Có khả năng thêm bớt tự động công ty (lấy mã số thuế làm trường chính) theo hóa đơn (từ Data được import excel vào, thằng nào mới thì tự động tạo khách hàng theo mã số thuế và tên công ty)
+- Theo dõi tổng tiền công nợ lấy từ hóa đơn ( DT + VAT của mỗi khách hàng).
+- Thêm khả năng nhập các khoản trả hộ cho kế toán (nhập tay hoặc nhập từ file excel), có cơ chế cảnh báo dữ liệu đã import để người dùng kiểm tra lại.
+Tạo theo dõi cho từng công ty, từng người quản lý khách hàng, từng khoảng thời gian được chọn
+Tạo theo dõi tổng thể (tất cả) các công ty theo kỳ (ngày, tháng, quý, năm)

@@ -1,0 +1,51 @@
+Tính năng APP theo dõi công nợ:
+Chạy để nhiều người cùng theo dõi, tương tác.  => dự kiến sẽ chạy trên cơ sở dữ liệu của máy chủ: Server1
+- Import dữ liệu từ file excel (chứa các thông tin liên quan đến hóa đơn: Mã số thuế, tên công ty, số hóa đơn, tiền trước thuế, tiền thuế VAT), có cơ chế cảnh báo dữ liệu đã import để người dùng kiểm tra lại.
+- Có phân quyền (admin, người nhập liệu / sửa / xóa, người xem) để hạn chế can thiệp vào dữ liệu.
+- Có khả năng thêm bớt tự động công ty (lấy mã số thuế làm trường chính) theo hóa đơn (từ Data được import excel vào, thằng nào mới thì tự động tạo khách hàng theo mã số thuế và tên công ty)
+- Theo dõi tổng tiền công nợ lấy từ hóa đơn ( DT + VAT của mỗi khách hàng).
+- Thêm khả năng nhập các khoản trả hộ cho kế toán (nhập tay hoặc nhập từ file excel), có cơ chế cảnh báo dữ liệu đã import để người dùng kiểm tra lại.
+Tạo theo dõi cho từng công ty, từng người quản lý khách hàng, từng khoảng thời gian được chọn
+Tạo theo dõi tổng thể (tất cả) các công ty theo kỳ (ngày, tháng, quý, năm)
+
+------------------------------
+› Hãy review lại toàn bộ hệ thống.Xem các chức năng đã hoạt động đúng chưa, cần sửa đổi, nâng cấp gì không? giao diện đã thân thiện + trải nghiệm người dùng đã ổn chưa, cần sửa gì không? Database và backend
+  đã đúng thiết kế chưa, đã tối ưu chưa, còn thiếu gì không? tính đồng bộ của hệ thống thế nào? và các khía cạnh khác mà mình còn thiếu vì kiến thức hạn hẹp của mình nữa, bạn là chuyên gia lập trình và sáng
+  tạo nên hãy giúp mình. Bạn hiểu ý mình không?
+
+
+Trả lời:
+
+• Findings
+
+  - High: Quyền Admin Users bị lệch giữa UI và backend — UI cho Supervisor vào nhưng backend chỉ Admin nên Supervisor sẽ bị 403. Tham chiếu: src/frontend/src/App.tsx:33, src/frontend/src/layouts/
+    AppShell.tsx:18, src/backend/Api/Program.cs:57.
+  - High: Import history/list & rollback yêu cầu ImportCommit (Admin/Supervisor) nhưng trang Import mở cho Accountant → Accountant sẽ không xem được history (403). Tham chiếu: src/backend/Api/Endpoints/
+    ImportEndpoints.cs:81, src/backend/Api/Endpoints/ImportEndpoints.cs:100, src/backend/Api/Program.cs:51, src/frontend/src/App.tsx:25.
+  - High: Tìm kiếm khách hàng chưa “unaccent + trigram” như yêu cầu; đang dùng ILIKE raw name nên vừa thiếu chức năng tìm không dấu, vừa có nguy cơ chậm với dữ liệu lớn. Tham chiếu: src/backend/Infrastructure/
+    backend/Api/Services/JwtTokenService.cs:40.
+  - Low: PWA minimal (manifest + icon + install/pin) chưa có, trong khi acceptance criteria yêu cầu. Tham chiếu: src/frontend/index.html:3, extracted_specs/ACCEPTANCE_CRITERIA_BY_PHASE.md:404.
+  - Low: Thiếu test coverage cho các phần mới (admin/users, customers list/detail, advances list, import history). Hiện chỉ có allocation/import parser/period lock. Tham chiếu: src/backend/Tests.Unit/
+    AllocationEngineTests.cs, src/backend/Tests.Integration/ImportCommitPeriodLockTests.cs.
+
+  Câu hỏi/giả định
+
+  - Supervisor có được phép quản lý Users/Roles không? Nếu có, cần mở policy; nếu không, nên ẩn menu/route.
+  - Accountant có cần xem Import History không? Nếu có, nên tạo policy ImportView riêng và dùng cho list/history.
+  - Có cần hiển thị record VOID trong Customer detail để kiểm toán/đối chiếu không?
+
+  Gợi ý UX (không blocker)
+
+  - Thêm lookup/search cho Owner/Customer/Receipt ID thay vì nhập GUID thủ công.
+  - Thêm confirm dialog cho rollback/void/role changes để giảm thao tác nhầm.
+  - Đồng bộ nhãn/viết tắt (VN hóa nhất quán, giảm thuật ngữ tiếng Anh nếu đội ngũ VN).
+
+  Tóm tắt
+
+  - Đây là review tĩnh theo code + tài liệu; chưa chạy UAT thực địa. Không có thay đổi code trong lần review này.
+
+  Gợi ý bước tiếp theo:
+
+  1. Chốt lại policy/roles (Admin vs Supervisor vs Accountant) và đồng bộ UI ↔ API.
+  2. Bổ sung unaccent + trigram cho search khách hàng (query + index).
+  3. Thêm PWA minimal (manifest + icon) để đạt tiêu chí Phase 4.

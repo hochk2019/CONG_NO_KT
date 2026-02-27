@@ -101,7 +101,7 @@
 
 .dashboard-summary__label {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--color-muted);
@@ -206,7 +206,7 @@
 }
 
 .role-cockpit__status {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--color-muted);
   white-space: nowrap;
 }
@@ -299,7 +299,7 @@
   padding: 0.2rem 0.6rem;
   width: fit-content;
   max-width: 100%;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   line-height: 1.35;
 }
 
@@ -414,7 +414,7 @@
 }
 
 .cashflow-chart__variance {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   line-height: 1.2;
   text-align: center;
   color: var(--color-muted);
@@ -429,7 +429,7 @@
 }
 
 .cashflow-chart__label {
-  font-size: 0.72rem;
+  font-size: 0.75rem;
   color: var(--color-muted);
   text-align: center;
 }

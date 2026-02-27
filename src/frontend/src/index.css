@@ -426,7 +426,7 @@ a:focus-visible {
 }
 
 .kpi-card__label {
-  font-size: 0.8rem;
+  font-size: 0.875rem;
   color: var(--color-muted);
 }
 
@@ -684,7 +684,7 @@ a:focus-visible {
 
 .stat-card__label {
   color: var(--color-muted);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
 }
 
 .stat-card__value {

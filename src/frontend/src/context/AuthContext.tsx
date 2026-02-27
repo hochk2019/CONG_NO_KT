@@ -13,6 +13,8 @@ const emptyState: AuthState = {
   roles: [],
 }
 
+const AUTH_SESSION_STORAGE_KEY = 'cng.auth.session.v1'
+
 const isExpired = (expiresAt: string | null) => {
   if (!expiresAt) {
     return true
@@ -20,10 +22,82 @@ const isExpired = (expiresAt: string | null) => {
   return new Date(expiresAt).getTime() <= Date.now()
 }
 
+const readPersistedState = (): AuthState => {
+  if (typeof window === 'undefined') {
+    return emptyState
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY)
+    if (!raw) {
+      return emptyState
+    }
+
+    const parsed = JSON.parse(raw) as Partial<AuthState> | null
+    if (!parsed || typeof parsed !== 'object') {
+      return emptyState
+    }
+
+    const accessToken = typeof parsed.accessToken === 'string' ? parsed.accessToken : null
+    const expiresAt = typeof parsed.expiresAt === 'string' ? parsed.expiresAt : null
+    const username = typeof parsed.username === 'string' ? parsed.username : null
+    const roles = Array.isArray(parsed.roles)
+      ? parsed.roles.filter((role): role is string => typeof role === 'string')
+      : []
+
+    if (!accessToken || isExpired(expiresAt)) {
+      return emptyState
+    }
+
+    return {
+      accessToken,
+      expiresAt,
+      username,
+      roles,
+    }
+  } catch {
+    return emptyState
+  }
+}
+
+const persistState = (state: AuthState) => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    if (!state.accessToken || isExpired(state.expiresAt)) {
+      window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY)
+      return
+    }
+
+    window.sessionStorage.setItem(AUTH_SESSION_STORAGE_KEY, JSON.stringify(state))
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+const clearPersistedState = () => {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.sessionStorage.removeItem(AUTH_SESSION_STORAGE_KEY)
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const debugAuth = import.meta.env.DEV
-  const [state, setState] = useState<AuthState>(() => emptyState)
-  const [bootstrapping, setBootstrapping] = useState(true)
+  const restoredState = useMemo(() => readPersistedState(), [])
+  const hasRestoredSession = useMemo(
+    () => Boolean(restoredState.accessToken && !isExpired(restoredState.expiresAt)),
+    [restoredState.accessToken, restoredState.expiresAt],
+  )
+  const [state, setState] = useState<AuthState>(() => restoredState)
+  const [bootstrapping, setBootstrapping] = useState(!hasRestoredSession)
 
   const isAuthenticated = useMemo(() => {
     return Boolean(state.accessToken && !isExpired(state.expiresAt))
@@ -59,6 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
     void logoutSession()
     setState(emptyState)
+    clearPersistedState()
   }
 
   useEffect(() => {
@@ -85,7 +160,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               if (debugAuth) {
                 console.warn('[auth] bootstrap refresh failed', err)
               }
-              setState(emptyState)
+              if (!hasRestoredSession) {
+                setState(emptyState)
+              }
               return
             }
             if (debugAuth) {
@@ -107,7 +184,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => {
       active = false
     }
-  }, [debugAuth])
+  }, [debugAuth, hasRestoredSession])
 
   useEffect(() => {
     if (!state.expiresAt || !state.accessToken) {
@@ -126,7 +203,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (debugAuth) {
             console.warn('[auth] refresh failed', err)
           }
-          setState(emptyState)
+          if (err instanceof ApiError && err.status === 401) {
+            setState(emptyState)
+          }
         })
       return
     }
@@ -147,7 +226,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           if (debugAuth) {
             console.warn('[auth] refresh failed', err)
           }
-          setState(emptyState)
+          if (err instanceof ApiError && err.status === 401) {
+            setState(emptyState)
+          }
         })
     }, refreshAt - Date.now())
 
@@ -155,6 +236,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       window.clearTimeout(timeoutId)
     }
   }, [debugAuth, state.accessToken, state.expiresAt])
+
+  useEffect(() => {
+    persistState(state)
+  }, [state])
 
   const value: AuthContextValue = {
     state,

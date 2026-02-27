@@ -5,6 +5,7 @@ import { AuthProvider } from '../AuthContext'
 import { useAuth } from '../AuthStore'
 
 const refreshSession = vi.fn()
+const AUTH_SESSION_STORAGE_KEY = 'cng.auth.session.v1'
 
 vi.mock('../../api/auth', () => ({
   login: vi.fn(),
@@ -33,6 +34,7 @@ describe('AuthProvider bootstrap', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     refreshSession.mockReset()
+    window.sessionStorage.clear()
   })
 
   afterEach(() => {
@@ -63,5 +65,51 @@ describe('AuthProvider bootstrap', () => {
     })
 
     expect(screen.getByTestId('status')).toHaveTextContent('auth:admin')
+  })
+
+  it('keeps restored session on bootstrap 401 after reload', async () => {
+    const token = buildToken({
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'admin',
+      'http://schemas.microsoft.com/ws/2008/06/identity/claims/role': ['Admin'],
+    })
+    const expiresAt = new Date(Date.now() + 3600_000).toISOString()
+    window.sessionStorage.setItem(
+      AUTH_SESSION_STORAGE_KEY,
+      JSON.stringify({
+        accessToken: token,
+        expiresAt,
+        username: 'admin',
+        roles: ['Admin'],
+      }),
+    )
+    refreshSession.mockRejectedValueOnce(new ApiError('Unauthorized', 401))
+
+    render(
+      <AuthProvider>
+        <AuthStatus />
+      </AuthProvider>,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('auth:admin')
+  })
+
+  it('falls back to guest when no restored session and bootstrap returns 401', async () => {
+    refreshSession.mockRejectedValueOnce(new ApiError('Unauthorized', 401))
+
+    render(
+      <AuthProvider>
+        <AuthStatus />
+      </AuthProvider>,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('guest')
   })
 })

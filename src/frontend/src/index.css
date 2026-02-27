@@ -2276,6 +2276,21 @@ input[type='file'] {
   gap: var(--space-4);
 }
 
+.kpi-stack__group {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.kpi-stack__header {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.kpi-stack__header h3,
+.kpi-stack__header p {
+  margin: 0;
+}
+
 .stat-grid--primary .stat-card__value {
   font-size: 1.85rem;
 }

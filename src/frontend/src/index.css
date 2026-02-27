@@ -678,8 +678,18 @@ a:focus-visible {
 }
 
 .stat-card--danger {
-  border: 1px solid rgba(220, 38, 38, 0.25);
-  background: linear-gradient(135deg, rgba(220, 38, 38, 0.12), var(--color-surface));
+  position: relative;
+  border: 1px solid rgba(220, 38, 38, 0.42);
+  background: linear-gradient(135deg, rgba(220, 38, 38, 0.16), var(--color-surface));
+}
+
+.stat-card--danger::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 4px;
+  border-radius: 12px 0 0 12px;
+  background: color-mix(in srgb, var(--color-danger) 85%, #b91c1c);
 }
 
 .stat-card__label {

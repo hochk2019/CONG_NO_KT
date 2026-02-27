@@ -266,20 +266,21 @@ const renderMomBadge = (
   direction: KpiDeltaDirection = 'lower-better',
 ) => {
   if (!delta) {
-    return <div className="kpi-delta kpi-delta--neutral">Chưa có dữ liệu so sánh tháng trước.</div>
+    return <div className="kpi-delta kpi-delta--neutral">─ Chưa có dữ liệu so sánh tháng trước.</div>
   }
 
   if (delta.delta === 0) {
-    return <div className="kpi-delta kpi-delta--neutral">Không đổi so với tháng trước.</div>
+    return <div className="kpi-delta kpi-delta--neutral">─ Không đổi so với tháng trước.</div>
   }
 
   const tone = resolveKpiDeltaTone(delta.delta, direction)
+  const indicator = delta.delta > 0 ? '▲' : '▼'
   const directionText = delta.delta > 0 ? 'Tăng' : 'Giảm'
   const percent = formatKpiDeltaPercent(delta.deltaPercent)
 
   return (
     <div className={`kpi-delta kpi-delta--${tone}`}>
-      {directionText} {formatKpiDeltaValue(delta.delta)}
+      {indicator} {directionText} {formatKpiDeltaValue(delta.delta)}
       {percent ? ` (${percent})` : ''} so với tháng trước.
     </div>
   )

@@ -480,7 +480,15 @@ export default function CustomerListSection({
         label: 'Dư nợ',
         width: '240px',
         align: 'right' as const,
-        render: (row: CustomerListItem) => formatMoney(row.currentBalance),
+        render: (row: CustomerListItem) => {
+          const toneClass =
+            row.currentBalance <= 0
+              ? 'debt-value--clear'
+              : row.currentBalance >= 500_000_000
+              ? 'debt-value--high'
+              : 'debt-value--medium'
+          return <span className={`debt-value ${toneClass}`}>{formatMoney(row.currentBalance)}</span>
+        },
       },
       {
         key: 'actions',

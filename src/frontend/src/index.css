@@ -783,6 +783,23 @@ a:focus-visible {
   text-align: right;
 }
 
+.debt-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.debt-value--clear {
+  color: color-mix(in srgb, var(--color-success) 82%, black);
+}
+
+.debt-value--medium {
+  color: color-mix(in srgb, var(--color-warning) 85%, black);
+}
+
+.debt-value--high {
+  color: color-mix(in srgb, var(--color-danger) 88%, black);
+}
+
 .list-row {
   display: flex;
   justify-content: space-between;

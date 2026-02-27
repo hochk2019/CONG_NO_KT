@@ -40,7 +40,7 @@ const navItems: NavItem[] = [
 const rolePriority = ['Admin', 'Supervisor', 'Accountant', 'Viewer']
 
 const roleGuidance: Record<string, string> = {
-  Admin: 'Theo dõi toàn cảnh vận hành, phân quyền và kiểm soát rủi ro hệ thống.',
+  Admin: 'Theo dõi vận hành, phân quyền và rủi ro hệ thống.',
   Supervisor: 'Ưu tiên xử lý cảnh báo, khóa kỳ và giám sát chất lượng dữ liệu.',
   Accountant: 'Tập trung nhập liệu chính xác, thu tiền đúng hạn và đối chiếu báo cáo.',
   Viewer: 'Theo dõi KPI công nợ, cảnh báo quá hạn và biến động theo kỳ.',
@@ -62,6 +62,7 @@ const resolveCurrentPageTitle = (pathname: string) => {
 
 const APP_VERSION = 'v1.0'
 const ONBOARDING_DISMISSED_STORAGE_KEY = 'pref.app.onboarding.dismissed.v1'
+const NAV_COLLAPSED_STORAGE_KEY = 'pref.app.nav.collapsed.v1'
 const themeOptions: Array<{ value: ThemePreference; label: string }> = [
   { value: 'light', label: 'Sáng' },
   { value: 'dark', label: 'Tối' },
@@ -82,6 +83,40 @@ const onboardingSteps = [
   },
 ]
 
+function ThemePreferenceIcon({ preference }: { preference: ThemePreference }) {
+  if (preference === 'light') {
+    return (
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <circle cx="12" cy="12" r="4.2" fill="currentColor" />
+        <path
+          d="M12 2.8v2.2M12 19v2.2M21.2 12H19M5 12H2.8M18.7 5.3l-1.6 1.6M6.9 17.1l-1.6 1.6M18.7 18.7l-1.6-1.6M6.9 6.9L5.3 5.3"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+        />
+      </svg>
+    )
+  }
+
+  if (preference === 'dark') {
+    return (
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+        <path
+          d="M15.5 3.5a8.8 8.8 0 1 0 5 15.9 9.2 9.2 0 0 1-2.6.4 8.8 8.8 0 0 1-8.8-8.8c0-3 1.5-5.7 4-7.3a8.6 8.6 0 0 1 2.4-.2z"
+          fill="currentColor"
+        />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="12" rx="1.8" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M9 19h6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 export default function AppShell() {
   const { state, logout } = useAuth()
   const { preference, setPreference } = useTheme()
@@ -98,12 +133,15 @@ export default function AppShell() {
     () => rolePriority.find((role) => state.roles.includes(role)),
     [state.roles],
   )
-  const primaryRoleLabel = primaryRole ? formatRoleDisplay(primaryRole) : 'Chưa xác định'
   const currentRoleGuidance =
     (primaryRole && roleGuidance[primaryRole]) ??
     'Theo dõi tiến độ công việc theo quy trình và ưu tiên các mục quá hạn.'
   const [navOpenPath, setNavOpenPath] = useState<string | null>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const [isNavCollapsed, setIsNavCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.localStorage.getItem(NAV_COLLAPSED_STORAGE_KEY) === '1'
+  })
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(() => {
     if (typeof window === 'undefined') return false
     return window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) !== '1'
@@ -134,6 +172,10 @@ export default function AppShell() {
   const handleReplayOnboarding = useCallback(() => {
     setOnboardingStepIndex(0)
     setIsOnboardingOpen(true)
+  }, [])
+
+  const handleToggleNavCollapsed = useCallback(() => {
+    setIsNavCollapsed((previous) => !previous)
   }, [])
 
   const handleOnboardingSkip = useCallback(() => {
@@ -266,8 +308,17 @@ export default function AppShell() {
     return () => window.removeEventListener('keydown', handleEscape)
   }, [handleOnboardingSkip, isOnboardingOpen])
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(NAV_COLLAPSED_STORAGE_KEY, isNavCollapsed ? '1' : '0')
+  }, [isNavCollapsed])
+
   return (
-    <div className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}`}>
+    <div
+      className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${
+        isNavCollapsed ? ' app-shell--nav-collapsed' : ''
+      }`}
+    >
       <button
         className="mobile-nav-backdrop"
         type="button"
@@ -288,6 +339,9 @@ export default function AppShell() {
         <div className="brand">
           <span className="brand__kicker">Golden Logistics</span>
           <span className="brand__title">Quản lý công nợ</span>
+          <span className="brand__compact-mark" aria-hidden="true">
+            CN
+          </span>
           <div className="brand-meta">
             <span>Phiên bản: {APP_VERSION}</span>
             <span className="brand-meta__design">Design by Hoc HK</span>
@@ -303,7 +357,10 @@ export default function AppShell() {
               onFocus={() => prefetchRoute(item.to)}
               onClick={() => setNavOpenPath(null)}
             >
-              <span>{item.label}</span>
+              <span className="nav-item__icon" aria-hidden="true">
+                {item.label.slice(0, 1)}
+              </span>
+              <span className="nav-item__label">{item.label}</span>
               {item.kicker && <span className="nav-pill">{item.kicker}</span>}
             </NavLink>
           ))}
@@ -317,6 +374,14 @@ export default function AppShell() {
           </div>
           <button className="btn btn-ghost" onClick={logout}>
             Đăng xuất
+          </button>
+          <button
+            type="button"
+            className="btn btn-ghost nav-collapse-toggle"
+            onClick={handleToggleNavCollapsed}
+            title={isNavCollapsed ? 'Mở rộng menu' : 'Thu gọn menu'}
+          >
+            {isNavCollapsed ? '»' : '«'}
           </button>
         </div>
       </aside>
@@ -334,30 +399,25 @@ export default function AppShell() {
           </button>
         </div>
         <div className="app-context">
-          <div className="app-context__summary">
-            <div className="app-context__copy">
-              <p className="app-context__eyebrow">Điều hướng theo vai trò</p>
-              <h1 className="app-context__title">{currentPageTitle}</h1>
-              <p className="app-context__description">{currentRoleGuidance}</p>
-            </div>
-            <div className="app-context__controls">
-              <div className="app-context__primary-actions">
-                <button
-                  type="button"
-                  className="btn btn-outline quick-search-trigger"
-                  aria-haspopup="dialog"
-                  aria-expanded={isSearchOpen}
-                  onClick={handleOpenSearch}
-                >
-                  Tìm nhanh
-                  <span className="quick-search-trigger__hint">Ctrl/Cmd + K</span>
-                </button>
-                <div className="app-context__role">
-                  <span>Vai trò chính</span>
-                  <strong>{primaryRoleLabel}</strong>
-                </div>
+          <header className="app-context__summary app-header-card">
+            <div className="app-header-toolbar">
+              <div className="app-context__copy app-header-copy app-header-toolbar__copy">
+                <p className="app-context__eyebrow">Điều hướng theo vai trò</p>
+                <h1 className="app-context__title">{currentPageTitle}</h1>
+                <p className="app-context__description">{currentRoleGuidance}</p>
               </div>
-              <div className="app-context__secondary-actions">
+              <button
+                type="button"
+                className="btn btn-outline quick-search-trigger app-header-toolbar__search"
+                aria-haspopup="dialog"
+                aria-expanded={isSearchOpen}
+                onClick={handleOpenSearch}
+              >
+                Tìm nhanh
+                <span className="quick-search-trigger__hint">Ctrl/Cmd + K</span>
+              </button>
+              <div className="app-header-toolbar__actions">
+                <NotificationBell />
                 <button
                   type="button"
                   className="btn btn-ghost app-header__guide-btn"
@@ -366,6 +426,9 @@ export default function AppShell() {
                   Hướng dẫn
                 </button>
                 <div className="theme-switch">
+                  <span className="theme-switch__icon">
+                    <ThemePreferenceIcon preference={preference} />
+                  </span>
                   <select
                     className="theme-switch__select"
                     aria-label="Chế độ giao diện"
@@ -379,10 +442,9 @@ export default function AppShell() {
                     ))}
                   </select>
                 </div>
-                <NotificationBell />
               </div>
             </div>
-          </div>
+          </header>
         </div>
         <main className="app-content">
           <Outlet />

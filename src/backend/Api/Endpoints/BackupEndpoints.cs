@@ -1,4 +1,5 @@
 using CongNoGolden.Api;
+using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Backups;
 using CongNoGolden.Application.Common.Interfaces;
 
@@ -40,7 +41,9 @@ public static class BackupEndpoints
         {
             var job = await service.EnqueueManualBackupAsync(ct);
             return Results.Ok(job);
-        }).RequireAuthorization("BackupManage");
+        })
+        .RequireAuthorization("BackupManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         group.MapGet("/jobs", async (
             int? page,
@@ -135,7 +138,9 @@ public static class BackupEndpoints
             {
                 return ApiErrors.InvalidRequest(ex.Message);
             }
-        }).RequireAuthorization("BackupRestore");
+        })
+        .RequireAuthorization("BackupRestore")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         group.MapGet("/audit", async (
             int? page,

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../../context/AuthStore'
 import type { CustomerListItem } from '../../api/customers'
@@ -74,6 +74,27 @@ export default function CustomersPage() {
       next.delete('doc')
     })
   }, [selectedTaxCode, updateSearchParams])
+
+  useEffect(() => {
+    if (!selectedTaxCode || typeof window === 'undefined') return
+
+    const scrollToCustomer360 = () => {
+      document.getElementById('customer-360-view')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      })
+    }
+
+    const frameId = requestAnimationFrame(() => {
+      requestAnimationFrame(scrollToCustomer360)
+    })
+    const timeoutId = window.setTimeout(scrollToCustomer360, 120)
+
+    return () => {
+      cancelAnimationFrame(frameId)
+      window.clearTimeout(timeoutId)
+    }
+  }, [selectedTaxCode])
 
   return (
     <div className="page-stack">

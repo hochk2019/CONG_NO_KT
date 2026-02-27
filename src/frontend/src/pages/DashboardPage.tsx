@@ -10,7 +10,6 @@ import {
   type DashboardOverview,
   type DashboardPreferences,
   type DashboardOverdueGroupItem,
-  type DashboardTopItem,
 } from '../api/dashboard'
 import { useAuth } from '../context/AuthStore'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
@@ -18,6 +17,13 @@ import { usePersistedState } from '../hooks/usePersistedState'
 import { formatDateTime, formatMoney } from '../utils/format'
 import { toDateInput } from './reports/reportUtils'
 import AllocationDonutCard from './dashboard/AllocationDonutCard'
+import DashboardCashflowChart, {
+  type TrendGranularity,
+  type UnitScale,
+} from './dashboard/DashboardCashflowChart'
+import DashboardExecutiveSummary from './dashboard/DashboardExecutiveSummary'
+import DashboardKpiSection from './dashboard/DashboardKpiSection'
+import DashboardTopCustomers from './dashboard/DashboardTopCustomers'
 import DashboardWidgetSettings from './dashboard/DashboardWidgetSettings'
 import RoleCockpitSection, { type DashboardRoleView } from './dashboard/RoleCockpitSection'
 import {
@@ -52,9 +58,6 @@ const buildRangeParams = (range: string) => {
 
   return { months: item.months }
 }
-
-type UnitScale = 'million' | 'billion'
-type TrendGranularity = 'week' | 'month'
 
 const resolveRangeBounds = (range: string) => {
   const today = new Date()
@@ -159,65 +162,6 @@ const receiptsStorageKey = {
   allocationStatus: 'pref.receipts.allocationStatus',
 }
 
-
-const renderTopList = (
-  rows: DashboardTopItem[],
-  emptyMessage: string,
-  showDays: boolean,
-) => {
-  if (rows.length === 0) {
-    return <div className="empty-state">{emptyMessage}</div>
-  }
-
-  return (
-    <div>
-      {rows.map((row) => (
-        <div className="list-row" key={row.customerTaxCode}>
-          <div>
-            <div className="list-title">{row.customerName}</div>
-            <div className="muted">{row.customerTaxCode}</div>
-          </div>
-          <div className="list-meta">
-            <div>{formatMoney(row.amount)}</div>
-            {showDays && row.daysPastDue !== null && row.daysPastDue !== undefined && (
-              <span className="muted">{row.daysPastDue} ngày</span>
-            )}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-const renderOverdueGroupList = (
-  rows: DashboardOverdueGroupItem[],
-  emptyMessage: string,
-) => {
-  if (rows.length === 0) {
-    return <div className="empty-state">{emptyMessage}</div>
-  }
-
-  return (
-    <div>
-      {rows.map((row) => {
-        const percent = Math.round(row.overdueRatio * 1000) / 10
-        return (
-          <div className="list-row" key={row.groupKey}>
-            <div>
-              <div className="list-title">{row.groupName}</div>
-              <div className="muted">{row.overdueCustomers} khách hàng quá hạn</div>
-            </div>
-            <div className="list-meta">
-              <div>{Number.isFinite(percent) ? `${percent}%` : '-'}</div>
-              <span className="muted">{formatMoney(row.overdueAmount)}</span>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
 type KpiDeltaDirection = 'higher-better' | 'lower-better'
 
 const resolveRoleView = (roles: string[]): DashboardRoleView => {
@@ -229,13 +173,6 @@ const resolveRoleView = (roles: string[]): DashboardRoleView => {
     return 'manager'
   }
   return 'operator'
-}
-
-const resolveSummaryTone = (status?: string) => {
-  if (status === 'critical') return 'critical'
-  if (status === 'warning') return 'warning'
-  if (status === 'good') return 'good'
-  return 'stable'
 }
 
 const resolveKpiDeltaTone = (delta: number, direction: KpiDeltaDirection) => {
@@ -636,7 +573,6 @@ export default function DashboardPage() {
   }, [overview])
 
   const executiveSummary = overview?.executiveSummary
-  const summaryTone = resolveSummaryTone(executiveSummary?.status)
   const roleView = resolveRoleView(state.roles)
 
   const handleAllocationDrilldown = (status: AllocationStatusKey) => {
@@ -648,18 +584,7 @@ export default function DashboardPage() {
   }
 
   const widgetSections: Record<DashboardWidgetId, ReactNode> = {
-    executiveSummary: executiveSummary ? (
-      <section className={`dashboard-summary dashboard-summary--${summaryTone}`}>
-        <div className="dashboard-summary__content">
-          <p className="dashboard-summary__label">Tóm tắt điều hành</p>
-          <h3 className="dashboard-summary__title">{executiveSummary.message}</h3>
-          <p className="dashboard-summary__hint">{executiveSummary.actionHint}</p>
-        </div>
-        <div className="dashboard-summary__meta">
-          <span>Cập nhật: {formatDateTime(executiveSummary.generatedAt)}</span>
-        </div>
-      </section>
-    ) : null,
+    executiveSummary: <DashboardExecutiveSummary summary={executiveSummary} />,
     roleCockpit: (
       <RoleCockpitSection
         roleView={roleView}
@@ -668,277 +593,46 @@ export default function DashboardPage() {
       />
     ),
     kpis: (
-      <section className="kpi-stack">
-        <section className="kpi-stack__group" aria-labelledby="kpi-overview-heading">
-          <div className="kpi-stack__header">
-            <h3 id="kpi-overview-heading" className="subsection-title">
-              Công nợ tổng quan
-            </h3>
-            <p className="muted">Tập trung vào quy mô dư nợ, quá hạn và trạng thái phân bổ phiếu thu.</p>
-          </div>
-          <div className="stat-grid stat-grid--primary">
-            <div className="stat-card">
-              <div className="stat-card__label">Tổng dư công nợ</div>
-              <div className="stat-card__value">{formatMoney(overview?.kpis.totalOutstanding ?? 0)}</div>
-              <div className="stat-card__meta">Gồm hóa đơn + trả hộ</div>
-              {renderMomBadge(overview?.kpiMoM?.totalOutstanding, 'lower-better')}
-            </div>
-            <div className="stat-card">
-              <div className="stat-card__label">Dư hóa đơn</div>
-              <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingInvoice ?? 0)}</div>
-              <div className="stat-card__meta">Chưa phân bổ hết</div>
-              {renderMomBadge(overview?.kpiMoM?.outstandingInvoice, 'lower-better')}
-            </div>
-            <div className="stat-card">
-              <div className="stat-card__label">Dư trả hộ</div>
-              <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingAdvance ?? 0)}</div>
-              <div className="stat-card__meta">Khoản trả hộ còn lại</div>
-              {renderMomBadge(overview?.kpiMoM?.outstandingAdvance, 'lower-better')}
-            </div>
-            <div className="stat-card">
-              <div className="stat-card__label">Đã thu chưa phân bổ</div>
-              <div className="stat-card__value">
-                {formatMoney(overview?.kpis.unallocatedReceiptsAmount ?? 0)}
-              </div>
-              <div className="stat-card__meta">
-                {overview?.kpis.unallocatedReceiptsCount ?? 0} phiếu thu treo
-              </div>
-              {renderMomBadge(overview?.kpiMoM?.unallocatedReceiptsAmount, 'lower-better')}
-            </div>
-            <div className={`stat-card${(overview?.kpis.overdueTotal ?? 0) > 0 ? ' stat-card--danger' : ''}`}>
-              <div className="stat-card__label">Quá hạn</div>
-              <div className="stat-card__value">{formatMoney(overview?.kpis.overdueTotal ?? 0)}</div>
-              <div className="stat-card__meta">
-                {overview?.kpis.overdueCustomers ?? 0} khách hàng đang quá hạn
-              </div>
-              {renderMomBadge(overview?.kpiMoM?.overdueTotal, 'lower-better')}
-            </div>
-          </div>
-        </section>
-        <section className="kpi-stack__group" aria-labelledby="kpi-performance-heading">
-          <div className="kpi-stack__header">
-            <h3 id="kpi-performance-heading" className="subsection-title">
-              Hiệu suất thu hồi theo kỳ
-            </h3>
-            <p className="muted">So sánh kỳ vọng và thực thu để theo dõi chất lượng thu hồi công nợ.</p>
-          </div>
-          <div className="stat-grid stat-grid--secondary">
-            <div className="stat-card stat-card--secondary">
-              <div className="stat-card__label">Thu thực tế trong kỳ</div>
-              <div className="stat-card__value">{formatMoney(periodTotals.actual)}</div>
-              <div className="stat-card__meta">Theo kỳ đã chọn</div>
-            </div>
-            <div className="stat-card stat-card--secondary">
-              <div className="stat-card__label">KH trả đúng hạn</div>
-              <div className="stat-card__value">{overview?.kpis.onTimeCustomers ?? 0}</div>
-              <div className="stat-card__meta">≥95% khoản đến hạn trong kỳ</div>
-              {renderMomBadge(overview?.kpiMoM?.onTimeCustomers, 'higher-better')}
-            </div>
-            <div className="stat-card stat-card--secondary">
-              <div className="stat-card__label">Thu kỳ vọng</div>
-              <div className="stat-card__value">{formatMoney(periodTotals.expected)}</div>
-              <div className="stat-card__meta">Invoice + trả hộ</div>
-            </div>
-            <div className="stat-card stat-card--secondary">
-              <div className="stat-card__label">Chênh lệch (Actual - Expected)</div>
-              <div className="stat-card__value">{formatMoney(periodTotals.variance)}</div>
-              <div className="stat-card__meta">
-                {periodTotals.variance >= 0 ? 'Thu vượt kỳ vọng' : 'Thu thấp hơn kỳ vọng'}
-              </div>
-            </div>
-            <div className="stat-card stat-card--secondary">
-              <div className="stat-card__label">% Actual/Expected</div>
-              <div className="stat-card__value">{periodTotals.actualRatio}%</div>
-              <div className="stat-card__meta">Hiệu suất thu hồi trong kỳ</div>
-            </div>
-          </div>
-        </section>
-      </section>
+      <DashboardKpiSection
+        overview={overview}
+        periodTotals={periodTotals}
+        isLoading={cashflowLoading}
+        renderMomBadge={renderMomBadge}
+        formatMoney={formatMoney}
+      />
     ),
     cashflow: (
       <section className="dashboard-charts">
-        <section className="card cashflow-card">
-          <div className="cashflow-header">
-            <div>
-              <h3>Dòng tiền Expected vs Actual</h3>
-              <p className="muted">Theo dõi kỳ vọng thu hồi, thực thu và chênh lệch theo từng kỳ.</p>
-            </div>
-            <div className="chart-controls chart-controls--cashflow">
-              <div className="unit-toggle chart-controls__group" role="group" aria-label="Chế độ kỳ biểu đồ">
-                <button
-                  className={`unit-toggle__btn ${trendGranularity === 'week' ? 'unit-toggle__btn--active' : ''}`}
-                  type="button"
-                  onClick={() => handleTrendGranularityChange('week')}
-                >
-                  Theo tuần
-                </button>
-                <button
-                  className={`unit-toggle__btn ${trendGranularity === 'month' ? 'unit-toggle__btn--active' : ''}`}
-                  type="button"
-                  onClick={() => handleTrendGranularityChange('month')}
-                >
-                  Theo tháng
-                </button>
-              </div>
-              <div className="unit-toggle chart-controls__group" role="group" aria-label="Đổi đơn vị biểu đồ">
-                <button
-                  className={`unit-toggle__btn ${unit === 'million' ? 'unit-toggle__btn--active' : ''}`}
-                  type="button"
-                  onClick={() => setUnit('million')}
-                >
-                  Triệu
-                </button>
-                <button
-                  className={`unit-toggle__btn ${unit === 'billion' ? 'unit-toggle__btn--active' : ''}`}
-                  type="button"
-                  onClick={() => setUnit('billion')}
-                >
-                  Tỷ
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="chart-legend chart-legend--cashflow">
-            <span style={{ color: 'var(--color-accent)' }}>■ Expected (Kỳ vọng)</span>
-            <span style={{ color: 'var(--color-success)' }}>■ Actual (Thực thu)</span>
-            <span style={{ color: 'var(--color-warning)' }}>■ Variance</span>
-            <span className="chart-legend__unit">Đơn vị: {unit === 'billion' ? 'tỷ' : 'triệu'}</span>
-          </div>
-          {cashflowLoading ? (
-            <div className="empty-state">Đang tải biểu đồ...</div>
-          ) : cashflowError ? (
-            <div className="alert alert--error">{cashflowError}</div>
-          ) : cashflowPoints.length === 0 ? (
-            <div className="empty-state">Không có dữ liệu trong kỳ đã chọn.</div>
-          ) : !hasMeaningfulCashflow ? (
-            <div className="empty-state">Dữ liệu kỳ này quá thưa để tạo biểu đồ so sánh.</div>
-          ) : (
-            <>
-              <div className="cashflow-chart">
-                {cashflowPoints.map((point, index) => {
-                  const expectedRatio = maxCashflowValue ? point.expected / maxCashflowValue : 0
-                  const actualRatio = maxCashflowValue ? point.actual / maxCashflowValue : 0
-                  const showLabel = index % cashflowLabelStep === 0 || index === cashflowPoints.length - 1
-                  const expectedHeight = point.expected > 0 ? Math.max(4, expectedRatio * 100) : 0
-                  const actualHeight = point.actual > 0 ? Math.max(4, actualRatio * 100) : 0
-                  return (
-                    <div className="cashflow-chart__group" key={point.period}>
-                      <div className="cashflow-chart__bars">
-                        <div
-                          className="cashflow-chart__bar cashflow-chart__bar--expected"
-                          style={{ height: `${expectedHeight}%` }}
-                          title={`${point.fullLabel} • Expected: ${formatUnitValue(point.expected, unit)}`}
-                        />
-                        <div
-                          className="cashflow-chart__bar cashflow-chart__bar--actual"
-                          style={{ height: `${actualHeight}%` }}
-                          title={`${point.fullLabel} • Actual: ${formatUnitValue(point.actual, unit)}`}
-                        />
-                      </div>
-                      <div
-                        className={`cashflow-chart__variance ${
-                          point.variance >= 0
-                            ? 'cashflow-chart__variance--positive'
-                            : 'cashflow-chart__variance--negative'
-                        }`}
-                      >
-                        {point.variance >= 0 ? '+' : ''}
-                        {formatUnitValue(point.variance, unit)}
-                      </div>
-                      <div className="cashflow-chart__label">{showLabel ? point.label : ''}</div>
-                    </div>
-                  )
-                })}
-              </div>
-              {forecastPoints.length > 0 && (
-                <div className="cashflow-forecast">
-                  <h4 className="subsection-title">
-                    Dự báo {trendGranularity === 'week' ? '4 tuần' : '3 tháng'} tới
-                  </h4>
-                  <div className="forecast-grid">
-                    {forecastPoints.map((point) => (
-                      <article className="forecast-card" key={point.period}>
-                        <div className="forecast-card__period">{point.label}</div>
-                        <div className="forecast-card__row">
-                          <span>Kỳ vọng</span>
-                          <strong>{formatMoney(point.expected)}</strong>
-                        </div>
-                        <div className="forecast-card__row">
-                          <span>Thực thu dự kiến</span>
-                          <strong>{formatMoney(point.actual)}</strong>
-                        </div>
-                        <div
-                          className={`forecast-card__row ${
-                            point.variance >= 0
-                              ? 'forecast-card__row--positive'
-                              : 'forecast-card__row--negative'
-                          }`}
-                        >
-                          <span>Variance</span>
-                          <strong>{formatMoney(point.variance)}</strong>
-                        </div>
-                      </article>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-        </section>
+        <DashboardCashflowChart
+          loading={cashflowLoading}
+          error={cashflowError}
+          points={cashflowPoints}
+          forecastPoints={forecastPoints}
+          maxValue={maxCashflowValue}
+          hasMeaningfulData={hasMeaningfulCashflow}
+          labelStep={cashflowLabelStep}
+          trendGranularity={trendGranularity}
+          unit={unit}
+          onChangeTrendGranularity={handleTrendGranularityChange}
+          onChangeUnit={setUnit}
+          formatMoney={formatMoney}
+          formatUnitValue={formatUnitValue}
+        />
 
         <AllocationDonutCard summary={allocationSummary} onDrilldown={handleAllocationDrilldown} />
       </section>
     ),
     panels: (
-      <section className="dashboard-panels">
-        <section className="card">
-          <div className="card-row">
-            <div>
-              <h3 className="section-title">Top cần chú ý</h3>
-              <p className="muted">Công nợ, quá hạn và số ngày trễ.</p>
-            </div>
-            <label className="field">
-              <span>Hiển thị</span>
-              <select value={topCount} onChange={(event) => setTopCount(Number(event.target.value))}>
-                <option value={5}>Top 5</option>
-                <option value={10}>Top 10</option>
-              </select>
-            </label>
-          </div>
-          <div className="stack-section">
-            <h4 className="subsection-title">Top công nợ lớn nhất</h4>
-            {renderTopList(overview?.topOutstanding ?? [], 'Chưa có công nợ.', false)}
-          </div>
-          <div className="stack-section">
-            <h4 className="subsection-title">Top quá hạn lâu nhất</h4>
-            {renderTopList(overview?.topOverdueDays ?? [], 'Chưa có khoản quá hạn.', true)}
-          </div>
-        </section>
-
-        <div className="panel-stack">
-          <section className="card">
-            <h3>Top trả đúng hạn nhất</h3>
-            <p className="muted">Khách hàng có tỷ lệ quá hạn thấp nhất trong kỳ.</p>
-            {renderTopList(overview?.topOnTime ?? [], 'Chưa có khách hàng trả đúng hạn.', false)}
-          </section>
-
-          <section className="card">
-            <div className="card-row">
-              <div>
-                <h3>Quá hạn theo phụ trách</h3>
-                <p className="muted">Tổng giá trị và tỷ lệ quá hạn theo nhóm phụ trách.</p>
-              </div>
-            </div>
-            {overdueGroupsLoading ? (
-              <div className="empty-state">Đang tải thống kê quá hạn...</div>
-            ) : overdueGroupsError ? (
-              <div className="alert alert--error" role="alert" aria-live="assertive">{overdueGroupsError}</div>
-            ) : (
-              renderOverdueGroupList(overdueGroups, 'Chưa có dữ liệu quá hạn theo phụ trách.')
-            )}
-          </section>
-        </div>
-      </section>
+      <DashboardTopCustomers
+        topCount={topCount}
+        onTopCountChange={setTopCount}
+        topOutstanding={overview?.topOutstanding ?? []}
+        topOverdueDays={overview?.topOverdueDays ?? []}
+        topOnTime={overview?.topOnTime ?? []}
+        overdueGroups={overdueGroups}
+        overdueGroupsLoading={overdueGroupsLoading}
+        overdueGroupsError={overdueGroupsError}
+      />
     ),
   }
 

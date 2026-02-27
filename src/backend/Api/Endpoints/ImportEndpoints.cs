@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using CongNoGolden.Api;
+using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
@@ -153,7 +154,8 @@ public static class ImportEndpoints
         })
         .WithName("ImportCommit")
         .WithTags("Imports")
-        .RequireAuthorization("ImportCommit");
+        .RequireAuthorization("ImportCommit")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPost("/imports/{batchId:guid}/rollback", async (
             Guid batchId,
@@ -173,7 +175,8 @@ public static class ImportEndpoints
         })
         .WithName("ImportRollback")
         .WithTags("Imports")
-        .RequireAuthorization("ImportCommit");
+        .RequireAuthorization("ImportCommit")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPost("/imports/{batchId:guid}/cancel", async (
             Guid batchId,
@@ -193,7 +196,8 @@ public static class ImportEndpoints
         })
         .WithName("ImportCancel")
         .WithTags("Imports")
-        .RequireAuthorization("ImportHistory");
+        .RequireAuthorization("ImportHistory")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         return app;
     }

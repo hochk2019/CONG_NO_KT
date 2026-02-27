@@ -7,6 +7,8 @@ public static class AuthSecurityPolicy
 {
     public const string LoginRateLimiterPolicy = "auth-login";
     public const string RefreshRateLimiterPolicy = "auth-refresh";
+    public const string MutationRateLimiterPolicy = "mutation";
+    public const string ExportRateLimiterPolicy = "export";
 
     private const int MinJwtSecretLength = 32;
     private const int MinPasswordLength = 8;

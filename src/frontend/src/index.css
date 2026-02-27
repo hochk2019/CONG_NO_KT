@@ -23,18 +23,18 @@
   --color-danger-soft: rgba(220, 38, 38, 0.15);
   --color-focus: rgba(37, 99, 235, 0.35);
   --shadow-soft: 0 16px 36px rgba(15, 23, 42, 0.08);
-  --font-size-h1: clamp(1.8rem, 1.4rem + 2vw, 2.6rem);
-  --font-size-h2: clamp(1.4rem, 1.2rem + 1.2vw, 2rem);
-  --font-size-h3: 1.2rem;
-  --font-size-body: 1rem;
-  --font-size-caption: 0.8rem;
-  --space-1: 0.5rem;
-  --space-2: 0.75rem;
-  --space-3: 1rem;
-  --space-4: 1.5rem;
-  --space-5: 2rem;
-  --space-6: 2.5rem;
-  --space-7: 3rem;
+  --font-size-h1: clamp(1.5rem, 1.2rem + 1.6vw, 2.2rem);
+  --font-size-h2: clamp(1.2rem, 1rem + 1vw, 1.7rem);
+  --font-size-h3: 1.1rem;
+  --font-size-body: 0.9375rem;
+  --font-size-caption: 0.75rem;
+  --space-1: 0.375rem;
+  --space-2: 0.625rem;
+  --space-3: 0.875rem;
+  --space-4: 1.25rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 2.5rem;
 }
 
 :root[data-theme='dark'] {
@@ -364,7 +364,7 @@ a:focus-visible {
 
 .card {
   background: var(--color-surface);
-  border-radius: 20px;
+  border-radius: 14px;
   padding: var(--space-4);
   box-shadow: var(--shadow-soft);
   border: 1px solid var(--color-border);
@@ -376,6 +376,7 @@ a:focus-visible {
   align-items: center;
   justify-content: space-between;
   gap: 2rem;
+  border-radius: 14px;
   background: linear-gradient(120deg, rgba(37, 99, 235, 0.12), rgba(14, 116, 144, 0.1));
 }
 
@@ -444,6 +445,106 @@ a:focus-visible {
   flex-wrap: wrap;
   gap: var(--space-2);
   color: var(--color-muted);
+}
+
+.customer-360__kpi {
+  position: relative;
+  overflow: hidden;
+  border-width: 1px;
+}
+
+.customer-360__kpi::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  opacity: 0.9;
+}
+
+.customer-360__kpi-value {
+  margin: 0;
+  font-size: 1.4rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.customer-360__kpi--accent {
+  border-color: color-mix(in srgb, var(--color-accent) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-accent) 12%);
+}
+
+.customer-360__kpi--accent::before {
+  background: var(--color-accent);
+}
+
+.customer-360__kpi--accent .customer-360__kpi-value {
+  color: var(--color-accent-deep);
+}
+
+.customer-360__kpi--danger {
+  border-color: color-mix(in srgb, var(--color-danger) 34%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 86%, var(--color-danger) 14%);
+}
+
+.customer-360__kpi--danger::before {
+  background: var(--color-danger);
+}
+
+.customer-360__kpi--danger .customer-360__kpi-value {
+  color: color-mix(in srgb, var(--color-danger) 92%, black 8%);
+}
+
+.customer-360__kpi--warning {
+  border-color: color-mix(in srgb, var(--color-warning) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-warning) 12%);
+}
+
+.customer-360__kpi--warning::before {
+  background: var(--color-warning);
+}
+
+.customer-360__kpi--warning .customer-360__kpi-value {
+  color: color-mix(in srgb, var(--color-warning) 85%, black 15%);
+}
+
+.customer-360__kpi--info {
+  border-color: color-mix(in srgb, var(--color-accent) 26%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 90%, var(--color-accent) 10%);
+}
+
+.customer-360__kpi--info::before {
+  background: color-mix(in srgb, var(--color-accent) 80%, var(--color-accent-deep));
+}
+
+.customer-360__kpi--info .customer-360__kpi-value {
+  color: var(--color-accent-deep);
+}
+
+.customer-360__kpi--neutral {
+  border-color: color-mix(in srgb, var(--color-muted) 30%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-bg) 6%);
+}
+
+.customer-360__kpi--neutral::before {
+  background: color-mix(in srgb, var(--color-muted) 65%, var(--color-border));
+}
+
+.customer-360__kpi--neutral .customer-360__kpi-value {
+  color: color-mix(in srgb, var(--color-muted) 85%, var(--color-text));
+}
+
+.customer-360__kpi--success {
+  border-color: color-mix(in srgb, var(--color-success) 35%, var(--color-border));
+  background: color-mix(in srgb, var(--color-surface) 88%, var(--color-success) 12%);
+}
+
+.customer-360__kpi--success::before {
+  background: var(--color-success);
+}
+
+.customer-360__kpi--success .customer-360__kpi-value {
+  color: color-mix(in srgb, var(--color-success) 88%, black 12%);
 }
 
 .customer-360__risk {
@@ -669,13 +770,13 @@ a:focus-visible {
 .stat-grid {
   display: grid;
   gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
   min-width: 0;
 }
 
 .stat-card {
   padding: var(--space-3);
-  border-radius: 18px;
+  border-radius: 12px;
   background: var(--color-surface);
   box-shadow: var(--shadow-soft);
 }
@@ -702,7 +803,7 @@ a:focus-visible {
 
 .stat-card__value {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.35rem;
   font-weight: 600;
   color: var(--color-ink);
 }
@@ -734,7 +835,7 @@ a:focus-visible {
 
 .table-row td,
 .table-row th {
-  padding: 0.6rem 0.65rem;
+  padding: 0.5rem 0.65rem;
   border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
   min-width: 0;
@@ -1930,10 +2031,64 @@ input[type='file'] {
 
 .empty-state {
   margin-top: var(--space-3);
-  padding: var(--space-3);
+  padding: var(--space-4);
+  border: 1px dashed color-mix(in srgb, var(--color-border) 78%, transparent);
   border-radius: 16px;
-  background: rgba(15, 23, 42, 0.04);
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-bg));
   color: var(--color-muted);
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.empty-state--compact {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  gap: 0.35rem;
+}
+
+.empty-state__icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.empty-state--compact .empty-state__icon {
+  font-size: 1.15rem;
+}
+
+.empty-state__title {
+  color: var(--color-ink);
+  font-weight: 600;
+}
+
+.empty-state__description {
+  max-width: 56ch;
+  font-size: 0.92rem;
+}
+
+.empty-state__action {
+  margin-top: 0.25rem;
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--color-border) 58%, transparent) 0%,
+    color-mix(in srgb, var(--color-surface) 70%, var(--color-border)) 50%,
+    color-mix(in srgb, var(--color-border) 58%, transparent) 100%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-shimmer 1.3s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .search-row {
@@ -2319,7 +2474,7 @@ input[type='file'] {
 }
 
 .stat-grid--primary .stat-card__value {
-  font-size: 1.85rem;
+  font-size: 1.5rem;
 }
 
 .stat-grid--secondary .stat-card {

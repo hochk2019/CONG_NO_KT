@@ -1,4 +1,5 @@
 using CongNoGolden.Api;
+using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Reports;
 
@@ -576,7 +577,8 @@ public static class ReportEndpoints
         })
         .WithName("ReportExport")
         .WithTags("Reports")
-        .RequireAuthorization("ReportsView");
+        .RequireAuthorization("ReportsView")
+        .RequireRateLimiting(AuthSecurityPolicy.ExportRateLimiterPolicy);
 
         return app;
     }

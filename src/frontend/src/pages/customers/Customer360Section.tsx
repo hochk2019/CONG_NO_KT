@@ -8,6 +8,8 @@ type Customer360SectionProps = {
   selectedName: string
 }
 
+type SummaryTone = 'accent' | 'danger' | 'warning' | 'info' | 'neutral' | 'success'
+
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
   currency: 'VND',
@@ -100,12 +102,36 @@ export default function Customer360Section({
     () =>
       data
         ? [
-            { label: 'Tổng công nợ mở', value: currencyFormatter.format(data.summary.totalOutstanding) },
-            { label: 'Nợ quá hạn', value: currencyFormatter.format(data.summary.overdueAmount) },
-            { label: 'Tỷ lệ quá hạn', value: percentFormatter.format(data.summary.overdueRatio) },
-            { label: 'Ngày trễ hạn max', value: `${data.summary.maxDaysPastDue} ngày` },
-            { label: 'Số hóa đơn mở', value: String(data.summary.openInvoiceCount) },
-            { label: 'Kỳ hạn gần nhất', value: formatDate(data.summary.nextDueDate) },
+            {
+              label: 'Tổng công nợ mở',
+              value: currencyFormatter.format(data.summary.totalOutstanding),
+              tone: 'accent' as SummaryTone,
+            },
+            {
+              label: 'Nợ quá hạn',
+              value: currencyFormatter.format(data.summary.overdueAmount),
+              tone: 'danger' as SummaryTone,
+            },
+            {
+              label: 'Tỷ lệ quá hạn',
+              value: percentFormatter.format(data.summary.overdueRatio),
+              tone: 'warning' as SummaryTone,
+            },
+            {
+              label: 'Ngày trễ hạn max',
+              value: `${data.summary.maxDaysPastDue} ngày`,
+              tone: 'info' as SummaryTone,
+            },
+            {
+              label: 'Số hóa đơn mở',
+              value: String(data.summary.openInvoiceCount),
+              tone: 'neutral' as SummaryTone,
+            },
+            {
+              label: 'Kỳ hạn gần nhất',
+              value: formatDate(data.summary.nextDueDate),
+              tone: 'success' as SummaryTone,
+            },
           ]
         : [],
     [data],
@@ -114,7 +140,7 @@ export default function Customer360Section({
   if (!selectedTaxCode) return null
 
   return (
-    <section className="card customer-360">
+    <section id="customer-360-view" className="card customer-360">
       <div className="card-row customer-360__header">
         <div>
           <p className="section-title">Customer 360 View</p>
@@ -136,9 +162,9 @@ export default function Customer360Section({
 
           <div className="kpi-grid customer-360__kpis">
             {summaryItems.map((item) => (
-              <article className="kpi-card" key={item.label}>
+              <article className={`kpi-card customer-360__kpi customer-360__kpi--${item.tone}`} key={item.label}>
                 <p className="kpi-card__label">{item.label}</p>
-                <p>{item.value}</p>
+                <p className="customer-360__kpi-value">{item.value}</p>
               </article>
             ))}
           </div>

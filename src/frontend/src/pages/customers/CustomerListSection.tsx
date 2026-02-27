@@ -289,14 +289,6 @@ export default function CustomerListSection({
   const handleSelectCustomer = useCallback(
     (row: CustomerListItem) => {
       onSelectCustomer(row)
-      if (typeof window !== 'undefined') {
-        requestAnimationFrame(() => {
-          document.getElementById('customer-transactions')?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'start',
-          })
-        })
-      }
     },
     [onSelectCustomer],
   )

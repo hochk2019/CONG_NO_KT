@@ -433,7 +433,8 @@ public static class AdminEndpoints
         })
         .WithName("AdminUserCreate")
         .WithTags("Admin")
-        .RequireAuthorization("AdminManage");
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPut("/admin/users/{id:guid}/roles", async (
             Guid id,
@@ -504,7 +505,8 @@ public static class AdminEndpoints
         })
         .WithName("AdminUserRolesUpdate")
         .WithTags("Admin")
-        .RequireAuthorization("AdminManage");
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPut("/admin/users/{id:guid}/status", async (
             Guid id,
@@ -536,7 +538,8 @@ public static class AdminEndpoints
         })
         .WithName("AdminUserStatusUpdate")
         .WithTags("Admin")
-        .RequireAuthorization("AdminManage");
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPut("/admin/users/{id:guid}/zalo", async (
             Guid id,
@@ -585,7 +588,8 @@ public static class AdminEndpoints
         })
         .WithName("AdminUserZaloUpdate")
         .WithTags("Admin")
-        .RequireAuthorization("AdminManage");
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapGet("/admin/audit-logs", async (
             string? entityType,

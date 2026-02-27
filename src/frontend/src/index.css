@@ -815,6 +815,10 @@ a:focus-visible {
   color: color-mix(in srgb, var(--color-success) 82%, black);
 }
 
+.debt-value--normal {
+  color: var(--color-ink);
+}
+
 .debt-value--medium {
   color: color-mix(in srgb, var(--color-warning) 85%, black);
 }

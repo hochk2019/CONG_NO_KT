@@ -759,10 +759,33 @@ a:focus-visible {
 }
 
 .table-scroll {
+  position: relative;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
+}
+
+.table-scroll::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 1.5rem;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.55;
+  background: linear-gradient(
+    to left,
+    color-mix(in srgb, var(--color-bg) 84%, var(--color-accent) 16%),
+    transparent
+  );
+  transition: opacity 0.2s ease;
+}
+
+.table-scroll:hover::after,
+.table-scroll:focus-within::after {
+  opacity: 0.85;
 }
 
 .table-wrapper {

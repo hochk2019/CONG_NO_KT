@@ -253,6 +253,9 @@ p {
 .btn:focus-visible,
 .nav-item:focus-visible,
 .table-sort:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--color-focus);
   outline-offset: 3px;

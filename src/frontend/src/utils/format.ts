@@ -17,8 +17,35 @@ const dateTimeFormatter = new Intl.DateTimeFormat('vi-VN', {
 })
 
 const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/
+const slashDateRegex = /^(\d{1,4})\/(\d{1,2})\/(\d{1,4})$/
 
 type DateInput = string | Date | null | undefined
+
+const pad2 = (value: string | number) => String(value).padStart(2, '0')
+
+const normalizeSlashDate = (value: string) => {
+  const match = slashDateRegex.exec(value)
+  if (!match) return value
+
+  const [, first, second, third] = match
+
+  if (first.length === 4) {
+    return `${pad2(third)}/${pad2(second)}/${first}`
+  }
+
+  if (third.length === 4) {
+    const firstNumber = Number(first)
+    const secondNumber = Number(second)
+
+    if (firstNumber <= 12 && secondNumber > 12) {
+      return `${pad2(secondNumber)}/${pad2(firstNumber)}/${third}`
+    }
+
+    return `${pad2(firstNumber)}/${pad2(secondNumber)}/${third}`
+  }
+
+  return value
+}
 
 export const formatMoney = (value: number | null | undefined) => {
   if (value === null || value === undefined || Number.isNaN(value)) {
@@ -42,7 +69,7 @@ export const formatDate = (value: DateInput) => {
   }
 
   if (trimmed.includes('/')) {
-    return trimmed
+    return normalizeSlashDate(trimmed)
   }
 
   if (dateOnlyRegex.test(trimmed)) {

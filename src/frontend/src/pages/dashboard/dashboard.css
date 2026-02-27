@@ -144,7 +144,7 @@
 
 .role-cockpit {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
 }
 
 .role-cockpit__header {
@@ -323,7 +323,7 @@
 
 .dashboard-charts {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
 }
 
@@ -333,7 +333,7 @@
 
 .dashboard-panels {
   display: grid;
-  gap: var(--space-3);
+  gap: var(--space-4);
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
 }
 

@@ -175,6 +175,80 @@ public static class ReportEndpoints
         .WithTags("Reports")
         .RequireAuthorization("ReportsView");
 
+        app.MapGet("/reports/overview", async (
+            DateOnly? from,
+            DateOnly? to,
+            DateOnly? asOfDate,
+            string? sellerTaxCode,
+            string? customerTaxCode,
+            Guid? ownerId,
+            int? dueSoonDays,
+            int? top,
+            IReportService reportService,
+            IReadModelCache cache,
+            HttpContext httpContext,
+            CancellationToken ct) =>
+        {
+            var rangeError = ReportRequestValidator.ValidateDateRange(from, to);
+            if (rangeError is not null)
+            {
+                return ApiErrors.InvalidRequest(rangeError);
+            }
+
+            var cacheKey = EndpointCacheKeys.ForHttpRequest(httpContext);
+            var overview = await cache.GetOrCreateAsync(
+                "reports",
+                cacheKey,
+                TimeSpan.FromSeconds(45),
+                async token =>
+                {
+                    var kpiTask = reportService.GetKpisAsync(
+                        new ReportKpiRequest(
+                            from,
+                            to,
+                            asOfDate,
+                            sellerTaxCode,
+                            customerTaxCode,
+                            ownerId,
+                            dueSoonDays.GetValueOrDefault(7)),
+                        token);
+
+                    var chartsTask = reportService.GetChartsAsync(
+                        new ReportChartsRequest(
+                            from,
+                            to,
+                            asOfDate,
+                            sellerTaxCode,
+                            customerTaxCode,
+                            ownerId),
+                        token);
+
+                    var insightsTask = reportService.GetInsightsAsync(
+                        new ReportInsightsRequest(
+                            from,
+                            to,
+                            asOfDate,
+                            sellerTaxCode,
+                            customerTaxCode,
+                            ownerId,
+                            top.GetValueOrDefault(5)),
+                        token);
+
+                    await Task.WhenAll(kpiTask, chartsTask, insightsTask);
+
+                    return new ReportOverviewResponse(
+                        kpiTask.Result,
+                        chartsTask.Result,
+                        insightsTask.Result);
+                },
+                ct);
+
+            return Results.Ok(overview);
+        })
+        .WithName("ReportOverview")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
         app.MapGet("/reports/statement", async (
             DateOnly? from,
             DateOnly? to,
@@ -330,6 +404,118 @@ public static class ReportEndpoints
         .WithTags("Reports")
         .RequireAuthorization("ReportsView");
 
+        app.MapGet("/reports/schedules", async (
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.ListAsync(ct);
+            return Results.Ok(result);
+        })
+        .WithName("ReportSchedulesList")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
+        app.MapPost("/reports/schedules", async (
+            ReportDeliveryScheduleUpsertRequest request,
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.CreateAsync(request, ct);
+                return Results.Created($"/reports/schedules/{result.Id}", result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReportSchedulesCreate")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
+        app.MapPut("/reports/schedules/{id:guid}", async (
+            Guid id,
+            ReportDeliveryScheduleUpsertRequest request,
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UpdateAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReportSchedulesUpdate")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
+        app.MapDelete("/reports/schedules/{id:guid}", async (
+            Guid id,
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                await service.DeleteAsync(id, ct);
+                return Results.NoContent();
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReportSchedulesDelete")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
+        app.MapPost("/reports/schedules/{id:guid}/run-now", async (
+            Guid id,
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.RunNowAsync(id, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReportSchedulesRunNow")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
+        app.MapGet("/reports/schedules/{id:guid}/runs", async (
+            Guid id,
+            int? page,
+            int? pageSize,
+            IReportScheduleService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.ListRunsAsync(
+                    id,
+                    new ReportDeliveryRunListRequest(page ?? 1, pageSize ?? 20),
+                    ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReportSchedulesRuns")
+        .WithTags("Reports")
+        .RequireAuthorization("ReportsView");
+
         app.MapGet("/reports/export", async (
             DateOnly? from,
             DateOnly? to,
@@ -339,10 +525,18 @@ public static class ReportEndpoints
             Guid? ownerId,
             string? filterText,
             ReportExportKind? kind,
+            string? format,
             IReportExportService exportService,
             CancellationToken ct) =>
         {
             var exportKind = kind ?? ReportExportKind.Full;
+            var exportFormat = ReportExportFormat.Xlsx;
+            if (!string.IsNullOrWhiteSpace(format)
+                && !Enum.TryParse<ReportExportFormat>(format, true, out exportFormat))
+            {
+                return ApiErrors.InvalidRequest("Định dạng xuất không hợp lệ. Chỉ hỗ trợ xlsx hoặc pdf.");
+            }
+
             var rangeError = ReportRequestValidator.ValidateDateRange(from, to);
             if (rangeError is not null)
             {
@@ -358,6 +552,11 @@ public static class ReportEndpoints
                 }
             }
 
+            if (exportFormat == ReportExportFormat.Pdf && exportKind != ReportExportKind.Summary)
+            {
+                return ApiErrors.InvalidRequest("Định dạng PDF hiện chỉ hỗ trợ báo cáo tổng hợp.");
+            }
+
             var request = new ReportExportRequest(
                 from,
                 to,
@@ -366,12 +565,13 @@ public static class ReportEndpoints
                 customerTaxCode,
                 ownerId,
                 filterText,
-                exportKind);
+                exportKind,
+                exportFormat);
 
             var result = await exportService.ExportAsync(request, ct);
             return Results.File(
                 result.Content,
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                result.ContentType,
                 result.FileName);
         })
         .WithName("ReportExport")
@@ -381,3 +581,8 @@ public static class ReportEndpoints
         return app;
     }
 }
+
+public sealed record ReportOverviewResponse(
+    ReportKpiDto Kpis,
+    ReportChartsDto Charts,
+    ReportInsightsDto Insights);

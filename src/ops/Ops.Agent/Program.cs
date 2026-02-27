@@ -34,6 +34,7 @@ builder.Services.AddSingleton<SystemMetricsProbe>();
 builder.Services.AddSingleton<VersionProbe>();
 builder.Services.AddSingleton<BackendConfigEditor>();
 builder.Services.AddSingleton<FrontendMaintenanceService>();
+builder.Services.AddSingleton<DockerRuntimeControl>();
 builder.Services.AddSingleton<ISqlCommandRunner, SqlCommandRunner>();
 builder.Services.AddSingleton<SqlConsoleService>();
 builder.Services.AddSingleton<DatabaseAdminService>();
@@ -54,10 +55,34 @@ app.MapPut("/config", (OpsConfig input, ConfigStore configStore, AgentState stat
     return Results.Ok(input);
 });
 
-app.MapGet("/status", async (AgentState state, ServiceControl services, IisControl iis, CancellationToken ct) =>
+app.MapGet("/runtime/info", (AgentState state) =>
 {
-    var backend = services.GetStatus(state.Config.Backend.ServiceName);
-    var frontend = await iis.StatusAsync(state.Config.Frontend.IisSiteName, ct);
+    var runtime = state.Config.Runtime;
+    return Results.Ok(new RuntimeInfoDto(
+        runtime.Mode,
+        runtime.Docker.ComposeFilePath,
+        runtime.Docker.WorkingDirectory,
+        runtime.Docker.ProjectName,
+        runtime.Docker.BackendService,
+        runtime.Docker.FrontendService));
+});
+
+app.MapGet("/status", async (AgentState state, ServiceControl services, IisControl iis, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    ServiceStatusDto backend;
+    ServiceStatusDto frontend;
+
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        backend = await docker.GetServiceStatusAsync(state.Config, state.Config.Runtime.Docker.BackendService, ct);
+        frontend = await docker.GetServiceStatusAsync(state.Config, state.Config.Runtime.Docker.FrontendService, ct);
+    }
+    else
+    {
+        backend = services.GetStatus(state.Config.Backend.ServiceName);
+        frontend = await iis.StatusAsync(state.Config.Frontend.IisSiteName, ct);
+    }
+
     return Results.Ok(new { backend, frontend });
 });
 
@@ -67,20 +92,55 @@ app.MapGet("/metrics/system", async (AgentState state, SystemMetricsProbe probe,
     return Results.Ok(metrics);
 });
 
-app.MapPost("/services/backend/start", (AgentState state, ServiceControl services) =>
-    Results.Ok(services.Start(state.Config.Backend.ServiceName)));
+app.MapPost("/services/backend/start", async (AgentState state, ServiceControl services, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        return Results.Ok(await docker.StartServiceAsync(state.Config, state.Config.Runtime.Docker.BackendService, ct));
+    }
 
-app.MapPost("/services/backend/stop", (AgentState state, ServiceControl services) =>
-    Results.Ok(services.Stop(state.Config.Backend.ServiceName)));
+    return Results.Ok(services.Start(state.Config.Backend.ServiceName));
+});
 
-app.MapPost("/services/backend/restart", (AgentState state, ServiceControl services) =>
-    Results.Ok(services.Restart(state.Config.Backend.ServiceName)));
+app.MapPost("/services/backend/stop", async (AgentState state, ServiceControl services, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        return Results.Ok(await docker.StopServiceAsync(state.Config, state.Config.Runtime.Docker.BackendService, ct));
+    }
 
-app.MapPost("/services/frontend/start", async (AgentState state, IisControl iis, CancellationToken ct) =>
-    Results.Ok(await iis.StartAsync(state.Config.Frontend.IisSiteName, ct)));
+    return Results.Ok(services.Stop(state.Config.Backend.ServiceName));
+});
 
-app.MapPost("/services/frontend/stop", async (AgentState state, IisControl iis, CancellationToken ct) =>
-    Results.Ok(await iis.StopAsync(state.Config.Frontend.IisSiteName, ct)));
+app.MapPost("/services/backend/restart", async (AgentState state, ServiceControl services, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        return Results.Ok(await docker.RestartServiceAsync(state.Config, state.Config.Runtime.Docker.BackendService, ct));
+    }
+
+    return Results.Ok(services.Restart(state.Config.Backend.ServiceName));
+});
+
+app.MapPost("/services/frontend/start", async (AgentState state, IisControl iis, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        return Results.Ok(await docker.StartServiceAsync(state.Config, state.Config.Runtime.Docker.FrontendService, ct));
+    }
+
+    return Results.Ok(await iis.StartAsync(state.Config.Frontend.IisSiteName, ct));
+});
+
+app.MapPost("/services/frontend/stop", async (AgentState state, IisControl iis, DockerRuntimeControl docker, CancellationToken ct) =>
+{
+    if (state.Config.Runtime.IsDockerMode)
+    {
+        return Results.Ok(await docker.StopServiceAsync(state.Config, state.Config.Runtime.Docker.FrontendService, ct));
+    }
+
+    return Results.Ok(await iis.StopAsync(state.Config.Frontend.IisSiteName, ct));
+});
 
 app.MapGet("/frontend/bindings", async (AgentState state, IisControl iis, CancellationToken ct) =>
 {

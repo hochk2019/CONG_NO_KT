@@ -46,6 +46,19 @@ export type ReceiptCreateRequest = {
   description?: string | null
 }
 
+export type ReceiptDraftUpdateRequest = {
+  receiptNo?: string | null
+  receiptDate: string
+  amount: number
+  allocationMode: string
+  appliedPeriodStart?: string | null
+  method?: string | null
+  description?: string | null
+  allocationPriority?: string | null
+  selectedTargets?: ReceiptTargetRef[] | null
+  version: number
+}
+
 export type ReceiptPreviewResult = {
   lines: ReceiptPreviewLine[]
   unallocatedAmount: number
@@ -171,6 +184,29 @@ export type ReceiptVoidResult = {
   reversedAllocations: number
 }
 
+export type ReceiptBulkApproveItem = {
+  receiptId: string
+  version: number
+  selectedTargets?: ReceiptTargetRef[] | null
+  overridePeriodLock?: boolean
+  overrideReason?: string | null
+}
+
+export type ReceiptBulkApproveItemResult = {
+  receiptId: string
+  result: string
+  preview?: ReceiptPreviewResult | null
+  errorCode?: string | null
+  errorMessage?: string | null
+}
+
+export type ReceiptBulkApproveResult = {
+  total: number
+  approved: number
+  failed: number
+  items: ReceiptBulkApproveItemResult[]
+}
+
 export const approveReceipt = async (
   token: string,
   receiptId: string,
@@ -193,6 +229,52 @@ export const approveReceipt = async (
   })
 }
 
+export const updateReceiptDraft = async (
+  token: string,
+  receiptId: string,
+  payload: ReceiptDraftUpdateRequest,
+) => {
+  return apiFetch<ReceiptDto>(`/receipts/${receiptId}/draft`, {
+    method: 'PUT',
+    token,
+    body: {
+      receiptNo: payload.receiptNo ?? null,
+      receiptDate: payload.receiptDate,
+      amount: payload.amount,
+      allocationMode: payload.allocationMode,
+      appliedPeriodStart: payload.appliedPeriodStart ?? null,
+      method: payload.method ?? null,
+      description: payload.description ?? null,
+      allocationPriority: payload.allocationPriority ?? null,
+      selectedTargets: payload.selectedTargets ?? null,
+      version: payload.version,
+    },
+  })
+}
+
+export const approveReceiptsBulk = async (
+  token: string,
+  payload: {
+    items: ReceiptBulkApproveItem[]
+    continueOnError?: boolean
+  },
+) => {
+  return apiFetch<ReceiptBulkApproveResult>('/receipts/approve-bulk', {
+    method: 'POST',
+    token,
+    body: {
+      items: payload.items.map((item) => ({
+        receipt_id: item.receiptId,
+        version: item.version,
+        selected_targets: item.selectedTargets ?? null,
+        override_period_lock: item.overridePeriodLock ?? false,
+        override_reason: item.overrideReason ?? null,
+      })),
+      continue_on_error: payload.continueOnError ?? true,
+    },
+  })
+}
+
 export const voidReceipt = async (
   token: string,
   receiptId: string,
@@ -208,6 +290,26 @@ export const voidReceipt = async (
     token,
     body: {
       reason: payload.reason,
+      version: payload.version,
+      override_period_lock: payload.overridePeriodLock ?? false,
+      override_reason: payload.overrideReason ?? null,
+    },
+  })
+}
+
+export const unvoidReceipt = async (
+  token: string,
+  receiptId: string,
+  payload: {
+    version: number
+    overridePeriodLock?: boolean
+    overrideReason?: string
+  },
+) => {
+  return apiFetch<ReceiptDto>(`/receipts/${receiptId}/unvoid`, {
+    method: 'POST',
+    token,
+    body: {
       version: payload.version,
       override_period_lock: payload.overridePeriodLock ?? false,
       override_reason: payload.overrideReason ?? null,

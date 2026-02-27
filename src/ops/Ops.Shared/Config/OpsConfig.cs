@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace Ops.Shared.Config;
@@ -7,6 +8,7 @@ public sealed record OpsConfig
     public AgentConfig Agent { get; init; } = new();
     public BackendConfig Backend { get; init; } = new();
     public FrontendConfig Frontend { get; init; } = new();
+    public RuntimeConfig Runtime { get; init; } = new();
     public DatabaseConfig Database { get; init; } = new();
     public BackupScheduleConfig BackupSchedule { get; init; } = new();
     public PathsConfig Paths { get; init; } = new();
@@ -40,6 +42,25 @@ public sealed record FrontendConfig
     public string AppPath { get; init; } = "C:\\apps\\congno\\web";
     public string PublicUrl { get; init; } = "http://localhost:8081";
     public string LogPath { get; init; } = "C:\\inetpub\\logs\\LogFiles";
+}
+
+public sealed record RuntimeConfig
+{
+    // windows-service | docker
+    public string Mode { get; init; } = "windows-service";
+    public DockerRuntimeConfig Docker { get; init; } = new();
+
+    public bool IsDockerMode =>
+        string.Equals(Mode, "docker", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record DockerRuntimeConfig
+{
+    public string ComposeFilePath { get; init; } = "C:\\apps\\congno\\docker-compose.yml";
+    public string WorkingDirectory { get; init; } = "C:\\apps\\congno";
+    public string ProjectName { get; init; } = "congno";
+    public string BackendService { get; init; } = "api";
+    public string FrontendService { get; init; } = "web";
 }
 
 public sealed record DatabaseConfig

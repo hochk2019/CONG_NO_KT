@@ -27,13 +27,21 @@ public sealed class ConGNoDbContext : DbContext
     public DbSet<RiskRule> RiskRules => Set<RiskRule>();
     public DbSet<ReminderSetting> ReminderSettings => Set<ReminderSetting>();
     public DbSet<ReminderLog> ReminderLogs => Set<ReminderLog>();
+    public DbSet<ReminderResponseState> ReminderResponseStates => Set<ReminderResponseState>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<NotificationPreference> NotificationPreferences => Set<NotificationPreference>();
+    public DbSet<RiskMlModel> RiskMlModels => Set<RiskMlModel>();
+    public DbSet<RiskMlTrainingRun> RiskMlTrainingRuns => Set<RiskMlTrainingRun>();
     public DbSet<ZaloLinkToken> ZaloLinkTokens => Set<ZaloLinkToken>();
     public DbSet<BackupSettings> BackupSettings => Set<BackupSettings>();
     public DbSet<BackupJob> BackupJobs => Set<BackupJob>();
     public DbSet<BackupAudit> BackupAudits => Set<BackupAudit>();
     public DbSet<BackupUpload> BackupUploads => Set<BackupUpload>();
+    public DbSet<ErpIntegrationSetting> ErpIntegrationSettings => Set<ErpIntegrationSetting>();
+    public DbSet<ReportDeliverySchedule> ReportDeliverySchedules => Set<ReportDeliverySchedule>();
+    public DbSet<ReportDeliveryRun> ReportDeliveryRuns => Set<ReportDeliveryRun>();
+    public DbSet<RiskScoreSnapshot> RiskScoreSnapshots => Set<RiskScoreSnapshot>();
+    public DbSet<RiskDeltaAlert> RiskDeltaAlerts => Set<RiskDeltaAlert>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -43,6 +51,7 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("users");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.FailedLoginCount).HasDefaultValue(0);
         });
 
         modelBuilder.Entity<Role>(entity =>
@@ -63,6 +72,9 @@ public sealed class ConGNoDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.HasIndex(x => x.TokenHash).IsUnique();
             entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => x.AbsoluteExpiresAt);
+            entity.Property(x => x.DeviceFingerprintHash).HasMaxLength(64);
+            entity.Property(x => x.IpPrefix).HasMaxLength(64);
         });
 
         modelBuilder.Entity<Seller>(entity =>
@@ -140,6 +152,7 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("risk_rules");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.MatchMode).HasMaxLength(8).HasDefaultValue("ANY");
         });
 
         modelBuilder.Entity<ReminderSetting>(entity =>
@@ -156,6 +169,15 @@ public sealed class ConGNoDbContext : DbContext
             entity.HasKey(x => x.Id);
         });
 
+        modelBuilder.Entity<ReminderResponseState>(entity =>
+        {
+            entity.ToTable("reminder_response_states");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.CustomerTaxCode, x.Channel }).IsUnique();
+            entity.HasIndex(x => x.ResponseStatus);
+            entity.HasIndex(x => x.LatestResponseAt);
+        });
+
         modelBuilder.Entity<Notification>(entity =>
         {
             entity.ToTable("notifications");
@@ -169,6 +191,26 @@ public sealed class ConGNoDbContext : DbContext
             entity.HasKey(x => x.UserId);
             entity.Property(x => x.PopupSeverities).HasColumnType("jsonb");
             entity.Property(x => x.PopupSources).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<RiskMlModel>(entity =>
+        {
+            entity.ToTable("risk_ml_models");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.ModelKey, x.Version }).IsUnique();
+            entity.Property(x => x.FeatureSchema).HasColumnType("jsonb");
+            entity.Property(x => x.Parameters).HasColumnType("jsonb");
+            entity.Property(x => x.Metrics).HasColumnType("jsonb");
+            entity.Property(x => x.PositiveRatio).HasPrecision(8, 6);
+        });
+
+        modelBuilder.Entity<RiskMlTrainingRun>(entity =>
+        {
+            entity.ToTable("risk_ml_training_runs");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.StartedAt);
+            entity.Property(x => x.Metrics).HasColumnType("jsonb");
+            entity.Property(x => x.PositiveRatio).HasPrecision(8, 6);
         });
 
         modelBuilder.Entity<ZaloLinkToken>(entity =>
@@ -202,6 +244,54 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("backup_uploads");
             entity.HasKey(x => x.Id);
+        });
+
+        modelBuilder.Entity<ErpIntegrationSetting>(entity =>
+        {
+            entity.ToTable("erp_integration_settings");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.UpdatedAt);
+        });
+
+        modelBuilder.Entity<ReportDeliverySchedule>(entity =>
+        {
+            entity.ToTable("report_delivery_schedules");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.UserId);
+            entity.HasIndex(x => new { x.Enabled, x.NextRunAt });
+            entity.Property(x => x.Recipients).HasColumnType("jsonb");
+            entity.Property(x => x.FilterPayload).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<ReportDeliveryRun>(entity =>
+        {
+            entity.ToTable("report_delivery_runs");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.ScheduleId, x.StartedAt });
+            entity.Property(x => x.ArtifactMeta).HasColumnType("jsonb");
+        });
+
+        modelBuilder.Entity<RiskScoreSnapshot>(entity =>
+        {
+            entity.ToTable("risk_score_snapshots");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.AsOfDate);
+            entity.HasIndex(x => new { x.CustomerTaxCode, x.CreatedAt });
+            entity.HasIndex(x => new { x.CustomerTaxCode, x.AsOfDate }).IsUnique();
+            entity.Property(x => x.Score).HasPrecision(10, 4);
+        });
+
+        modelBuilder.Entity<RiskDeltaAlert>(entity =>
+        {
+            entity.ToTable("risk_delta_alerts");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.Status, x.DetectedAt });
+            entity.HasIndex(x => new { x.CustomerTaxCode, x.CreatedAt });
+            entity.HasIndex(x => new { x.CustomerTaxCode, x.AsOfDate }).IsUnique();
+            entity.Property(x => x.PrevScore).HasPrecision(10, 4);
+            entity.Property(x => x.CurrScore).HasPrecision(10, 4);
+            entity.Property(x => x.Delta).HasPrecision(10, 4);
+            entity.Property(x => x.Threshold).HasPrecision(10, 4);
         });
     }
 }

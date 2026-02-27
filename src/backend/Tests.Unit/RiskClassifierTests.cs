@@ -6,14 +6,14 @@ namespace CongNoGolden.Tests.Unit;
 public class RiskClassifierTests
 {
     [Fact]
-    public void Classify_Picks_Highest_Matching_Level()
+    public void Classify_Picks_Highest_Matching_Level_WithAnyMatchMode()
     {
         var rules = new[]
         {
-            new RiskRule(RiskLevel.VeryHigh, 90, 0.6m, 4),
-            new RiskRule(RiskLevel.High, 60, 0.4m, 3),
-            new RiskRule(RiskLevel.Medium, 30, 0.2m, 2),
-            new RiskRule(RiskLevel.Low, 0, 0m, 0)
+            new RiskRule(RiskLevel.VeryHigh, 90, 0.6m, 4, MatchMode: RiskMatchMode.Any),
+            new RiskRule(RiskLevel.High, 60, 0.4m, 3, MatchMode: RiskMatchMode.Any),
+            new RiskRule(RiskLevel.Medium, 30, 0.2m, 2, MatchMode: RiskMatchMode.Any),
+            new RiskRule(RiskLevel.Low, 0, 0m, 0, MatchMode: RiskMatchMode.Any)
         };
 
         var veryHigh = RiskClassifier.Classify(
@@ -35,5 +35,25 @@ public class RiskClassifierTests
             new RiskMetrics(100, 0, 0m, 0, 0),
             rules);
         Assert.Equal(RiskLevel.Low, low);
+    }
+
+    [Fact]
+    public void Classify_WithAllMatchMode_RequiresAllThresholds()
+    {
+        var rules = new[]
+        {
+            new RiskRule(RiskLevel.High, 30, 0.3m, 2, MatchMode: RiskMatchMode.All),
+            new RiskRule(RiskLevel.Low, 0, 0m, 0, MatchMode: RiskMatchMode.Any)
+        };
+
+        var onlyOneMetric = RiskClassifier.Classify(
+            new RiskMetrics(100, 40, 0.4m, 5, 0),
+            rules);
+        Assert.Equal(RiskLevel.Low, onlyOneMetric);
+
+        var allMetrics = RiskClassifier.Classify(
+            new RiskMetrics(100, 40, 0.4m, 35, 2),
+            rules);
+        Assert.Equal(RiskLevel.High, allMetrics);
     }
 }

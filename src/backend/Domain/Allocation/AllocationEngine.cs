@@ -25,9 +25,15 @@ public static class AllocationEngine
             AllocationMode.ByInvoice => OrderBySelected(request, eligible),
             AllocationMode.ByPeriod => OrderByPeriod(request, eligible),
             AllocationMode.Fifo => OrderByFifo(eligible),
+            AllocationMode.ProRata => OrderBySelected(request, eligible),
             AllocationMode.Manual => OrderBySelected(request, eligible),
             _ => OrderByFifo(eligible)
         };
+
+        if (request.Mode == AllocationMode.ProRata)
+        {
+            return AllocateProRata(request.Amount, ordered);
+        }
 
         var lines = new List<AllocationLine>();
         var remaining = request.Amount;
@@ -99,9 +105,63 @@ public static class AllocationEngine
         return inMonth;
     }
 
+    private static AllocationResult AllocateProRata(decimal requestedAmount, IReadOnlyList<AllocationTarget> targets)
+    {
+        if (requestedAmount <= 0 || targets.Count == 0)
+        {
+            return new AllocationResult(Array.Empty<AllocationLine>(), requestedAmount);
+        }
+
+        var totalOutstanding = targets.Sum(t => t.OutstandingAmount);
+        if (totalOutstanding <= 0)
+        {
+            return new AllocationResult(Array.Empty<AllocationLine>(), requestedAmount);
+        }
+
+        var allocatable = Math.Min(requestedAmount, totalOutstanding);
+        var allocations = new List<ProRataAllocation>(targets.Count);
+
+        foreach (var target in targets)
+        {
+            var raw = allocatable * (target.OutstandingAmount / totalOutstanding);
+            var roundedDown = decimal.Floor(raw * 100m) / 100m;
+            var amount = Math.Min(target.OutstandingAmount, roundedDown);
+            allocations.Add(new ProRataAllocation(target, amount));
+        }
+
+        var distributed = allocations.Sum(a => a.Amount);
+        var remainder = allocatable - distributed;
+        if (remainder > 0)
+        {
+            for (var i = 0; i < allocations.Count && remainder > 0; i++)
+            {
+                var current = allocations[i];
+                var capacity = current.Target.OutstandingAmount - current.Amount;
+                if (capacity <= 0)
+                {
+                    continue;
+                }
+
+                var delta = Math.Min(capacity, remainder);
+                allocations[i] = current with { Amount = current.Amount + delta };
+                remainder -= delta;
+            }
+        }
+
+        var lines = allocations
+            .Where(a => a.Amount > 0)
+            .Select(a => new AllocationLine(a.Target.Id, a.Target.TargetType, a.Amount))
+            .ToArray();
+
+        var totalAllocated = lines.Sum(l => l.Amount);
+        return new AllocationResult(lines, requestedAmount - totalAllocated);
+    }
+
     private static IReadOnlyList<AllocationTarget> OrderByFifo(
         IReadOnlyList<AllocationTarget> eligible)
     {
         return eligible.OrderBy(t => t.IssueDate).ToList();
     }
+
+    private readonly record struct ProRataAllocation(AllocationTarget Target, decimal Amount);
 }

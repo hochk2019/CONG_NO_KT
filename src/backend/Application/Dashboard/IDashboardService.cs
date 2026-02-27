@@ -6,4 +6,9 @@ public interface IDashboardService
     Task<IReadOnlyList<DashboardOverdueGroupItem>> GetOverdueGroupsAsync(
         DashboardOverdueGroupRequest request,
         CancellationToken ct);
+    Task<DashboardPreferencesDto> GetPreferencesAsync(Guid userId, CancellationToken ct);
+    Task<DashboardPreferencesDto> UpdatePreferencesAsync(
+        Guid userId,
+        UpdateDashboardPreferencesRequest request,
+        CancellationToken ct);
 }

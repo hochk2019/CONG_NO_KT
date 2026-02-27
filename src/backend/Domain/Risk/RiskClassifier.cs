@@ -22,8 +22,16 @@ public static class RiskClassifier
 
     private static bool Matches(RiskMetrics metrics, RiskRule rule)
     {
-        return metrics.MaxDaysPastDue >= rule.MinOverdueDays
-            || metrics.OverdueRatio >= rule.MinOverdueRatio
-            || metrics.LateCount >= rule.MinLateCount;
+        return rule.MatchMode switch
+        {
+            RiskMatchMode.All =>
+                metrics.MaxDaysPastDue >= rule.MinOverdueDays
+                && metrics.OverdueRatio >= rule.MinOverdueRatio
+                && metrics.LateCount >= rule.MinLateCount,
+            _ =>
+                metrics.MaxDaysPastDue >= rule.MinOverdueDays
+                || metrics.OverdueRatio >= rule.MinOverdueRatio
+                || metrics.LateCount >= rule.MinLateCount
+        };
     }
 }

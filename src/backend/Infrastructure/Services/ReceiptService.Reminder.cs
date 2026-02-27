@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Receipts;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -7,7 +8,7 @@ public sealed partial class ReceiptService
 {
     public async Task UpdateReminderAsync(Guid receiptId, ReceiptReminderUpdateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == receiptId && r.DeletedAt == null, ct);
         if (receipt is null)

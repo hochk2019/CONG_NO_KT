@@ -11,6 +11,9 @@ public sealed class User
     public string? ZaloUserId { get; set; }
     public DateTimeOffset? ZaloLinkedAt { get; set; }
     public bool IsActive { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTimeOffset? LastFailedLoginAt { get; set; }
+    public DateTimeOffset? LockoutEndAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public int Version { get; set; }
@@ -34,7 +37,10 @@ public sealed class RefreshToken
     public Guid Id { get; set; }
     public Guid UserId { get; set; }
     public string TokenHash { get; set; } = string.Empty;
+    public string? DeviceFingerprintHash { get; set; }
+    public string? IpPrefix { get; set; }
     public DateTimeOffset ExpiresAt { get; set; }
+    public DateTimeOffset AbsoluteExpiresAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
 }

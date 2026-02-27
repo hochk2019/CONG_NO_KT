@@ -4,13 +4,12 @@ import { ApiError } from '../api/client'
 import {
   exportReport,
   fetchReportAgingPaged,
-  fetchReportCharts,
-  fetchReportInsights,
-  fetchReportKpis,
+  fetchReportOverview,
   fetchReportPreferences,
   fetchReportStatementPaged,
   fetchReportSummaryPaged,
   updateReportPreferences,
+  type ReportExportFormat,
   type ReportExportKind,
   type ReportAgingRow,
   type ReportCharts,
@@ -30,6 +29,8 @@ import {
 } from '../api/lookups'
 import { useAuth } from '../context/AuthStore'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { usePagination } from '../hooks/usePagination'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { formatDate } from '../utils/format'
 import { ReportsChartsSection } from './reports/ReportsChartsSection'
 import { ReportsFilters, type ReportPreset } from './reports/ReportsFilters'
@@ -47,6 +48,7 @@ import {
   toDateInput,
   type ReportPresetConfig,
 } from './reports/reportUtils'
+import './reports/reports.css'
 
 type ExportJob = {
   id: number
@@ -64,19 +66,11 @@ const STATEMENT_PAGE_SIZE_KEY = 'reports.statement.pageSize'
 const AGING_PAGE_SIZE_KEY = 'reports.aging.pageSize'
 const TOP_OUTSTANDING_KEY = 'reports.insights.topOutstanding'
 
-const readStoredNumber = (key: string, fallback: number, allowed?: number[]) => {
-  if (typeof window === 'undefined') return fallback
-  const raw = window.localStorage.getItem(key)
-  const parsed = Number(raw)
-  if (!Number.isFinite(parsed)) return fallback
-  if (allowed?.length && !allowed.includes(parsed)) return fallback
-  return parsed
-}
+const isAllowedPageSize = (value: unknown): value is number =>
+  typeof value === 'number' && PAGE_SIZE_OPTIONS.includes(value)
 
-const storeNumber = (key: string, value: number) => {
-  if (typeof window === 'undefined') return
-  window.localStorage.setItem(key, String(value))
-}
+const isAllowedTopOutstanding = (value: unknown): value is number =>
+  typeof value === 'number' && TOP_OUTSTANDING_OPTIONS.includes(value)
 
 const arePreferencesEqual = (
   first: { kpiOrder: string[]; dueSoonDays: number } | null,
@@ -115,26 +109,41 @@ export function ReportsPage() {
   const [charts, setCharts] = useState<ReportCharts | null>(null)
   const [insights, setInsights] = useState<ReportInsights | null>(null)
   const [summaryRows, setSummaryRows] = useState<ReportSummaryRow[]>([])
-  const [summaryPage, setSummaryPage] = useState(1)
-  const [summaryPageSize, setSummaryPageSize] = useState(() =>
-    readStoredNumber(SUMMARY_PAGE_SIZE_KEY, DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS),
+  const [summaryPageSizePreference, setSummaryPageSizePreference] = usePersistedState<number>(
+    SUMMARY_PAGE_SIZE_KEY,
+    DEFAULT_PAGE_SIZE,
+    { validate: isAllowedPageSize },
   )
-  const [summaryTotal, setSummaryTotal] = useState(0)
+  const summaryPagination = usePagination({
+    initialPage: 1,
+    initialPageSize: summaryPageSizePreference,
+    initialTotal: 0,
+  })
   const [summarySortKey, setSummarySortKey] = useState('')
 
   const [statement, setStatement] = useState<ReportStatementPagedResult | null>(null)
-  const [statementPage, setStatementPage] = useState(1)
-  const [statementPageSize, setStatementPageSize] = useState(() =>
-    readStoredNumber(STATEMENT_PAGE_SIZE_KEY, DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS),
+  const [statementPageSizePreference, setStatementPageSizePreference] = usePersistedState<number>(
+    STATEMENT_PAGE_SIZE_KEY,
+    DEFAULT_PAGE_SIZE,
+    { validate: isAllowedPageSize },
   )
-  const [statementTotal, setStatementTotal] = useState(0)
+  const statementPagination = usePagination({
+    initialPage: 1,
+    initialPageSize: statementPageSizePreference,
+    initialTotal: 0,
+  })
 
   const [agingRows, setAgingRows] = useState<ReportAgingRow[]>([])
-  const [agingPage, setAgingPage] = useState(1)
-  const [agingPageSize, setAgingPageSize] = useState(() =>
-    readStoredNumber(AGING_PAGE_SIZE_KEY, DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS),
+  const [agingPageSizePreference, setAgingPageSizePreference] = usePersistedState<number>(
+    AGING_PAGE_SIZE_KEY,
+    DEFAULT_PAGE_SIZE,
+    { validate: isAllowedPageSize },
   )
-  const [agingTotal, setAgingTotal] = useState(0)
+  const agingPagination = usePagination({
+    initialPage: 1,
+    initialPageSize: agingPageSizePreference,
+    initialTotal: 0,
+  })
   const [agingSortKey, setAgingSortKey] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loadingAction, setLoadingAction] = useState('')
@@ -147,23 +156,22 @@ export function ReportsPage() {
   } | null>(null)
 
   const [preferencesLoaded, setPreferencesLoaded] = useState(false)
-  const [savingPreferences, setSavingPreferences] = useState(false)
   const [lastSavedPreferences, setLastSavedPreferences] = useState<ReportPreferences | null>(null)
   const [kpiOrder, setKpiOrder] = useState<string[]>(defaultKpiOrder)
   const [dueSoonDays, setDueSoonDays] = useState(7)
   const [overviewLoaded, setOverviewLoaded] = useState(false)
   const lastOverviewKey = useRef<string | null>(null)
   const overviewInFlight = useRef(false)
-  const [topOutstandingCount, setTopOutstandingCount] = useState(() =>
-    readStoredNumber(TOP_OUTSTANDING_KEY, TOP_OUTSTANDING_OPTIONS[0], TOP_OUTSTANDING_OPTIONS),
+  const [topOutstandingCount, setTopOutstandingCount] = usePersistedState<number>(
+    TOP_OUTSTANDING_KEY,
+    TOP_OUTSTANDING_OPTIONS[0],
+    { validate: isAllowedTopOutstanding },
   )
-  const [quickActionsOpen, setQuickActionsOpen] = useState(() => {
-    if (typeof window === 'undefined') return true
-    const stored = window.localStorage.getItem(quickActionsStorageKey)
-    if (stored === 'false') return false
-    if (stored === 'true') return true
-    return true
-  })
+  const [quickActionsOpen, setQuickActionsOpen] = usePersistedState<boolean>(
+    quickActionsStorageKey,
+    true,
+    { validate: (value): value is boolean => typeof value === 'boolean' },
+  )
 
   const presets = useMemo<ReportPresetConfig[]>(() => buildPresetList(), [])
   const presetOptions = useMemo<ReportPreset[]>(
@@ -257,27 +265,6 @@ export function ReportsPage() {
   }, [token])
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(quickActionsStorageKey, String(quickActionsOpen))
-  }, [quickActionsOpen])
-
-  useEffect(() => {
-    storeNumber(SUMMARY_PAGE_SIZE_KEY, summaryPageSize)
-  }, [summaryPageSize])
-
-  useEffect(() => {
-    storeNumber(STATEMENT_PAGE_SIZE_KEY, statementPageSize)
-  }, [statementPageSize])
-
-  useEffect(() => {
-    storeNumber(AGING_PAGE_SIZE_KEY, agingPageSize)
-  }, [agingPageSize])
-
-  useEffect(() => {
-    storeNumber(TOP_OUTSTANDING_KEY, topOutstandingCount)
-  }, [topOutstandingCount])
-
-  useEffect(() => {
     if (!token) return
     let isActive = true
     const loadPreferences = async () => {
@@ -306,7 +293,6 @@ export function ReportsPage() {
     let isActive = true
 
     const persistPreferences = async () => {
-      setSavingPreferences(true)
       try {
         const result = await updateReportPreferences(token, debouncedPreferences)
         if (!isActive) return
@@ -316,10 +302,6 @@ export function ReportsPage() {
       } catch {
         if (!isActive) return
         setError('Không lưu được cấu hình báo cáo.')
-      } finally {
-        if (isActive) {
-          setSavingPreferences(false)
-        }
       }
     }
 
@@ -373,6 +355,9 @@ export function ReportsPage() {
     if (target) {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
+  }, [])
+  const handlePrint = useCallback(() => {
+    window.print()
   }, [])
 
   const showValidation = useCallback((title: string, message: string) => {
@@ -455,9 +440,9 @@ export function ReportsPage() {
     setGroupBy('customer')
     setFilterText('')
     setUseCustomAsOf(false)
-    setSummaryPage(1)
-    setStatementPage(1)
-    setAgingPage(1)
+    summaryPagination.reset()
+    statementPagination.reset()
+    agingPagination.reset()
   }
 
   const handleLoadOverview = useCallback(async () => {
@@ -472,14 +457,14 @@ export function ReportsPage() {
     setError(null)
     setLoadingAction('overview')
     try {
-      const [kpiResult, chartsResult, insightsResult] = await Promise.all([
-        fetchReportKpis(token, { ...baseParams, dueSoonDays }),
-        fetchReportCharts(token, baseParams),
-        fetchReportInsights(token, { ...baseParams, top: topOutstandingCount }),
-      ])
-      setKpis(kpiResult)
-      setCharts(chartsResult)
-      setInsights(insightsResult)
+      const result = await fetchReportOverview(token, {
+        ...baseParams,
+        dueSoonDays,
+        top: topOutstandingCount,
+      })
+      setKpis(result.kpis)
+      setCharts(result.charts)
+      setInsights(result.insights)
       setOverviewLoaded(true)
       scrollToSection('overview')
     } catch (err) {
@@ -514,8 +499,8 @@ export function ReportsPage() {
   ])
 
   const loadSummary = async (
-    nextPage = summaryPage,
-    nextPageSize = summaryPageSize,
+    nextPage = summaryPagination.page,
+    nextPageSize = summaryPagination.pageSize,
     nextSortKey = summarySortKey,
   ) => {
     if (!token) {
@@ -535,9 +520,12 @@ export function ReportsPage() {
         sortDirection: nextSortKey ? 'desc' : undefined,
       })
       setSummaryRows(result.items)
-      setSummaryPage(result.page)
-      setSummaryPageSize(result.pageSize)
-      setSummaryTotal(result.total)
+      summaryPagination.update({
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+      })
+      setSummaryPageSizePreference(result.pageSize)
       setSummarySortKey(nextSortKey)
       scrollToSection('summary')
     } catch (err) {
@@ -552,12 +540,12 @@ export function ReportsPage() {
   }
 
   const handleSummary = async () => {
-    await loadSummary(1, summaryPageSize, summarySortKey)
+    await loadSummary(1, summaryPagination.pageSize, summarySortKey)
   }
 
   const loadStatement = async (
-    nextPage = statementPage,
-    nextPageSize = statementPageSize,
+    nextPage = statementPagination.page,
+    nextPageSize = statementPagination.pageSize,
   ) => {
     if (!token) {
       setError('Vui lòng đăng nhập.')
@@ -573,9 +561,12 @@ export function ReportsPage() {
         pageSize: nextPageSize,
       })
       setStatement(result)
-      setStatementPage(result.page)
-      setStatementPageSize(result.pageSize)
-      setStatementTotal(result.total)
+      statementPagination.update({
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+      })
+      setStatementPageSizePreference(result.pageSize)
       scrollToSection('statement')
     } catch (err) {
       if (err instanceof ApiError) {
@@ -595,18 +586,18 @@ export function ReportsPage() {
         'Hệ thống sẽ tải sao kê tổng hợp theo khoảng thời gian đã chọn. Bạn có thể chọn MST bên mua để xem riêng từng khách hàng.',
         () => {
           closeValidation()
-          void loadStatement(1, statementPageSize)
+          void loadStatement(1, statementPagination.pageSize)
         },
         'Tiếp tục tải',
       )
       return
     }
 
-    await loadStatement(1, statementPageSize)
+    await loadStatement(1, statementPagination.pageSize)
   }
   const loadAging = async (
-    nextPage = agingPage,
-    nextPageSize = agingPageSize,
+    nextPage = agingPagination.page,
+    nextPageSize = agingPagination.pageSize,
     nextSortKey = agingSortKey,
   ) => {
     if (!token) {
@@ -625,9 +616,12 @@ export function ReportsPage() {
         sortDirection: nextSortKey ? 'desc' : undefined,
       })
       setAgingRows(result.items)
-      setAgingPage(result.page)
-      setAgingPageSize(result.pageSize)
-      setAgingTotal(result.total)
+      agingPagination.update({
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+      })
+      setAgingPageSizePreference(result.pageSize)
       setAgingSortKey(nextSortKey)
       scrollToSection('aging')
     } catch (err) {
@@ -642,49 +636,49 @@ export function ReportsPage() {
   }
 
   const handleAging = async () => {
-    await loadAging(1, agingPageSize, agingSortKey)
+    await loadAging(1, agingPagination.pageSize, agingSortKey)
   }
 
   const handleSummaryPageChange = (page: number) => {
-    void loadSummary(page, summaryPageSize, summarySortKey)
+    void loadSummary(page, summaryPagination.pageSize, summarySortKey)
   }
 
   const handleSummaryPageSizeChange = (pageSize: number) => {
-    setSummaryPageSize(pageSize)
-    setSummaryPage(1)
+    summaryPagination.setPageSize(pageSize)
+    setSummaryPageSizePreference(pageSize)
     void loadSummary(1, pageSize, summarySortKey)
   }
 
   const handleSummarySortChange = (sortKey: string) => {
     setSummarySortKey(sortKey)
-    setSummaryPage(1)
-    void loadSummary(1, summaryPageSize, sortKey)
+    summaryPagination.setPage(1)
+    void loadSummary(1, summaryPagination.pageSize, sortKey)
   }
 
   const handleStatementPageChange = (page: number) => {
-    void loadStatement(page, statementPageSize)
+    void loadStatement(page, statementPagination.pageSize)
   }
 
   const handleStatementPageSizeChange = (pageSize: number) => {
-    setStatementPageSize(pageSize)
-    setStatementPage(1)
+    statementPagination.setPageSize(pageSize)
+    setStatementPageSizePreference(pageSize)
     void loadStatement(1, pageSize)
   }
 
   const handleAgingPageChange = (page: number) => {
-    void loadAging(page, agingPageSize, agingSortKey)
+    void loadAging(page, agingPagination.pageSize, agingSortKey)
   }
 
   const handleAgingPageSizeChange = (pageSize: number) => {
-    setAgingPageSize(pageSize)
-    setAgingPage(1)
+    agingPagination.setPageSize(pageSize)
+    setAgingPageSizePreference(pageSize)
     void loadAging(1, pageSize, agingSortKey)
   }
 
   const handleAgingSortChange = (sortKey: string) => {
     setAgingSortKey(sortKey)
-    setAgingPage(1)
-    void loadAging(1, agingPageSize, sortKey)
+    agingPagination.setPage(1)
+    void loadAging(1, agingPagination.pageSize, sortKey)
   }
 
   const handleTopOutstandingCountChange = (value: number) => {
@@ -692,7 +686,12 @@ export function ReportsPage() {
   }
 
   const runExport = useCallback(
-    async (kind: ReportExportKind, label: string, guards: (() => boolean)[]) => {
+    async (
+      kind: ReportExportKind,
+      label: string,
+      guards: (() => boolean)[],
+      format: ReportExportFormat = 'Xlsx',
+    ) => {
       if (!token) {
         setError('Vui lòng đăng nhập.')
         return
@@ -701,7 +700,7 @@ export function ReportsPage() {
         if (!guard()) return
       }
       setError(null)
-      const actionKey = `export-${kind.toLowerCase()}`
+      const actionKey = `export-${kind.toLowerCase()}-${format.toLowerCase()}`
       setLoadingAction(actionKey)
       const jobId = Date.now()
       const newJob: ExportJob = {
@@ -719,6 +718,7 @@ export function ReportsPage() {
             filterText: filterText || undefined,
           },
           kind,
+          format,
         )
         const url = window.URL.createObjectURL(result.blob)
         const link = document.createElement('a')
@@ -727,7 +727,7 @@ export function ReportsPage() {
         document.body.appendChild(link)
         link.click()
         link.remove()
-        window.URL.revokeObjectURL(url)
+        // Keep object URL alive to avoid 0-byte files in browsers that defer save handling.
         setExportJobs((prev) =>
           prev.map((job) =>
             job.id === jobId ? { ...job, state: 'done', fileName: result.fileName } : job,
@@ -753,6 +753,13 @@ export function ReportsPage() {
     runExport('Full', 'Xuất toàn bộ báo cáo', [() => ensureDateRange('xuất Excel')])
   const handleExportSummary = () =>
     runExport('Summary', 'Xuất báo cáo tổng hợp', [() => ensureDateRange('xuất Excel')])
+  const handleExportSummaryPdf = () =>
+    runExport(
+      'Summary',
+      'Xuất PDF tổng hợp',
+      [() => ensureDateRange('xuất PDF tổng hợp')],
+      'Pdf',
+    )
   const handleExportStatement = () => {
     if (!customerTaxCode.trim()) {
       showConfirm(
@@ -826,6 +833,20 @@ export function ReportsPage() {
     ownerOptions,
   ])
 
+  const printTimestamp = useMemo(
+    () =>
+      new Intl.DateTimeFormat('vi-VN', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(new Date()),
+    [],
+  )
+
+  const printFilterSummary = useMemo(() => {
+    if (filterChips.length === 0) return 'Không có bộ lọc.'
+    return filterChips.map((chip) => `${chip.label}: ${chip.value}`).join(' | ')
+  }, [filterChips])
+
   const statementCustomerName = useMemo(() => {
     const fromStatement = statement?.lines?.[0]?.customerName?.trim()
     if (fromStatement) return fromStatement
@@ -846,6 +867,9 @@ export function ReportsPage() {
           </p>
         </div>
         <div className="header-actions">
+          <button type="button" className="btn btn-ghost no-print" onClick={handlePrint}>
+            In báo cáo
+          </button>
           <a className="btn btn-ghost" href="#filters">
             Bộ lọc
           </a>
@@ -857,6 +881,13 @@ export function ReportsPage() {
           </a>
         </div>
       </div>
+
+      <section className="reports-print-header" aria-hidden="true">
+        <div className="reports-print-header__brand">CongNo Golden</div>
+        <h1>Báo cáo công nợ</h1>
+        <p>Thời điểm in: {printTimestamp}</p>
+        <p className="reports-print-header__filters">{printFilterSummary}</p>
+      </section>
 
       <ReportsFilters
         filter={{
@@ -949,7 +980,6 @@ export function ReportsPage() {
         kpis={kpis}
         kpiOrder={kpiOrder}
         dueSoonDays={dueSoonDays}
-        savingPreferences={savingPreferences}
         onMoveKpi={handleMoveKpi}
         onResetKpiOrder={handleResetKpiOrder}
         onDueSoonDaysChange={handleDueSoonDaysChange}
@@ -969,13 +999,21 @@ export function ReportsPage() {
         summaryRows={summaryRows}
         statement={statement}
         agingRows={agingRows}
-        summaryPagination={{ page: summaryPage, pageSize: summaryPageSize, total: summaryTotal }}
-        statementPagination={{
-          page: statementPage,
-          pageSize: statementPageSize,
-          total: statementTotal,
+        summaryPagination={{
+          page: summaryPagination.page,
+          pageSize: summaryPagination.pageSize,
+          total: summaryPagination.total,
         }}
-        agingPagination={{ page: agingPage, pageSize: agingPageSize, total: agingTotal }}
+        statementPagination={{
+          page: statementPagination.page,
+          pageSize: statementPagination.pageSize,
+          total: statementPagination.total,
+        }}
+        agingPagination={{
+          page: agingPagination.page,
+          pageSize: agingPagination.pageSize,
+          total: agingPagination.total,
+        }}
         summarySortKey={summarySortKey}
         agingSortKey={agingSortKey}
         loadingSummary={loadingAction === 'summary'}
@@ -983,10 +1021,12 @@ export function ReportsPage() {
         loadingAging={loadingAction === 'aging'}
         statementCustomerTaxCode={customerTaxCode || undefined}
         statementCustomerName={statementCustomerName || undefined}
-        exportingSummary={loadingAction.startsWith('export')}
-        exportingStatement={loadingAction.startsWith('export')}
-        exportingAging={loadingAction.startsWith('export')}
+        exportingSummary={loadingAction === 'export-summary-xlsx'}
+        exportingSummaryPdf={loadingAction === 'export-summary-pdf'}
+        exportingStatement={loadingAction === 'export-statement-xlsx'}
+        exportingAging={loadingAction === 'export-aging-xlsx'}
         onExportSummary={handleExportSummary}
+        onExportSummaryPdf={handleExportSummaryPdf}
         onExportStatement={handleExportStatement}
         onExportAging={handleExportAging}
         onSummaryPageChange={handleSummaryPageChange}

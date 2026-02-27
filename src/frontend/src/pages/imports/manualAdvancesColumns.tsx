@@ -31,6 +31,7 @@ type ManualAdvanceColumnsOptions = {
   onCancelEdit: () => void
   onApprove: (row: AdvanceListItem) => void
   onVoid: (row: AdvanceListItem) => void
+  onUnvoid: (row: AdvanceListItem) => void
   loadingAction: string
 }
 
@@ -43,6 +44,7 @@ export const buildManualAdvanceColumns = ({
   onCancelEdit,
   onApprove,
   onVoid,
+  onUnvoid,
   loadingAction,
 }: ManualAdvanceColumnsOptions) => [
   {
@@ -142,6 +144,7 @@ export const buildManualAdvanceColumns = ({
       const canEdit = status !== 'VOID'
       const canApprove = row.status.toUpperCase() === 'DRAFT'
       const canVoid = row.status.toUpperCase() !== 'VOID'
+      const canUnvoid = row.status.toUpperCase() === 'VOID'
       return (
         <div className="input-row">
           {canEdit && (
@@ -167,14 +170,25 @@ export const buildManualAdvanceColumns = ({
           >
             {loadingAction === `approve:${row.id}` ? 'Đang phê duyệt...' : 'Phê duyệt'}
           </button>
-          <button
-            className="btn btn-outline-danger"
-            type="button"
-            onClick={() => onVoid(row)}
-            disabled={!canVoid || loadingAction === `void:${row.id}`}
-          >
-            {loadingAction === `void:${row.id}` ? 'Đang hủy...' : 'Hủy'}
-          </button>
+          {canUnvoid ? (
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={() => onUnvoid(row)}
+              disabled={loadingAction === `unvoid:${row.id}`}
+            >
+              {loadingAction === `unvoid:${row.id}` ? 'Đang bỏ hủy...' : 'Bỏ hủy'}
+            </button>
+          ) : (
+            <button
+              className="btn btn-outline-danger"
+              type="button"
+              onClick={() => onVoid(row)}
+              disabled={!canVoid || loadingAction === `void:${row.id}`}
+            >
+              {loadingAction === `void:${row.id}` ? 'Đang hủy...' : 'Hủy'}
+            </button>
+          )}
         </div>
       )
     },

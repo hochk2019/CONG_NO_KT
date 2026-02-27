@@ -6,6 +6,7 @@ import AppShell from './layouts/AppShell'
 import {
   loadAdminAuditPage,
   loadAdminBackupPage,
+  loadAdminErpIntegrationPage,
   loadAdminHealthPage,
   loadAdminPeriodLocksPage,
   loadAdminUsersPage,
@@ -25,6 +26,7 @@ import {
 
 const AdminAuditPage = lazy(loadAdminAuditPage)
 const AdminBackupPage = lazy(loadAdminBackupPage)
+const AdminErpIntegrationPage = lazy(loadAdminErpIntegrationPage)
 const AdminHealthPage = lazy(loadAdminHealthPage)
 const AdminPeriodLocksPage = lazy(loadAdminPeriodLocksPage)
 const AdminUsersPage = lazy(loadAdminUsersPage)
@@ -87,6 +89,14 @@ export default function App() {
               element={
                 <RequireRole roles={['Admin', 'Supervisor']}>
                   <AdminHealthPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/admin/erp-integration"
+              element={
+                <RequireRole roles={['Admin', 'Supervisor']}>
+                  <AdminErpIntegrationPage />
                 </RequireRole>
               }
             />

@@ -76,7 +76,7 @@ GROUP BY 1;
             ownerId = request.OwnerId
         };
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         using var multi = await connection.QueryMultipleAsync(

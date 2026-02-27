@@ -1,5 +1,11 @@
 # Ops Admin Console Implementation Plan
 
+> [!IMPORTANT]
+> **HISTORICAL EXECUTION PLAN**
+> Tài liệu này là kế hoạch/thực thi theo thời điểm viết, có thể chứa giả định cũ.
+> Nguồn vận hành hiện hành: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `task.md`.
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Build a Windows Ops admin .exe + Agent Windows Service to manage backend/frontend/DB/backup/restore and updates for CongNoGolden.
@@ -809,3 +815,4 @@ Skip unless user asks for commit.
 
 Skip unless user asks for commit.
 ```
+

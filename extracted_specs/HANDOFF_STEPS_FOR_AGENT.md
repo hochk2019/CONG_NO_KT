@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # HANDOFF_STEPS_FOR_AGENT — Cách đưa tài liệu cho Agent Antigravity
 
 ## Bạn gửi gì?
@@ -11,3 +18,5 @@
 - Phase 1 thiếu module boundaries / server paging policy → FAIL
 - Phase 2 thiếu staging import + unit tests allocation → FAIL
 - Phase 3 thiếu allocation preview / ownership approve → FAIL
+
+

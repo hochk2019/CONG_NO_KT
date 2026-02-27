@@ -5,6 +5,7 @@ public enum AllocationMode
     ByInvoice,
     ByPeriod,
     Fifo,
+    ProRata,
     Manual
 }
 

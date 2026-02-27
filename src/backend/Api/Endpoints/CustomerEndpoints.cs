@@ -46,6 +46,18 @@ public static class CustomerEndpoints
         .WithTags("Customers")
         .RequireAuthorization("CustomerView");
 
+        app.MapGet("/customers/{taxCode}/360", async (
+            string taxCode,
+            ICustomerService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.Get360Async(taxCode, ct);
+            return result is null ? ApiErrors.NotFound("Customer not found.") : Results.Ok(result);
+        })
+        .WithName("Customer360")
+        .WithTags("Customers")
+        .RequireAuthorization("CustomerView");
+
         app.MapPut("/customers/{taxCode}", async (
             string taxCode,
             CustomerUpdateRequest request,

@@ -6,15 +6,29 @@ namespace CongNoGolden.Infrastructure.Data;
 
 public sealed class NpgsqlConnectionFactory : IDbConnectionFactory
 {
-    private readonly string _connectionString;
+    private readonly string _writeConnectionString;
+    private readonly string? _readConnectionString;
 
-    public NpgsqlConnectionFactory(string connectionString)
+    public NpgsqlConnectionFactory(string writeConnectionString, string? readConnectionString = null)
     {
-        _connectionString = connectionString;
+        _writeConnectionString = writeConnectionString;
+        _readConnectionString = string.IsNullOrWhiteSpace(readConnectionString)
+            ? null
+            : readConnectionString.Trim();
     }
 
     public DbConnection Create()
     {
-        return new NpgsqlConnection(_connectionString);
+        return CreateWrite();
+    }
+
+    public DbConnection CreateRead()
+    {
+        return new NpgsqlConnection(_readConnectionString ?? _writeConnectionString);
+    }
+
+    public DbConnection CreateWrite()
+    {
+        return new NpgsqlConnection(_writeConnectionString);
     }
 }

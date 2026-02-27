@@ -1,3 +1,5 @@
+import { useEffect } from 'react'
+
 type ImportPreviewModalProps = {
   isOpen: boolean
   onClose: () => void
@@ -32,6 +34,21 @@ type ImportPreviewModalProps = {
   actionSuggestionLabels: Record<string, string>
 }
 
+const isInteractiveElement = (target: EventTarget | null) => {
+  if (!(target instanceof HTMLElement)) {
+    return false
+  }
+  const tag = target.tagName
+  return (
+    target.isContentEditable ||
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    tag === 'BUTTON' ||
+    tag === 'A'
+  )
+}
+
 export default function ImportPreviewModal({
   isOpen,
   onClose,
@@ -51,6 +68,51 @@ export default function ImportPreviewModal({
   previewStatusLabels,
   actionSuggestionLabels,
 }: ImportPreviewModalProps) {
+  useEffect(() => {
+    if (!isOpen) {
+      return
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isInteractiveElement(event.target)) {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        onClose()
+        return
+      }
+
+      if (!preview) {
+        return
+      }
+
+      const canGoPrev = preview.page > 1
+      const canGoNext = preview.page < previewTotalPages
+
+      if (event.key === 'ArrowLeft' || (event.key === 'Enter' && event.shiftKey)) {
+        if (!canGoPrev) {
+          return
+        }
+        event.preventDefault()
+        onPrevPage()
+        return
+      }
+
+      if (event.key === 'ArrowRight' || (event.key === 'Enter' && !event.shiftKey)) {
+        if (!canGoNext) {
+          return
+        }
+        event.preventDefault()
+        onNextPage()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isOpen, onClose, onNextPage, onPrevPage, preview, previewTotalPages])
+
   if (!isOpen) return null
 
   return (
@@ -164,6 +226,10 @@ export default function ImportPreviewModal({
               <div className="table-controls">
                 <div className="table-page-info">
                   Trang {preview.page} / {previewTotalPages} (Tổng {preview.totalRows})
+                  <div className="muted">
+                    Phím tắt: <kbd>Esc</kbd> đóng • <kbd>←</kbd>/<kbd>→</kbd> đổi trang •{' '}
+                    <kbd>Enter</kbd>/<kbd>Shift</kbd>+<kbd>Enter</kbd>
+                  </div>
                 </div>
                 <div className="table-page-actions">
                   <button className="btn btn-ghost" type="button" onClick={onPrevPage} disabled={preview.page <= 1}>

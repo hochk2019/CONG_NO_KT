@@ -1,10 +1,12 @@
 using System.Text.Json;
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Receipts;
 using CongNoGolden.Domain.Allocation;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -24,12 +26,17 @@ public sealed partial class ReceiptService : IReceiptService
 
     public async Task<PagedResult<ReceiptListItem>> ListAsync(ReceiptListRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var page = request.Page <= 0 ? 1 : request.Page;
         var pageSize = request.PageSize <= 0 ? 20 : Math.Min(request.PageSize, 200);
+        var statusFilter = request.Status?.Trim().ToUpperInvariant();
+        var includeVoided = statusFilter == ReceiptStatusCodes.Void;
 
-        var query = _db.Receipts.AsNoTracking().Where(r => r.DeletedAt == null);
+        var query = _db.Receipts.AsNoTracking();
+        query = includeVoided
+            ? query.Where(r => r.DeletedAt != null)
+            : query.Where(r => r.DeletedAt == null);
 
         if (!string.IsNullOrWhiteSpace(request.SellerTaxCode))
         {
@@ -43,10 +50,9 @@ public sealed partial class ReceiptService : IReceiptService
             query = query.Where(r => r.CustomerTaxCode == customer);
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Status))
+        if (!string.IsNullOrWhiteSpace(statusFilter))
         {
-            var status = request.Status.Trim().ToUpperInvariant();
-            query = query.Where(r => r.Status == status);
+            query = query.Where(r => r.Status == statusFilter);
         }
 
         if (!string.IsNullOrWhiteSpace(request.AllocationStatus))
@@ -55,11 +61,12 @@ public sealed partial class ReceiptService : IReceiptService
             query = allocationStatus switch
             {
                 "ALLOCATED" => query.Where(r =>
-                    r.AllocationStatus == "ALLOCATED" || r.AllocationStatus == "PARTIAL"),
+                    r.AllocationStatus == ReceiptAllocationStatusCodes.Allocated ||
+                    r.AllocationStatus == ReceiptAllocationStatusCodes.Partial),
                 "UNALLOCATED" => query.Where(r =>
-                    r.AllocationStatus == "UNALLOCATED" ||
-                    r.AllocationStatus == "SELECTED" ||
-                    r.AllocationStatus == "SUGGESTED"),
+                    r.AllocationStatus == ReceiptAllocationStatusCodes.Unallocated ||
+                    r.AllocationStatus == ReceiptAllocationStatusCodes.Selected ||
+                    r.AllocationStatus == ReceiptAllocationStatusCodes.Suggested),
                 _ => query.Where(r => r.AllocationStatus == allocationStatus)
             };
         }
@@ -71,7 +78,8 @@ public sealed partial class ReceiptService : IReceiptService
 
             var receiptMatches = _db.Receipts
                 .AsNoTracking()
-                .Where(r => r.DeletedAt == null && r.ReceiptNo != null && EF.Functions.ILike(r.ReceiptNo, pattern))
+                .Where(r => includeVoided ? r.DeletedAt != null : r.DeletedAt == null)
+                .Where(r => r.ReceiptNo != null && EF.Functions.ILike(r.ReceiptNo, pattern))
                 .Select(r => r.Id);
 
             var invoiceMatches = _db.ReceiptAllocations
@@ -145,14 +153,15 @@ public sealed partial class ReceiptService : IReceiptService
                 : query.Where(r => r.ReminderDisabledAt != null);
         }
 
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var isAdmin = roles.Contains("Admin") || roles.Contains("Supervisor");
-        var userId = _currentUser.UserId;
+        var ownerFilter = _currentUser.ResolveOwnerFilter(
+            privilegedRoles: ["Admin", "Supervisor"]);
+        var isAdmin = !ownerFilter.HasValue;
 
-        if (!isAdmin && userId.HasValue)
+        if (ownerFilter.HasValue)
         {
+            var ownerId = ownerFilter.Value;
             query = query.Where(r => _db.Customers
-                .Any(c => c.TaxCode == r.CustomerTaxCode && c.AccountantOwnerId == userId));
+                .Any(c => c.TaxCode == r.CustomerTaxCode && c.AccountantOwnerId == ownerId));
         }
 
         var total = await query.CountAsync(ct);
@@ -216,7 +225,7 @@ public sealed partial class ReceiptService : IReceiptService
                 ? name
                 : null;
 
-            var canManage = isAdmin || (userId.HasValue && customer?.AccountantOwnerId == userId);
+            var canManage = isAdmin || customer?.AccountantOwnerId == ownerFilter;
 
             return new ReceiptListItem(
                 r.Id,
@@ -246,7 +255,7 @@ public sealed partial class ReceiptService : IReceiptService
 
     public async Task<ReceiptDto> CreateAsync(ReceiptCreateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         if (request.Amount <= 0)
         {
@@ -314,7 +323,9 @@ public sealed partial class ReceiptService : IReceiptService
         var allocationTargetsJson = selectedTargets.Count > 0
             ? SerializeTargets(selectedTargets)
             : null;
-        var allocationStatus = selectedTargets.Count > 0 ? "SELECTED" : "UNALLOCATED";
+        var allocationStatus = selectedTargets.Count > 0
+            ? ReceiptAllocationStatusCodes.Selected
+            : ReceiptAllocationStatusCodes.Unallocated;
         var allocationSource = selectedTargets.Count > 0 ? "MANUAL" : null;
 
         var receipt = new Receipt
@@ -334,7 +345,7 @@ public sealed partial class ReceiptService : IReceiptService
             AllocationTargets = allocationTargetsJson,
             AllocationSource = allocationSource,
             UnallocatedAmount = 0,
-            Status = "DRAFT",
+            Status = ReceiptStatusCodes.Draft,
             CreatedBy = _currentUser.UserId,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
@@ -394,145 +405,140 @@ public sealed partial class ReceiptService : IReceiptService
 
     public async Task<ReceiptPreviewResult> ApproveAsync(Guid receiptId, ReceiptApproveRequest request, CancellationToken ct)
     {
-        var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == receiptId && r.DeletedAt == null, ct);
-        if (receipt is null)
+        try
         {
-            throw new InvalidOperationException("Receipt not found.");
-        }
-
-        if (request.Version is null)
-        {
-            throw new InvalidOperationException("Receipt version is required.");
-        }
-
-        if (request.Version.Value != receipt.Version)
-        {
-            throw new ConcurrencyException("Receipt was updated by another user. Please refresh.");
-        }
-
-        if (receipt.Status != "DRAFT")
-        {
-            throw new InvalidOperationException("Receipt status is not eligible for approval.");
-        }
-
-        await EnsureCanApproveReceipt(receipt, ct);
-        var lockedPeriods = await ReceiptPeriodLock.GetLockedPeriodsAsync(_db, receipt, ct);
-        var overrideApplied = false;
-        var overrideReason = string.Empty;
-        if (lockedPeriods.Count > 0)
-        {
-            if (!request.OverridePeriodLock)
+            var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == receiptId && r.DeletedAt == null, ct);
+            if (receipt is null)
             {
-                throw new InvalidOperationException(
-                    $"Period is locked for receipt approval: {string.Join(", ", lockedPeriods)}.");
+                throw new InvalidOperationException("Receipt not found.");
             }
 
-            overrideReason = PeriodLockOverridePolicy.RequireOverride(_currentUser, request.OverrideReason);
-            overrideApplied = true;
-        }
+            if (request.Version is null)
+            {
+                throw new InvalidOperationException("Receipt version is required.");
+            }
 
-        var mode = ParseMode(receipt.AllocationMode);
-        var selected = MapSelectedTargets(request.SelectedTargets ?? DeserializeTargets(receipt.AllocationTargets));
+            if (request.Version.Value != receipt.Version)
+            {
+                throw new ConcurrencyException("Receipt was updated by another user. Please refresh.");
+            }
 
-        var previousStatus = receipt.Status;
+            if (receipt.Status != ReceiptStatusCodes.Draft)
+            {
+                throw new InvalidOperationException("Receipt status is not eligible for approval.");
+            }
 
-        await using var tx = await _db.Database.BeginTransactionAsync(ct);
+            await EnsureCanApproveReceipt(receipt, ct);
+            var lockedPeriods = await ReceiptPeriodLock.GetLockedPeriodsAsync(_db, receipt, ct);
+            var overrideApplied = false;
+            var overrideReason = string.Empty;
+            if (lockedPeriods.Count > 0)
+            {
+                if (!request.OverridePeriodLock)
+                {
+                    throw new InvalidOperationException(
+                        $"Period is locked for receipt approval: {string.Join(", ", lockedPeriods)}.");
+                }
 
-        var targets = await LoadTargetsAsync(receipt.SellerTaxCode, receipt.CustomerTaxCode, ct);
-        if (targets.Count > 0 && (selected is null || selected.Count == 0))
-        {
-            throw new InvalidOperationException("Cần chọn chứng từ để phân bổ phiếu thu.");
-        }
-        var allocation = AllocationEngine.Allocate(
-            new AllocationRequest(receipt.Amount, mode, receipt.AppliedPeriodStart, selected),
-            targets);
+                overrideReason = PeriodLockOverridePolicy.RequireOverride(_currentUser, request.OverrideReason);
+                overrideApplied = true;
+            }
 
-        var allocatedTotal = allocation.Lines.Sum(l => l.Amount);
+            var mode = ParseMode(receipt.AllocationMode);
+            var selected = MapSelectedTargets(request.SelectedTargets ?? DeserializeTargets(receipt.AllocationTargets));
 
-        await ApplyAllocations(receipt, allocation.Lines, ct);
+            var previousStatus = receipt.Status;
 
-        var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
-        if (customer is not null)
-        {
-            customer.CurrentBalance -= receipt.Amount;
-        }
+            await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        var finalTargets = request.SelectedTargets ?? DeserializeTargets(receipt.AllocationTargets);
+            var targets = await LoadTargetsAsync(receipt.SellerTaxCode, receipt.CustomerTaxCode, ct);
+            if (targets.Count > 0 && (selected is null || selected.Count == 0))
+            {
+                throw new InvalidOperationException("Cần chọn chứng từ để phân bổ phiếu thu.");
+            }
+            var allocation = AllocationEngine.Allocate(
+                new AllocationRequest(receipt.Amount, mode, receipt.AppliedPeriodStart, selected),
+                targets);
 
-        receipt.Status = "APPROVED";
-        receipt.ApprovedAt = DateTimeOffset.UtcNow;
-        receipt.ApprovedBy = _currentUser.UserId;
-        receipt.UnallocatedAmount = allocation.UnallocatedAmount;
-        receipt.AllocationStatus = allocation.UnallocatedAmount > 0 ? "PARTIAL" : "ALLOCATED";
-        receipt.AllocationTargets = SerializeTargets(finalTargets);
-        if (request.SelectedTargets is not null)
-        {
-            receipt.AllocationSource = "MANUAL";
-        }
-        receipt.UpdatedAt = DateTimeOffset.UtcNow;
-        receipt.Version += 1;
+            var allocatedTotal = allocation.Lines.Sum(l => l.Amount);
 
-        await _db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+            await ApplyAllocations(receipt, allocation.Lines, ct);
 
-        if (overrideApplied)
-        {
+            var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
+            if (customer is not null)
+            {
+                customer.CurrentBalance -= receipt.Amount;
+            }
+
+            var finalTargets = request.SelectedTargets ?? DeserializeTargets(receipt.AllocationTargets);
+
+            receipt.Status = ReceiptStatusCodes.Approved;
+            receipt.ApprovedAt = DateTimeOffset.UtcNow;
+            receipt.ApprovedBy = _currentUser.UserId;
+            receipt.UnallocatedAmount = allocation.UnallocatedAmount;
+            receipt.AllocationStatus = allocation.UnallocatedAmount > 0
+                ? ReceiptAllocationStatusCodes.Partial
+                : ReceiptAllocationStatusCodes.Allocated;
+            receipt.AllocationTargets = SerializeTargets(finalTargets);
+            if (request.SelectedTargets is not null)
+            {
+                receipt.AllocationSource = "MANUAL";
+            }
+            receipt.UpdatedAt = DateTimeOffset.UtcNow;
+            receipt.Version += 1;
+
+            await _db.SaveChangesAsync(ct);
+
+            if (overrideApplied)
+            {
+                await _auditService.LogAsync(
+                    "PERIOD_LOCK_OVERRIDE",
+                    "Receipt",
+                    receipt.Id.ToString(),
+                    null,
+                    new { operation = "RECEIPT_APPROVE", lockedPeriods, reason = overrideReason },
+                    ct);
+            }
+
             await _auditService.LogAsync(
-                "PERIOD_LOCK_OVERRIDE",
+                "RECEIPT_APPROVE",
                 "Receipt",
                 receipt.Id.ToString(),
-                null,
-                new { operation = "RECEIPT_APPROVE", lockedPeriods, reason = overrideReason },
+                new { status = previousStatus },
+                new { status = receipt.Status, allocatedTotal, allocation.UnallocatedAmount },
                 ct);
+
+            await tx.CommitAsync(ct);
+
+            if (receipt.AllocationStatus == ReceiptAllocationStatusCodes.Partial &&
+                receipt.UnallocatedAmount > 0)
+            {
+                await NotifyPartialAllocationAsync(receipt, ct);
+                await _db.SaveChangesAsync(ct);
+            }
+
+            BusinessMetrics.RecordReceiptApprovalSuccess(
+                receipt.AllocationStatus,
+                receipt.Amount,
+                allocation.UnallocatedAmount);
+
+            return new ReceiptPreviewResult(
+                allocation.Lines.Select(l => new ReceiptPreviewLine(l.TargetId, l.TargetType.ToString().ToUpperInvariant(), l.Amount)).ToList(),
+                allocation.UnallocatedAmount);
         }
-
-        await _auditService.LogAsync(
-            "RECEIPT_APPROVE",
-            "Receipt",
-            receipt.Id.ToString(),
-            new { status = previousStatus },
-            new { status = receipt.Status, allocatedTotal, allocation.UnallocatedAmount },
-            ct);
-
-        if (receipt.AllocationStatus == "PARTIAL" && receipt.UnallocatedAmount > 0)
+        catch (Exception ex) when (ex is ConcurrencyException or InvalidOperationException or UnauthorizedAccessException)
         {
-            await NotifyPartialAllocationAsync(receipt, ct);
-            await _db.SaveChangesAsync(ct);
+            BusinessMetrics.RecordReceiptApprovalFailure(ResolveReceiptApprovalFailureReason(ex));
+            throw;
         }
-
-        return new ReceiptPreviewResult(
-            allocation.Lines.Select(l => new ReceiptPreviewLine(l.TargetId, l.TargetType.ToString().ToUpperInvariant(), l.Amount)).ToList(),
-            allocation.UnallocatedAmount);
     }
 
     private async Task EnsureCanApproveReceipt(Receipt receipt, CancellationToken ct)
     {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
-
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        if (roles.Contains("Admin") || roles.Contains("Supervisor"))
-        {
-            return;
-        }
-
-        if (roles.Contains("Accountant"))
-        {
-            var ownerId = await _db.Customers
-                .AsNoTracking()
-                .Where(c => c.TaxCode == receipt.CustomerTaxCode)
-                .Select(c => c.AccountantOwnerId)
-                .FirstOrDefaultAsync(ct);
-
-            if (ownerId.HasValue && ownerId.Value == _currentUser.UserId)
-            {
-                return;
-            }
-        }
-
-        throw new UnauthorizedAccessException("Not allowed to approve this receipt.");
+        await EnsureCanManageCustomer(
+            receipt.CustomerTaxCode,
+            ct,
+            "Not allowed to approve this receipt.");
     }
 
     private async Task<List<AllocationTarget>> LoadTargetsAsync(string sellerTaxCode, string customerTaxCode, CancellationToken ct)
@@ -562,6 +568,7 @@ public sealed partial class ReceiptService : IReceiptService
             "BY_INVOICE" => AllocationMode.ByInvoice,
             "BY_PERIOD" => AllocationMode.ByPeriod,
             "FIFO" => AllocationMode.Fifo,
+            "PRO_RATA" => AllocationMode.ProRata,
             "MANUAL" => AllocationMode.Manual,
             _ => AllocationMode.Fifo
         };
@@ -571,7 +578,7 @@ public sealed partial class ReceiptService : IReceiptService
         Guid receiptId,
         CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var receipt = await _db.Receipts
             .AsNoTracking()
@@ -582,11 +589,9 @@ public sealed partial class ReceiptService : IReceiptService
             throw new InvalidOperationException("Receipt not found.");
         }
 
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var isAdmin = roles.Contains("Admin") || roles.Contains("Supervisor");
-        var userId = _currentUser.UserId;
-
-        if (!isAdmin && userId.HasValue)
+        var ownerFilter = _currentUser.ResolveOwnerFilter(
+            privilegedRoles: ["Admin", "Supervisor"]);
+        if (ownerFilter.HasValue)
         {
             var ownerId = await _db.Customers
                 .AsNoTracking()
@@ -594,7 +599,7 @@ public sealed partial class ReceiptService : IReceiptService
                 .Select(c => c.AccountantOwnerId)
                 .FirstOrDefaultAsync(ct);
 
-            if (!ownerId.HasValue || ownerId.Value != userId.Value)
+            if (!ownerId.HasValue || ownerId.Value != ownerFilter.Value)
             {
                 throw new UnauthorizedAccessException("Not allowed to view receipt allocations.");
             }
@@ -693,14 +698,6 @@ public sealed partial class ReceiptService : IReceiptService
 
     }
 
-    private void EnsureUser()
-    {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
-    }
-
     private static string NormalizeAllocationPriority(string? priority)
     {
         var value = (priority ?? string.Empty).Trim().ToUpperInvariant();
@@ -784,6 +781,7 @@ public sealed partial class ReceiptService : IReceiptService
             "BY_INVOICE" => value,
             "BY_PERIOD" => value,
             "FIFO" => value,
+            "PRO_RATA" => value,
             "MANUAL" => value,
             _ => throw new InvalidOperationException("Invalid allocation mode.")
         };
@@ -803,6 +801,19 @@ public sealed partial class ReceiptService : IReceiptService
             "CASH" => value,
             "OTHER" => value,
             _ => throw new InvalidOperationException("Invalid receipt method.")
+        };
+    }
+
+    private static string ResolveReceiptApprovalFailureReason(Exception ex)
+    {
+        return ex switch
+        {
+            ConcurrencyException => "concurrency",
+            UnauthorizedAccessException => "forbidden",
+            InvalidOperationException ioex when ioex.Message.Contains("locked", StringComparison.OrdinalIgnoreCase) => "period_locked",
+            InvalidOperationException ioex when ioex.Message.Contains("chọn chứng từ", StringComparison.OrdinalIgnoreCase) => "missing_targets",
+            InvalidOperationException => "invalid_operation",
+            _ => "unknown"
         };
     }
 }

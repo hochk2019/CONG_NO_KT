@@ -1,3 +1,13 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
+> [!NOTE]
+> `task_plan.md` và `findings.md` được nhắc trong nội dung bên dưới là tham chiếu lịch sử.
+> Hai file này đã được dọn ở **Phase 63 (2026-02-14)** và được khôi phục lại ở **Phase 66 (2026-02-23)** cho workflow planning hiện hành.
 # Progress Log
 <!-- 
   WHAT: Your session log - a chronological record of what you did, when, and what happened.
@@ -117,7 +127,7 @@
 | Where am I? | Phase 2 (đang fix groupBy, chuẩn bị BE/UX review) |
 | Where am I going? | Phase 3–5 |
 | What's the goal? | Hoàn tất review toàn hệ thống + fix issue ưu tiên |
-| What have I learned? | See findings.md |
+| What have I learned? | Historical notes nằm trong file này; `findings.md` đã được khôi phục lại ở Phase 66 để làm sổ tay phiên hiện hành. |
 | What have I done? | See above |
 
 ---
@@ -208,6 +218,10 @@ Update: ran Playwright E2E `npm run test:e2e` → 9 passed, 2 skipped.
 2026-02-03: Chạy full frontend vitest (npm run test -- --run) -> 13 files, 40 tests pass.
 2026-02-03: Chạy Playwright E2E (npm run test:e2e) -> 10 passed, 1 skipped.
 2026-02-03: Lập kế hoạch xử lý lệch trạng thái phân bổ phiếu thu/khách hàng, lưu tại docs/plans/2026-02-03-receipt-allocation-sync.md.
+2026-02-26: Hoàn thiện Collection Task Queue wiring (DI + endpoint mapping) và sửa dedupe/count logic khi generate từ risk list.
+2026-02-26: Bổ sung unit tests CollectionTaskQueueTests (3 case: dedupe, no-duplicate-open-task, status transition).
+2026-02-26: Bổ sung responsive card layout cho Reports tables (data-label + CSS `.table--mobile-cards`) và cập nhật test reports-modules.
+2026-02-26: Verification targeted pass: `dotnet test --filter CollectionTaskQueueTests` (3/3), `npm run test -- reports-modules.test.tsx` (9/9).
 2026-02-03: Đã truy vấn DB cho MST 0315666756; xác nhận receipt PARTIAL có unallocated 592,320; advance 600,000 chưa được phân bổ (receipt_allocations = 0).
 2026-02-03: Added integration tests for auto-allocating receipt credits to advances (approve + import commit); implemented allocation logic in AdvanceService and ImportCommitService.
 2026-02-03: dotnet test filters passed for AdvanceAutoAllocateTests + ImportCommitAdvanceAutoAllocateTests.
@@ -244,3 +258,44 @@ Update: ran Playwright E2E `npm run test:e2e` → 9 passed, 2 skipped.
 2026-02-10: Build release bundle (ops+backend+frontend+migrations) to E:\GPT\CONG_NO_KT\release\CongNoGolden_DeployBundle_20260210 and zip to CongNoGolden_DeployBundle_20260210.zip; added DEPLOY_GUIDE.md; Ops Console auto-detect payload if source empty.
 2026-02-10: Tạo script scripts/INSTALL_OPS.ps1 (copy ops+payload + cài service agent) và cập nhật DEPLOY_GUIDE.md; rezip bundle.
 2026-02-10: Bổ sung scripts INSTALL_OPS (auto DB+Migrations), ROLLBACK_OPS, UNINSTALL_OPS vào bundle; cập nhật DEPLOY_GUIDE.md; rezip bundle.
+2026-02-23: Áp dụng workflow skills (`planning-with-files`, `plan-writing`, `lint-and-validate`, `verification-before-completion`); tạo lại `task_plan.md` + `findings.md` cho phiên hiện tại.
+2026-02-23: Sửa lint frontend: bỏ setState đồng bộ trong effect (`useTheme`), refactor guard bootstrap bằng `bootstrapInFlightRef` ở `RiskAlertsPage` để hết cảnh báo exhaustive-deps.
+2026-02-23: Verification pass: `npm --prefix src/frontend run lint`; `npm --prefix src/frontend run test -- --run` (90/90); `npm --prefix src/frontend run build`; `dotnet test` Unit (116/116) + Integration (41/41).
+2026-02-23: Đóng bead `cng-fwg` sau khi xác thực lại evidence; `bd ready --json` trả `[]`.
+2026-02-23: Lập roadmap scale readiness theo yêu cầu user không chuyên kỹ thuật; tạo epic `cng-oiw` + 5 task con (`cng-oiw.1` -> `cng-oiw.5`) trong bead.
+2026-02-23: Viết kế hoạch chi tiết `docs/plans/2026-02-23-scale-readiness-roadmap.md` và đồng bộ tracker vào `task.md` (Phase 67).
+2026-02-23: Hoàn tất code scale readiness còn thiếu: thêm maintenance async queue + hosted worker + metrics queue/latency/outcome; thêm endpoint enqueue/status cho reconcile và retention.
+2026-02-23: Bổ sung test mới `MaintenanceJobQueueTests`, `AdminMaintenanceEndpointsTests`; backend unit test pass `127/127`.
+2026-02-23: Cập nhật tài liệu kỹ thuật liên quan thay đổi: `API_CONTRACT_NOTES.md`, `docs/API_CONTRACT_NOTES.md`, `RUNBOOK.md`, `DEPLOYMENT_GUIDE_DOCKER.md`, `docs/OPS_MONITORING_BASELINE.md`, cùng bộ docs hiệu năng (`QUEUE_WORKER_OPERATIONS`, `READ_REPLICA_ROUTING`, `AUTOSCALING_GUARDRAILS`).
+2026-02-23: Chạy verification full sau khi hoàn tất triển khai: backend integration `41/41`, frontend lint/test/build/build:budget đều pass.
+2026-02-23: Đóng toàn bộ beads scale readiness `cng-oiw.1` -> `cng-oiw.5` và epic `cng-oiw`; `bd ready --json` trả `[]`.
+2026-02-24: Retry xử lý Opus V3; bổ sung `Codex Validation Addendum` vào `Opus_review_v3.md` để phân loại claim `OUTDATED/PARTIAL/CONFIRMED GAP` với evidence file-level.
+2026-02-24: Cập nhật kế hoạch/remediation tracker cho `cng-rlx` (`opus-review-v3-remediation.md`) và đồng bộ sổ tay (`task.md`, `task_plan.md`, `findings.md`, `progress.md`).
+2026-02-24: Chạy lại verification full trong cùng phiên: `dotnet build`, `dotnet test` Unit `127/127`, Integration `42/42`; `npm lint`, `npm test -- --run` `92/92`, `npm build` pass.
+2026-02-24: Đủ điều kiện đóng bead `cng-rlx.1` -> `cng-rlx.5` và epic `cng-rlx`.
+
+
+2026-02-25: Tiếp tục cng-los.1 (risk delta); hoàn tất test integration RiskDeltaAlertsTests (2/2) + unit RiskBootstrapEndpointTests (1/1), fix compile bằng thêm using CurrentUserAccessExtensions trong RiskService.Delta.
+2026-02-25: Thêm integration tests `ReportScheduleServiceTests` (RunNow + RunDueSchedules) để xác nhận run logs, artifact metadata, notification `REPORT` và chỉ chạy lịch đến hạn.
+2026-02-25: Thêm integration tests `ReminderEscalationPolicyTests` để xác nhận escalation theo mức 1->2->3 (owner/supervisor/admin) và cooldown skip (`COOLDOWN_ACTIVE`) không phát sinh notification mới.
+2026-02-25: Thêm unit tests `ReportScheduleServiceTests` cho parse cron (5/6 token), timezone validation, và `CalculateNextRunUtc`.
+2026-02-25: Verification pass: `dotnet test Tests.Unit --filter ReportScheduleServiceTests` (4/4) và `dotnet test Tests.Integration --filter "ReportScheduleServiceTests|ReminderEscalationPolicyTests"` (4/4).
+2026-02-25: Tiếp tục `cng-los.2` (Global Search) và sửa flaky assertion của deep-link test: trường tìm chứng từ có info-tip nên nhãn thực tế chứa ký tự phụ, đổi query sang `getByRole('textbox', { name: /Tìm chứng từ \(PT \/ HD \/ TH\)/i })` để ổn định.
+2026-02-25: Verification pass cho `cng-los.2`: `dotnet test ... --filter GlobalSearchServiceIntegrationTests` (2/2) và `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/customers/__tests__/customers-modules.test.tsx` (11/11).
+2026-02-26: Tiếp tục `cng-los.4` theo phần dở dang: hoàn tất Dashboard widget preferences (API+UI), thêm print action/layout cho Reports, bổ sung test backend/frontend tương ứng.
+2026-02-26: Frontend lint fail do `react-hooks/set-state-in-effect` tại `AppShell.tsx` và `CustomersPage.tsx`; đã refactor để bỏ setState đồng bộ trong effect và giữ behavior cũ.
+2026-02-26: Verification pass full Phase 69 completion: `dotnet build` pass; backend Unit `134/134`; backend Integration `52/52`; frontend `lint` pass; frontend `vitest --run` `99/99`; frontend `build` pass.
+2026-02-26: Đồng bộ tracker Phase 69 trong `task.md` (đánh dấu hoàn tất `cng-los.3/.4/.5`, cập nhật evidence hoàn tất).
+2026-02-26: Đóng beads `cng-los.3`, `cng-los.4`, `cng-los.5` và epic `cng-los`; `bd ready --json` trả `[]`.
+2026-02-26: Tiếp tục bead `cng-d3e.2`; fix compile error `EnsureUser` trong `ReminderService.ResponseState.cs` bằng `using CongNoGolden.Infrastructure.Services.Common`.
+2026-02-26: Chạy test targeted cho reminder flow: `dotnet test ... --filter "FullyQualifiedName~Reminder"` pass (`6/6`).
+2026-02-26: Chạy frontend regression test cho Risk Alerts tabs: `npm --prefix src/frontend run test -- risk-alerts-page-tabs` pass (`1/1`).
+2026-02-26: Đóng bead `cng-d3e.2` sau khi verification pass; trạng thái `CLOSED`.
+2026-02-26: Tiếp tục `cng-d3e.3`; bổ sung 2 integration tests mới cho transition `DISPUTED` và `ESCALATION_LOCKED` trong `ReminderEscalationPolicyTests`.
+2026-02-26: Chạy `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReminderEscalationPolicyTests"` pass (`6/6`).
+2026-02-26: Chạy lại frontend targeted test `npm --prefix src/frontend run test -- risk-alerts-page-tabs` pass (`1/1`).
+2026-02-26: Cập nhật `Opus_review_v3.md` để đóng claim residual reminder escalation (`PARTIAL` -> `OUTDATED (đã có 2026-02-26)`), đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md`.
+2026-02-26: Đóng beads `cng-d3e.1`, `cng-d3e.3` và epic `cng-d3e`.
+2026-02-26: Tiếp tục bead `cng-9y1`; bổ sung style `upload-dropzone--error` trong `src/frontend/src/index.css` để phản hồi trực quan khi file import không hợp lệ.
+2026-02-26: Mở rộng `importBatchSection.dragdrop.test.tsx` với 3 case invalid file (sai định dạng `.txt`, quá `20MB` qua input, quá `20MB` qua drag-drop), xác nhận không gọi `uploadImport`.
+2026-02-26: Verification frontend pass: `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` (`4/4`) và `npm run lint` pass.

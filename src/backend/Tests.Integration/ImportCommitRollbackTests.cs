@@ -36,6 +36,11 @@ public class ImportCommitRollbackTests
             CancellationToken.None);
 
         Assert.Equal(1, commitResult.InsertedInvoices);
+        Assert.Equal(1, commitResult.TotalEligibleRows);
+        Assert.Equal(1, commitResult.CommittedRows);
+        Assert.Equal(0, commitResult.SkippedRows);
+        Assert.NotNull(commitResult.ProgressSteps);
+        Assert.NotEmpty(commitResult.ProgressSteps!);
 
         var committed = await db.ImportBatches.AsNoTracking().FirstAsync(b => b.Id == batch.Id);
         Assert.Equal("COMMITTED", committed.Status);

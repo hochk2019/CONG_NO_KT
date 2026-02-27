@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Risk;
 using CongNoGolden.Domain.Risk;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Services.Common;
 using Dapper;
 using Microsoft.EntityFrameworkCore;
 
@@ -14,27 +15,30 @@ public sealed partial class RiskService : IRiskService
     private readonly ConGNoDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _auditService;
+    private readonly IRiskAiModelService _riskAiModelService;
 
     public RiskService(
         IDbConnectionFactory connectionFactory,
         ConGNoDbContext db,
         ICurrentUser currentUser,
-        IAuditService auditService)
+        IAuditService auditService,
+        IRiskAiModelService riskAiModelService)
     {
         _connectionFactory = connectionFactory;
         _db = db;
         _currentUser = currentUser;
         _auditService = auditService;
+        _riskAiModelService = riskAiModelService;
     }
 
     public async Task<RiskOverviewDto> GetOverviewAsync(RiskOverviewRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
-        var ownerId = ResolveOwnerFilter();
+        var ownerId = _currentUser.ResolveOwnerFilter();
         var asOf = request.AsOfDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var rows = await connection.QueryAsync<RiskOverviewRow>(
@@ -59,9 +63,9 @@ public sealed partial class RiskService : IRiskService
 
     public async Task<PagedResult<RiskCustomerItem>> ListCustomersAsync(RiskCustomerListRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
-        var ownerId = ResolveOwnerFilter(request.OwnerId);
+        var ownerId = _currentUser.ResolveOwnerFilter(request.OwnerId);
         var asOf = request.AsOfDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var page = request.Page < 1 ? 1 : request.Page;
         var pageSize = request.PageSize is < 5 or > 200 ? 20 : request.PageSize;
@@ -76,7 +80,7 @@ public sealed partial class RiskService : IRiskService
 
         var sql = string.Format(RiskListSqlTemplate, RiskBaseCte, orderBy);
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         using var multi = await connection.QueryMultipleAsync(
@@ -92,19 +96,42 @@ public sealed partial class RiskService : IRiskService
 
         var total = await multi.ReadSingleAsync<int>();
         var rows = (await multi.ReadAsync<RiskCustomerRow>()).ToList();
+        await _riskAiModelService.GetActiveModelAsync(modelKey: null, ct);
 
         var items = rows
-            .Select(r => new RiskCustomerItem(
-                r.CustomerTaxCode ?? string.Empty,
-                r.CustomerName ?? r.CustomerTaxCode ?? string.Empty,
-                r.OwnerId,
-                r.OwnerName,
-                r.TotalOutstanding,
-                r.OverdueAmount,
-                r.OverdueRatio,
-                r.MaxDaysPastDue,
-                r.LateCount,
-                r.RiskLevel ?? "LOW"))
+            .Select(r =>
+            {
+                var prediction = _riskAiModelService.Predict(new RiskMetrics(
+                    r.TotalOutstanding,
+                    r.OverdueAmount,
+                    r.OverdueRatio,
+                    r.MaxDaysPastDue,
+                    r.LateCount), asOf);
+
+                return new RiskCustomerItem(
+                    r.CustomerTaxCode ?? string.Empty,
+                    r.CustomerName ?? r.CustomerTaxCode ?? string.Empty,
+                    r.OwnerId,
+                    r.OwnerName,
+                    r.TotalOutstanding,
+                    r.OverdueAmount,
+                    r.OverdueRatio,
+                    r.MaxDaysPastDue,
+                    r.LateCount,
+                    r.RiskLevel ?? "LOW",
+                    prediction.Probability,
+                    prediction.Signal,
+                    prediction.Factors
+                        .Select(factor => new RiskAiFactorItem(
+                            factor.Code,
+                            factor.Label,
+                            factor.RawValue,
+                            factor.NormalizedValue,
+                            factor.Weight,
+                            factor.Contribution))
+                        .ToList(),
+                    prediction.Recommendation);
+            })
             .ToList();
 
         return new PagedResult<RiskCustomerItem>(items, page, pageSize, total);
@@ -119,7 +146,8 @@ public sealed partial class RiskService : IRiskService
                 r.MinOverdueDays,
                 r.MinOverdueRatio,
                 r.MinLateCount,
-                r.IsActive))
+                r.IsActive,
+                r.MatchMode))
             .ToListAsync(ct);
 
         return rules;
@@ -127,7 +155,7 @@ public sealed partial class RiskService : IRiskService
 
     public async Task UpdateRulesAsync(RiskRulesUpdateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         if (request.Rules.Count == 0)
         {
@@ -138,6 +166,7 @@ public sealed partial class RiskService : IRiskService
             .Select((rule, index) => new
             {
                 Level = NormalizeLevel(rule.Level) ?? string.Empty,
+                MatchMode = NormalizeMatchMode(rule.MatchMode),
                 rule.MinOverdueDays,
                 rule.MinOverdueRatio,
                 rule.MinLateCount,
@@ -149,6 +178,11 @@ public sealed partial class RiskService : IRiskService
         if (normalized.Any(r => string.IsNullOrWhiteSpace(r.Level)))
         {
             throw new InvalidOperationException("Invalid risk level.");
+        }
+
+        if (normalized.Any(r => string.IsNullOrWhiteSpace(r.MatchMode)))
+        {
+            throw new InvalidOperationException("Invalid match mode.");
         }
 
         if (normalized.Any(r => r.MinOverdueDays < 0 || r.MinLateCount < 0))
@@ -165,6 +199,7 @@ public sealed partial class RiskService : IRiskService
         var before = existing.Select(r => new
         {
             r.Level,
+            r.MatchMode,
             r.MinOverdueDays,
             r.MinOverdueRatio,
             r.MinLateCount,
@@ -187,6 +222,7 @@ public sealed partial class RiskService : IRiskService
                 existing.Add(entity);
             }
 
+            entity.MatchMode = rule.MatchMode!;
             entity.MinOverdueDays = rule.MinOverdueDays;
             entity.MinOverdueRatio = rule.MinOverdueRatio;
             entity.MinLateCount = rule.MinLateCount;
@@ -200,6 +236,7 @@ public sealed partial class RiskService : IRiskService
         var after = normalized.Select(r => new
         {
             r.Level,
+            r.MatchMode,
             r.MinOverdueDays,
             r.MinOverdueRatio,
             r.MinLateCount,
@@ -216,27 +253,6 @@ public sealed partial class RiskService : IRiskService
             ct);
     }
 
-    private void EnsureUser()
-    {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
-    }
-
-    private Guid? ResolveOwnerFilter(Guid? explicitOwner = null)
-    {
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var canViewAll = roles.Contains("Admin") || roles.Contains("Supervisor") || roles.Contains("Viewer");
-
-        if (!canViewAll)
-        {
-            return _currentUser.UserId;
-        }
-
-        return explicitOwner;
-    }
-
     private static string? NormalizeLevel(string? level)
     {
         if (!RiskLevelExtensions.TryParse(level, out var parsed))
@@ -245,6 +261,18 @@ public sealed partial class RiskService : IRiskService
         }
 
         return parsed.ToCode();
+    }
+
+    private static string? NormalizeMatchMode(string? mode)
+    {
+        if (string.IsNullOrWhiteSpace(mode))
+        {
+            return RiskMatchMode.Any.ToCode();
+        }
+
+        return RiskMatchModeExtensions.TryParse(mode, out var parsed)
+            ? parsed.ToCode()
+            : null;
     }
 
     private static string ResolveSortColumn(string? sort)

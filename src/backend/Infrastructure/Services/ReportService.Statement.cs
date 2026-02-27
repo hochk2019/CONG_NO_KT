@@ -281,7 +281,7 @@ public async Task<ReportStatementResult> GetStatementAsync(ReportStatementReques
         sellerTaxCode = request.SellerTaxCode
     };
 
-    await using var connection = _connectionFactory.Create();
+    await using var connection = _connectionFactory.CreateRead();
     await connection.OpenAsync(ct);
 
     var lines = (await connection.QueryAsync<ReportStatementLine>(
@@ -358,7 +358,7 @@ public async Task<ReportStatementPagedResult> GetStatementPagedAsync(
         pageSize
     };
 
-    await using var connection = _connectionFactory.Create();
+    await using var connection = _connectionFactory.CreateRead();
     await connection.OpenAsync(ct);
 
     var sql = BuildStatementPagedSql();

@@ -42,11 +42,15 @@ public partial class MainWindow
         try
         {
             var status = await _client.GetStatusAsync(CancellationToken.None);
+            var runtime = await _client.GetRuntimeInfoAsync(CancellationToken.None);
             TxtStatus.Text = status is null ? string.Empty : JsonSerializer.Serialize(status, JsonOptions);
             ApplyStatusBadge(TxtBackendStatus, BadgeBackendStatus, status?.Backend?.Status);
             ApplyStatusBadge(TxtFrontendStatus, BadgeFrontendStatus, status?.Frontend?.Status);
             ApplyStatusBadge(TxtBackendServiceStatus, BadgeBackendServiceStatus, status?.Backend?.Status);
             ApplyStatusBadge(TxtFrontendServiceStatus, BadgeFrontendServiceStatus, status?.Frontend?.Status);
+            var runtimeMode = runtime?.Mode ?? "--";
+            TxtRuntimeModeOverview.Text = $"Runtime: {runtimeMode}";
+            TxtRuntimeModeServices.Text = runtimeMode;
             SetConnectionState(true, "Đã kết nối");
             await LoadAppPoolStatusAsync();
         }

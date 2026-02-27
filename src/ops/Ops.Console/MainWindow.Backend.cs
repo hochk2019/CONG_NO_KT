@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using Ops.Shared.Models;
 
 namespace Ops.Console;
@@ -10,6 +11,24 @@ public partial class MainWindow
     {
         try
         {
+            var config = await _client.GetConfigAsync(CancellationToken.None);
+            if (config is not null)
+            {
+                var runtimeMode = string.IsNullOrWhiteSpace(config.Runtime.Mode)
+                    ? "windows-service"
+                    : config.Runtime.Mode;
+
+                CmbRuntimeMode.SelectedItem = runtimeMode;
+                TxtDockerComposeFile.Text = config.Runtime.Docker.ComposeFilePath;
+                TxtDockerWorkingDirectory.Text = config.Runtime.Docker.WorkingDirectory;
+                TxtDockerProjectName.Text = config.Runtime.Docker.ProjectName;
+                TxtDockerBackendService.Text = config.Runtime.Docker.BackendService;
+                TxtDockerFrontendService.Text = config.Runtime.Docker.FrontendService;
+                ApplyRuntimeModeUi(runtimeMode);
+                TxtRuntimeModeOverview.Text = $"Runtime: {runtimeMode}";
+                TxtRuntimeModeServices.Text = runtimeMode;
+            }
+
             var logLevel = await _client.GetBackendLogLevelAsync(CancellationToken.None);
             if (logLevel is not null)
                 CmbLogLevel.SelectedItem = logLevel.DefaultLevel;
@@ -42,6 +61,58 @@ public partial class MainWindow
         {
             // ignore load errors
         }
+    }
+
+    private async void OnSaveRuntimeConfig(object? sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var config = await _client.GetConfigAsync(CancellationToken.None);
+            if (config is null)
+            {
+                SetInlineStatus(TxtRuntimeConfigStatus, false, "Không tải được config");
+                return;
+            }
+
+            var runtimeMode = ResolveRuntimeMode();
+            var updated = config with
+            {
+                Runtime = config.Runtime with
+                {
+                    Mode = runtimeMode,
+                    Docker = config.Runtime.Docker with
+                    {
+                        ComposeFilePath = TxtDockerComposeFile.Text.Trim(),
+                        WorkingDirectory = TxtDockerWorkingDirectory.Text.Trim(),
+                        ProjectName = TxtDockerProjectName.Text.Trim(),
+                        BackendService = TxtDockerBackendService.Text.Trim(),
+                        FrontendService = TxtDockerFrontendService.Text.Trim()
+                    }
+                }
+            };
+
+            var saved = await _client.SaveConfigAsync(updated, CancellationToken.None);
+            if (saved is null)
+            {
+                SetInlineStatus(TxtRuntimeConfigStatus, false, "Lưu runtime thất bại");
+                return;
+            }
+
+            SetInlineStatus(TxtRuntimeConfigStatus, true, "Đã lưu runtime config");
+            ApplyRuntimeModeUi(runtimeMode);
+            TxtRuntimeModeOverview.Text = $"Runtime: {runtimeMode}";
+            TxtRuntimeModeServices.Text = runtimeMode;
+            await LoadStatusAsync();
+        }
+        catch (Exception ex)
+        {
+            SetInlineStatus(TxtRuntimeConfigStatus, false, ex.Message);
+        }
+    }
+
+    private void OnRuntimeModeChanged(object? sender, SelectionChangedEventArgs e)
+    {
+        ApplyRuntimeModeUi(ResolveRuntimeMode());
     }
 
     private async void OnSaveEndpoints(object? sender, RoutedEventArgs e)
@@ -208,5 +279,22 @@ public partial class MainWindow
         return double.TryParse(input, NumberStyles.Any, CultureInfo.InvariantCulture, out var value)
             ? value
             : 0;
+    }
+
+    private string ResolveRuntimeMode()
+    {
+        var value = CmbRuntimeMode.SelectedItem?.ToString();
+        if (string.Equals(value, "docker", StringComparison.OrdinalIgnoreCase))
+        {
+            return "docker";
+        }
+
+        return "windows-service";
+    }
+
+    private void ApplyRuntimeModeUi(string mode)
+    {
+        var dockerMode = string.Equals(mode, "docker", StringComparison.OrdinalIgnoreCase);
+        PnlDockerRuntime.Visibility = dockerMode ? Visibility.Visible : Visibility.Collapsed;
     }
 }

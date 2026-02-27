@@ -1,6 +1,8 @@
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Dashboard;
+using CongNoGolden.Infrastructure.Services.Common;
 using Dapper;
+using System.Globalization;
 
 namespace CongNoGolden.Infrastructure.Services;
 
@@ -18,12 +20,10 @@ public sealed partial class DashboardService : IDashboardService
 
     public async Task<DashboardOverviewDto> GetOverviewAsync(DashboardOverviewRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var canViewAll = roles.Contains("Admin") || roles.Contains("Supervisor") || roles.Contains("Viewer");
-        var canViewImports = roles.Contains("Admin") || roles.Contains("Supervisor");
-        var canViewLocks = roles.Contains("Admin") || roles.Contains("Supervisor");
+        var canViewImports = _currentUser.HasAnyRole("Admin", "Supervisor");
+        var canViewLocks = canViewImports;
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = request.To ?? today;
@@ -42,6 +42,8 @@ public sealed partial class DashboardService : IDashboardService
         {
             from = StartOfMonth(to);
         }
+        var previousFrom = from.AddMonths(-1);
+        var previousTo = to.AddMonths(-1);
 
         var hasExplicitTrend = !string.IsNullOrWhiteSpace(request.TrendGranularity) || request.TrendPeriods.HasValue;
         var trendGranularity = NormalizeTrendGranularity(request.TrendGranularity);
@@ -80,7 +82,7 @@ public sealed partial class DashboardService : IDashboardService
             top = 20;
         }
 
-        var ownerId = canViewAll ? null : _currentUser.UserId;
+        var ownerId = _currentUser.ResolveOwnerFilter();
         var parameters = new
         {
             ownerId,
@@ -95,8 +97,22 @@ public sealed partial class DashboardService : IDashboardService
             trendFilterTo,
             trendGranularity
         };
+        var previousParameters = new
+        {
+            ownerId,
+            from = previousFrom,
+            to = previousTo,
+            asOf = previousTo,
+            top,
+            onTimeThreshold = OnTimeThreshold,
+            trendSeriesFrom,
+            trendSeriesTo,
+            trendFilterFrom,
+            trendFilterTo,
+            trendGranularity
+        };
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var kpiSnapshot = await connection.QuerySingleAsync<DashboardKpiRow>(
@@ -104,6 +120,10 @@ public sealed partial class DashboardService : IDashboardService
 
         var onTimeCustomers = await connection.QuerySingleAsync<int>(
             new CommandDefinition(DashboardOnTimeCountSql, parameters, cancellationToken: ct));
+        var previousKpiSnapshot = await connection.QuerySingleAsync<DashboardKpiRow>(
+            new CommandDefinition(DashboardKpiSql, previousParameters, cancellationToken: ct));
+        var previousOnTimeCustomers = await connection.QuerySingleAsync<int>(
+            new CommandDefinition(DashboardOnTimeCountSql, previousParameters, cancellationToken: ct));
 
         var kpis = new DashboardKpiDto(
             kpiSnapshot.OutstandingInvoice + kpiSnapshot.OutstandingAdvance,
@@ -120,6 +140,8 @@ public sealed partial class DashboardService : IDashboardService
             kpiSnapshot.PendingAdvancesAmount,
             canViewImports ? kpiSnapshot.PendingImportBatches : 0,
             canViewLocks ? kpiSnapshot.PeriodLocksCount : 0);
+        var kpiMoM = BuildKpiMoM(kpiSnapshot, onTimeCustomers, previousKpiSnapshot, previousOnTimeCustomers);
+        var executiveSummary = BuildExecutiveSummary(kpis, kpiMoM);
 
         var trendRows = (await connection.QueryAsync<DashboardTrendRow>(
             new CommandDefinition(DashboardTrendSql, parameters, cancellationToken: ct))).ToList();
@@ -129,8 +151,12 @@ public sealed partial class DashboardService : IDashboardService
                 r.Period ?? string.Empty,
                 r.InvoicedTotal,
                 r.AdvancedTotal,
-                r.ReceiptedTotal))
+                r.ReceiptedTotal,
+                r.InvoicedTotal + r.AdvancedTotal,
+                r.ReceiptedTotal,
+                r.ReceiptedTotal - (r.InvoicedTotal + r.AdvancedTotal)))
             .ToList();
+        var cashflowForecast = BuildCashflowForecast(trend, trendGranularity, trendSeriesTo);
 
         var topOutstanding = (await connection.QueryAsync<DashboardTopRow>(
             new CommandDefinition(DashboardTopOutstandingSql, parameters, cancellationToken: ct)))
@@ -167,8 +193,11 @@ public sealed partial class DashboardService : IDashboardService
         return new DashboardOverviewDto(
             trendFilterFrom,
             trendFilterTo,
+            executiveSummary,
             kpis,
+            kpiMoM,
             trend,
+            cashflowForecast,
             topOutstanding,
             topOnTime,
             topOverdueDays,
@@ -181,12 +210,8 @@ public sealed partial class DashboardService : IDashboardService
         DashboardOverdueGroupRequest request,
         CancellationToken ct)
     {
-        EnsureUser();
-
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var canViewAll = roles.Contains("Admin") || roles.Contains("Supervisor") || roles.Contains("Viewer");
-
-        var ownerId = canViewAll ? null : _currentUser.UserId;
+        _currentUser.EnsureUser();
+        var ownerId = _currentUser.ResolveOwnerFilter();
         var asOf = request.AsOf ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
 
         var top = request.Top.GetValueOrDefault(5);
@@ -214,7 +239,7 @@ public sealed partial class DashboardService : IDashboardService
             top
         };
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var rows = await connection.QueryAsync<DashboardOverdueGroupRow>(
@@ -229,14 +254,6 @@ public sealed partial class DashboardService : IDashboardService
                 r.OverdueRatio,
                 r.OverdueCustomers))
             .ToList();
-    }
-
-    private void EnsureUser()
-    {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
     }
 
     private static DateOnly StartOfMonth(DateOnly date) => new(date.Year, date.Month, 1);
@@ -283,6 +300,141 @@ public sealed partial class DashboardService : IDashboardService
             name,
             row.Amount,
             row.DaysPastDue);
+    }
+
+    private static IReadOnlyList<DashboardCashflowForecastPoint> BuildCashflowForecast(
+        IReadOnlyList<DashboardTrendPoint> trend,
+        string trendGranularity,
+        DateOnly trendSeriesTo)
+    {
+        if (trend.Count == 0)
+        {
+            return Array.Empty<DashboardCashflowForecastPoint>();
+        }
+
+        var windowSize = Math.Min(4, trend.Count);
+        var tail = trend.Skip(trend.Count - windowSize);
+        var expectedAvg = tail.Average(point => point.ExpectedTotal);
+        var actualAvg = tail.Average(point => point.ActualTotal);
+
+        var horizon = trendGranularity == "week" ? 4 : 3;
+        var anchor = trendGranularity == "week"
+            ? StartOfWeek(trendSeriesTo)
+            : StartOfMonth(trendSeriesTo);
+        var result = new List<DashboardCashflowForecastPoint>(horizon);
+
+        for (var i = 1; i <= horizon; i++)
+        {
+            var periodStart = trendGranularity == "week"
+                ? anchor.AddDays(i * 7)
+                : StartOfMonth(anchor).AddMonths(i);
+
+            result.Add(new DashboardCashflowForecastPoint(
+                FormatPeriodKey(periodStart, trendGranularity),
+                expectedAvg,
+                actualAvg,
+                actualAvg - expectedAvg));
+        }
+
+        return result;
+    }
+
+    private static string FormatPeriodKey(DateOnly periodStart, string trendGranularity)
+    {
+        if (trendGranularity == "week")
+        {
+            var date = periodStart.ToDateTime(TimeOnly.MinValue);
+            var isoYear = ISOWeek.GetYear(date);
+            var isoWeek = ISOWeek.GetWeekOfYear(date);
+            return $"{isoYear}-W{isoWeek:D2}";
+        }
+
+        return $"{periodStart.Year:D4}-{periodStart.Month:D2}";
+    }
+
+    private static DashboardKpiMoMDto BuildKpiMoM(
+        DashboardKpiRow current,
+        int currentOnTimeCustomers,
+        DashboardKpiRow previous,
+        int previousOnTimeCustomers)
+    {
+        var currentTotalOutstanding = current.OutstandingInvoice + current.OutstandingAdvance;
+        var previousTotalOutstanding = previous.OutstandingInvoice + previous.OutstandingAdvance;
+
+        return new DashboardKpiMoMDto(
+            CreateDelta(currentTotalOutstanding, previousTotalOutstanding),
+            CreateDelta(current.OutstandingInvoice, previous.OutstandingInvoice),
+            CreateDelta(current.OutstandingAdvance, previous.OutstandingAdvance),
+            CreateDelta(current.OverdueTotal, previous.OverdueTotal),
+            CreateDelta(current.UnallocatedReceiptsAmount, previous.UnallocatedReceiptsAmount),
+            CreateDelta(currentOnTimeCustomers, previousOnTimeCustomers));
+    }
+
+    private static DashboardExecutiveSummaryDto BuildExecutiveSummary(
+        DashboardKpiDto kpis,
+        DashboardKpiMoMDto kpiMoM)
+    {
+        var status = "stable";
+        var actionHint = "Theo dõi dashboard mỗi ngày để phát hiện biến động công nợ sớm.";
+        var movement = DescribeDelta(kpiMoM.TotalOutstanding.Delta);
+        var message = $"Tổng dư công nợ đang {movement} so với tháng trước.";
+
+        if (kpis.OverdueTotal > 0)
+        {
+            status = "critical";
+            actionHint = "Ưu tiên xử lý danh sách quá hạn lâu nhất và xác nhận lịch thu trong 24-48h.";
+            message =
+                $"Đang có {kpis.OverdueCustomers} khách hàng quá hạn với tổng giá trị {kpis.OverdueTotal:N0} đ.";
+        }
+        else if (kpis.UnallocatedReceiptsAmount > 0)
+        {
+            status = "warning";
+            actionHint = "Phân bổ các phiếu thu treo để giảm lệch công nợ.";
+            message =
+                $"Có {kpis.UnallocatedReceiptsCount} phiếu thu chưa phân bổ ({kpis.UnallocatedReceiptsAmount:N0} đ).";
+        }
+        else if (kpis.TotalOutstanding <= 0)
+        {
+            status = "good";
+            actionHint = "Duy trì kiểm soát kỳ hạn thanh toán và theo dõi nhóm khách hàng mới phát sinh.";
+            message = "Không còn dư công nợ mở tại kỳ hiện tại.";
+        }
+
+        return new DashboardExecutiveSummaryDto(
+            status,
+            message,
+            actionHint,
+            DateTime.UtcNow);
+    }
+
+    private static DashboardKpiDeltaDto CreateDelta(decimal current, decimal previous)
+    {
+        var delta = current - previous;
+        decimal? percent = null;
+        if (previous != 0)
+        {
+            percent = decimal.Round((delta / previous) * 100m, 2, MidpointRounding.AwayFromZero);
+        }
+
+        return new DashboardKpiDeltaDto(current, previous, delta, percent);
+    }
+
+    private static DashboardKpiDeltaDto CreateDelta(int current, int previous) =>
+        CreateDelta((decimal)current, (decimal)previous);
+
+    private static string DescribeDelta(decimal value)
+    {
+        if (value > 0)
+        {
+            return "tăng";
+        }
+
+        if (value < 0)
+        {
+            return "giảm";
+        }
+
+        return "đi ngang";
     }
 
     private sealed class DashboardKpiRow

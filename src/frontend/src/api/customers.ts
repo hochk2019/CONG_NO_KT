@@ -27,6 +27,61 @@ export type CustomerDetail = {
   updatedAt: string
 }
 
+export type Customer360Summary = {
+  totalOutstanding: number
+  overdueAmount: number
+  overdueRatio: number
+  maxDaysPastDue: number
+  openInvoiceCount: number
+  nextDueDate?: string | null
+}
+
+export type Customer360RiskSnapshot = {
+  score?: number | null
+  signal?: string | null
+  asOfDate?: string | null
+  modelVersion?: string | null
+  createdAt?: string | null
+}
+
+export type Customer360ReminderLog = {
+  id: string
+  channel: string
+  status: string
+  riskLevel: string
+  escalationLevel: number
+  escalationReason?: string | null
+  message?: string | null
+  sentAt?: string | null
+  createdAt: string
+}
+
+export type Customer360ResponseState = {
+  channel: string
+  responseStatus: string
+  latestResponseAt?: string | null
+  escalationLocked: boolean
+  attemptCount: number
+  currentEscalationLevel: number
+  lastSentAt?: string | null
+  updatedAt: string
+}
+
+export type Customer360 = {
+  taxCode: string
+  name: string
+  status: string
+  currentBalance: number
+  paymentTermsDays: number
+  creditLimit?: number | null
+  ownerName?: string | null
+  managerName?: string | null
+  summary: Customer360Summary
+  riskSnapshot: Customer360RiskSnapshot
+  reminderTimeline: Customer360ReminderLog[]
+  responseStates: Customer360ResponseState[]
+}
+
 export type CustomerUpdateRequest = {
   name: string
   address?: string | null
@@ -107,6 +162,10 @@ export const fetchCustomers = async (params: {
 
 export const fetchCustomerDetail = async (token: string, taxCode: string) => {
   return apiFetch<CustomerDetail>(`/customers/${taxCode}`, { token })
+}
+
+export const fetchCustomer360 = async (token: string, taxCode: string) => {
+  return apiFetch<Customer360>(`/customers/${taxCode}/360`, { token })
 }
 
 export const updateCustomer = async (

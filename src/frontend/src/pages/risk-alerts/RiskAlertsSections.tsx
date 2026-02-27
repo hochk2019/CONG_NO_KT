@@ -335,11 +335,12 @@ export function RiskRulesSection({
       <div className="table-scroll">
         <table
           className="table"
-          style={{ '--table-columns': 5, '--table-min-width': '820px' } as CSSProperties}
+          style={{ '--table-columns': 6, '--table-min-width': '980px' } as CSSProperties}
         >
           <thead className="table-head">
             <tr className="table-row">
               <th scope="col">Nhóm</th>
+              <th scope="col">Chế độ khớp</th>
               <th scope="col">Ngày quá hạn</th>
               <th scope="col">Tỷ lệ quá hạn (%)</th>
               <th scope="col">Số lần trễ</th>
@@ -350,6 +351,16 @@ export function RiskRulesSection({
             {rulesDraft.map((rule, index) => (
               <tr className="table-row" key={rule.level}>
                 <td>{riskLabels[rule.level] ?? rule.level}</td>
+                <td>
+                  <select
+                    value={rule.matchMode}
+                    disabled={!canManage}
+                    onChange={(event) => onRuleChange(index, 'matchMode', event.target.value)}
+                  >
+                    <option value="ANY">Bất kỳ điều kiện</option>
+                    <option value="ALL">Tất cả điều kiện</option>
+                  </select>
+                </td>
                 <td>
                   <input
                     type="number"
@@ -394,7 +405,7 @@ export function RiskRulesSection({
             ))}
             {rulesDraft.length === 0 && (
               <tr className="table-row">
-                <td colSpan={5}>
+                <td colSpan={6}>
                   <div className="empty-state">Chưa có tiêu chí.</div>
                 </td>
               </tr>

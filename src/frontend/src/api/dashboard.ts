@@ -17,11 +17,44 @@ export type DashboardKpis = {
   lockedPeriodsCount: number
 }
 
+export type DashboardKpiDelta = {
+  current: number
+  previous: number
+  delta: number
+  deltaPercent: number | null
+}
+
+export type DashboardKpiMoM = {
+  totalOutstanding: DashboardKpiDelta
+  outstandingInvoice: DashboardKpiDelta
+  outstandingAdvance: DashboardKpiDelta
+  overdueTotal: DashboardKpiDelta
+  unallocatedReceiptsAmount: DashboardKpiDelta
+  onTimeCustomers: DashboardKpiDelta
+}
+
+export type DashboardExecutiveSummary = {
+  status: 'good' | 'stable' | 'warning' | 'critical' | string
+  message: string
+  actionHint: string
+  generatedAt: string
+}
+
 export type DashboardTrendPoint = {
   period: string
   invoicedTotal: number
   advancedTotal: number
   receiptedTotal: number
+  expectedTotal: number
+  actualTotal: number
+  variance: number
+}
+
+export type DashboardCashflowForecastPoint = {
+  period: string
+  expectedTotal: number
+  actualTotal: number
+  variance: number
 }
 
 export type DashboardTopItem = {
@@ -44,8 +77,11 @@ export type DashboardAllocationStatus = {
 export type DashboardOverview = {
   trendFrom: string
   trendTo: string
+  executiveSummary: DashboardExecutiveSummary
   kpis: DashboardKpis
+  kpiMoM: DashboardKpiMoM
   trend: DashboardTrendPoint[]
+  cashflowForecast: DashboardCashflowForecastPoint[]
   topOutstanding: DashboardTopItem[]
   topOnTime: DashboardTopItem[]
   topOverdueDays: DashboardTopItem[]
@@ -61,6 +97,11 @@ export type DashboardOverdueGroupItem = {
   overdueAmount: number
   overdueRatio: number
   overdueCustomers: number
+}
+
+export type DashboardPreferences = {
+  widgetOrder: string[]
+  hiddenWidgets: string[]
 }
 
 export const fetchDashboardOverview = async (params: {
@@ -103,3 +144,16 @@ export const fetchDashboardOverdueGroups = async (params: {
     { token: params.token },
   )
 }
+
+export const fetchDashboardPreferences = async (token: string) =>
+  apiFetch<DashboardPreferences>('/dashboard/preferences', { token })
+
+export const updateDashboardPreferences = async (
+  token: string,
+  payload: Partial<DashboardPreferences>,
+) =>
+  apiFetch<DashboardPreferences>('/dashboard/preferences', {
+    method: 'PUT',
+    token,
+    body: payload,
+  })

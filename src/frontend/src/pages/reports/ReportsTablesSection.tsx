@@ -27,9 +27,11 @@ type ReportsTablesSectionProps = {
   statementCustomerTaxCode?: string
   statementCustomerName?: string
   exportingSummary?: boolean
+  exportingSummaryPdf?: boolean
   exportingStatement?: boolean
   exportingAging?: boolean
   onExportSummary?: () => void
+  onExportSummaryPdf?: () => void
   onExportStatement?: () => void
   onExportAging?: () => void
   onSummaryPageChange?: (page: number) => void
@@ -57,9 +59,11 @@ export function ReportsTablesSection({
   statementCustomerTaxCode,
   statementCustomerName,
   exportingSummary = false,
+  exportingSummaryPdf = false,
   exportingStatement = false,
   exportingAging = false,
   onExportSummary,
+  onExportSummaryPdf,
   onExportStatement,
   onExportAging,
   onSummaryPageChange,
@@ -166,7 +170,18 @@ export function ReportsTablesSection({
                 disabled={exportingSummary}
                 aria-label="Tải báo cáo tổng hợp"
               >
-                {exportingSummary ? 'Đang tải...' : 'Tải báo cáo tổng hợp'}
+                {exportingSummary ? 'Đang tải...' : 'Tải Excel tổng hợp'}
+              </button>
+            )}
+            {onExportSummaryPdf && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-table"
+                onClick={onExportSummaryPdf}
+                disabled={exportingSummaryPdf}
+                aria-label="Tải PDF tổng hợp"
+              >
+                {exportingSummaryPdf ? 'Đang tải...' : 'Tải PDF tổng hợp'}
               </button>
             )}
           </div>
@@ -177,7 +192,7 @@ export function ReportsTablesSection({
           <>
             <div className="table-scroll">
               <table
-                className="table"
+                className="table table--mobile-cards"
                 style={{ '--table-columns': 8, '--table-min-width': '980px' } as CSSProperties}
               >
                 <thead className="table-head">
@@ -195,14 +210,14 @@ export function ReportsTablesSection({
                 <tbody>
                   {summaryRows.map((row) => (
                     <tr className="table-row" key={row.groupKey}>
-                      <td>{row.groupKey}</td>
-                      <td>{row.groupName ?? '-'}</td>
-                      <td>{formatMoney(row.invoicedTotal)}</td>
-                      <td>{formatMoney(row.advancedTotal)}</td>
-                      <td>{formatMoney(row.receiptedTotal)}</td>
-                      <td>{formatMoney(row.outstandingInvoice)}</td>
-                      <td>{formatMoney(row.outstandingAdvance)}</td>
-                      <td>{formatMoney(row.currentBalance)}</td>
+                      <td data-label="Nhóm">{row.groupKey}</td>
+                      <td data-label="Tên">{row.groupName ?? '-'}</td>
+                      <td data-label="Phát sinh HĐ">{formatMoney(row.invoicedTotal)}</td>
+                      <td data-label="Phát sinh trả hộ">{formatMoney(row.advancedTotal)}</td>
+                      <td data-label="Tiền đã thu">{formatMoney(row.receiptedTotal)}</td>
+                      <td data-label="Dư HĐ còn lại">{formatMoney(row.outstandingInvoice)}</td>
+                      <td data-label="Dư trả hộ còn lại">{formatMoney(row.outstandingAdvance)}</td>
+                      <td data-label="Tổng nợ còn lại">{formatMoney(row.currentBalance)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -261,7 +276,7 @@ export function ReportsTablesSection({
             )}
             <div className="table-scroll">
               <table
-                className="table"
+                className="table table--mobile-cards"
                 style={{ '--table-columns': 8, '--table-min-width': '1020px' } as CSSProperties}
               >
                 <thead className="table-head">
@@ -279,14 +294,14 @@ export function ReportsTablesSection({
                 <tbody>
                   {statement.lines.map((line, index) => (
                     <tr className="table-row" key={`${line.documentDate}-${index}`}>
-                      <td>{formatDate(line.documentDate)}</td>
-                      <td>{formatDate(line.appliedPeriodStart)}</td>
-                      <td>{line.type}</td>
-                      <td>{line.documentNo ?? '-'}</td>
-                      <td>{line.description ?? '-'}</td>
-                      <td>{formatMoney(line.increase)}</td>
-                      <td>{formatMoney(line.decrease)}</td>
-                      <td>{formatMoney(line.runningBalance)}</td>
+                      <td data-label="Ngày">{formatDate(line.documentDate)}</td>
+                      <td data-label="Kỳ áp dụng">{formatDate(line.appliedPeriodStart)}</td>
+                      <td data-label="Loại">{line.type}</td>
+                      <td data-label="Số CT">{line.documentNo ?? '-'}</td>
+                      <td data-label="Diễn giải">{line.description ?? '-'}</td>
+                      <td data-label="Tăng">{formatMoney(line.increase)}</td>
+                      <td data-label="Giảm">{formatMoney(line.decrease)}</td>
+                      <td data-label="Dư cuối">{formatMoney(line.runningBalance)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -340,7 +355,7 @@ export function ReportsTablesSection({
           <>
             <div className="table-scroll">
               <table
-                className="table"
+                className="table table--mobile-cards"
                 style={{ '--table-columns': 10, '--table-min-width': '1200px' } as CSSProperties}
               >
                 <thead className="table-head">
@@ -360,16 +375,16 @@ export function ReportsTablesSection({
                 <tbody>
                   {agingRows.map((row) => (
                     <tr className="table-row" key={`${row.customerTaxCode}-${row.sellerTaxCode}`}>
-                      <td>{row.customerTaxCode}</td>
-                      <td>{row.customerName}</td>
-                      <td>{row.sellerTaxCode}</td>
-                      <td>{formatMoney(row.bucket0To30)}</td>
-                      <td>{formatMoney(row.bucket31To60)}</td>
-                      <td>{formatMoney(row.bucket61To90)}</td>
-                      <td>{formatMoney(row.bucket91To180)}</td>
-                      <td>{formatMoney(row.bucketOver180)}</td>
-                      <td>{formatMoney(row.total)}</td>
-                      <td>{formatMoney(row.overdue)}</td>
+                      <td data-label="MST KH">{row.customerTaxCode}</td>
+                      <td data-label="Khách hàng">{row.customerName}</td>
+                      <td data-label="MST bán">{row.sellerTaxCode}</td>
+                      <td data-label="0-30">{formatMoney(row.bucket0To30)}</td>
+                      <td data-label="31-60">{formatMoney(row.bucket31To60)}</td>
+                      <td data-label="61-90">{formatMoney(row.bucket61To90)}</td>
+                      <td data-label="91-180">{formatMoney(row.bucket91To180)}</td>
+                      <td data-label=">180">{formatMoney(row.bucketOver180)}</td>
+                      <td data-label="Tổng">{formatMoney(row.total)}</td>
+                      <td data-label="Quá hạn">{formatMoney(row.overdue)}</td>
                     </tr>
                   ))}
                 </tbody>

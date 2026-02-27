@@ -31,8 +31,13 @@ type CustomerTransactionsSectionProps = {
   canManageCustomers: boolean
   selectedTaxCode: string | null
   selectedName: string
+  initialTab?: CustomerTransactionsTab
+  initialDoc?: string | null
+  onTabChange?: (tab: CustomerTransactionsTab) => void
   onClearSelection: () => void
 }
+
+type CustomerTransactionsTab = 'invoices' | 'advances' | 'receipts'
 
 type InvoiceModalState = {
   mode: 'view' | 'void'
@@ -49,9 +54,12 @@ export default function CustomerTransactionsSection({
   canManageCustomers,
   selectedTaxCode,
   selectedName,
+  initialTab,
+  initialDoc,
+  onTabChange,
   onClearSelection,
 }: CustomerTransactionsSectionProps) {
-  const [activeTab, setActiveTab] = useState<'invoices' | 'advances' | 'receipts'>('invoices')
+  const [activeTab, setActiveTab] = useState<CustomerTransactionsTab>(initialTab ?? 'invoices')
 
   const [invoiceRows, setInvoiceRows] = useState<CustomerInvoice[]>([])
   const [invoicePage, setInvoicePage] = useState(1)
@@ -118,14 +126,35 @@ export default function CustomerTransactionsSection({
 
   useEffect(() => {
     if (!selectedTaxCode) return
-    setActiveTab('invoices')
+    setActiveTab(initialTab ?? 'invoices')
     setInvoicePage(1)
     setAdvancePage(1)
     setReceiptPage(1)
     setInvoiceRows([])
     setAdvanceRows([])
     setReceiptRows([])
-  }, [selectedTaxCode])
+  }, [selectedTaxCode, initialTab])
+
+  useEffect(() => {
+    if (!selectedTaxCode) return
+
+    const doc = initialDoc?.trim() ?? ''
+    if (!doc) return
+
+    const targetTab = initialTab ?? 'invoices'
+    if (targetTab === 'invoices') {
+      setInvoiceSearch(doc)
+      setInvoicePage(1)
+      return
+    }
+    if (targetTab === 'advances') {
+      setAdvanceSearch(doc)
+      setAdvancePage(1)
+      return
+    }
+    setReceiptSearch(doc)
+    setReceiptPage(1)
+  }, [initialDoc, initialTab, selectedTaxCode])
 
   useEffect(() => {
     if (!token || !selectedTaxCode || activeTab !== 'invoices') return
@@ -491,6 +520,12 @@ export default function CustomerTransactionsSection({
       }),
     [handleOpenReceiptModal],
   )
+
+  const handleSwitchTab = useCallback((tab: CustomerTransactionsTab) => {
+    setActiveTab(tab)
+    onTabChange?.(tab)
+  }, [onTabChange])
+
   if (!selectedTaxCode) {
     return null
   }
@@ -518,7 +553,7 @@ export default function CustomerTransactionsSection({
           role="tab"
           aria-selected={activeTab === 'invoices'}
           aria-controls="customer-panel-invoices"
-          onClick={() => setActiveTab('invoices')}
+          onClick={() => handleSwitchTab('invoices')}
         >
           Hóa đơn
         </button>
@@ -529,7 +564,7 @@ export default function CustomerTransactionsSection({
           role="tab"
           aria-selected={activeTab === 'advances'}
           aria-controls="customer-panel-advances"
-          onClick={() => setActiveTab('advances')}
+          onClick={() => handleSwitchTab('advances')}
         >
           Khoản trả hộ KH
         </button>
@@ -540,7 +575,7 @@ export default function CustomerTransactionsSection({
           role="tab"
           aria-selected={activeTab === 'receipts'}
           aria-controls="customer-panel-receipts"
-          onClick={() => setActiveTab('receipts')}
+          onClick={() => handleSwitchTab('receipts')}
         >
           Phiếu thu
         </button>

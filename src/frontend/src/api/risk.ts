@@ -1,5 +1,8 @@
 import { apiFetch } from './client'
+import type { NotificationItem } from './notifications'
+import type { ReminderLogItem, ReminderSettings } from './reminders'
 import type { PagedResult } from './types'
+import type { ZaloLinkStatus } from './zalo'
 
 export type RiskOverviewItem = {
   level: string
@@ -16,6 +19,15 @@ export type RiskOverview = {
   totalOverdue: number
 }
 
+export type RiskAiFactorItem = {
+  code: string
+  label: string
+  rawValue: number
+  normalizedValue: number
+  weight: number
+  contribution: number
+}
+
 export type RiskCustomerItem = {
   customerTaxCode: string
   customerName: string
@@ -27,14 +39,29 @@ export type RiskCustomerItem = {
   maxDaysPastDue: number
   lateCount: number
   riskLevel: string
+  predictedOverdueProbability: number
+  aiSignal: string
+  aiFactors: RiskAiFactorItem[]
+  aiRecommendation: string
 }
 
 export type RiskRule = {
   level: string
+  matchMode: 'ANY' | 'ALL'
   minOverdueDays: number
   minOverdueRatio: number
   minLateCount: number
   isActive: boolean
+}
+
+export type RiskBootstrap = {
+  overview: RiskOverview
+  customers: PagedResult<RiskCustomerItem>
+  rules: RiskRule[]
+  settings: ReminderSettings
+  logs: PagedResult<ReminderLogItem>
+  notifications: PagedResult<NotificationItem>
+  zaloStatus: ZaloLinkStatus | null
 }
 
 export const fetchRiskOverview = async (params: { token: string; asOfDate?: string }) => {
@@ -69,6 +96,45 @@ export const fetchRiskCustomers = async (params: {
   if (params.order) query.append('order', params.order)
 
   return apiFetch<PagedResult<RiskCustomerItem>>(`/risk/customers?${query.toString()}`, {
+    token: params.token,
+  })
+}
+
+export const fetchRiskBootstrap = async (params: {
+  token: string
+  search?: string
+  ownerId?: string
+  level?: string
+  asOfDate?: string
+  page: number
+  pageSize: number
+  sort?: string
+  order?: string
+  logChannel?: string
+  logStatus?: string
+  logPage: number
+  logPageSize: number
+  notificationPage?: number
+  notificationPageSize?: number
+}) => {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+    logPage: String(params.logPage),
+    logPageSize: String(params.logPageSize),
+    notificationPage: String(params.notificationPage ?? 1),
+    notificationPageSize: String(params.notificationPageSize ?? 5),
+  })
+  if (params.search) query.append('search', params.search)
+  if (params.ownerId) query.append('ownerId', params.ownerId)
+  if (params.level) query.append('level', params.level)
+  if (params.asOfDate) query.append('asOfDate', params.asOfDate)
+  if (params.sort) query.append('sort', params.sort)
+  if (params.order) query.append('order', params.order)
+  if (params.logChannel) query.append('logChannel', params.logChannel)
+  if (params.logStatus) query.append('logStatus', params.logStatus)
+
+  return apiFetch<RiskBootstrap>(`/risk/bootstrap?${query.toString()}`, {
     token: params.token,
   })
 }

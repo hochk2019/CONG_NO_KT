@@ -1,0 +1,203 @@
+name: congno
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: congno-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-congno_golden}
+      POSTGRES_USER: ${POSTGRES_USER:-congno_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - congno_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-congno_app} -d ${POSTGRES_DB:-congno_golden}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - congno_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: congno-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - congno_net
+
+  api:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    image: congno-api:latest
+    container_name: congno-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=db;Port=5432;Database=${POSTGRES_DB:-congno_golden};Username=${POSTGRES_USER:-congno_app};Password=${POSTGRES_PASSWORD:-change_me}
+      ConnectionStrings__Migrations: Host=db;Port=5432;Database=${POSTGRES_DB:-congno_golden};Username=${POSTGRES_USER:-congno_app};Password=${POSTGRES_PASSWORD:-change_me}
+      ConnectionStrings__ReadReplica: ${READ_REPLICA_CONNECTION:-}
+      ConnectionStrings__Redis: ${REDIS_CONNECTION:-redis:6379}
+      Migrations__Enabled: "true"
+      Jwt__Secret: ${JWT_SECRET}
+      Jwt__Issuer: ${JWT_ISSUER:-CongNoGolden}
+      Jwt__Audience: ${JWT_AUDIENCE:-CongNoGolden.Client}
+      Jwt__RefreshCookieSecure: ${JWT_REFRESH_COOKIE_SECURE:-false}
+      Jwt__RefreshCookieSameSite: ${JWT_REFRESH_COOKIE_SAMESITE:-Lax}
+      Jwt__RefreshCookiePath: ${JWT_REFRESH_COOKIE_PATH:-/}
+      Serilog__WriteTo__0__Args__path: ${SERILOG_FILE_PATH:-/var/lib/congno/logs/api.log}
+      Seed__AdminUsername: ${SEED_ADMIN_USERNAME:-admin}
+      Seed__AdminPassword: ${SEED_ADMIN_PASSWORD}
+      Seed__Enabled: ${SEED_ENABLED:-true}
+      Zalo__Enabled: ${ZALO_ENABLED:-false}
+      Zalo__OaId: ${ZALO_OA_ID:-}
+      Zalo__ApiBaseUrl: ${ZALO_API_BASE_URL:-https://openapi.zalo.me/v2.0/oa/message}
+      Zalo__AccessToken: ${ZALO_ACCESS_TOKEN:-}
+      Zalo__WebhookToken: ${ZALO_WEBHOOK_TOKEN:-}
+      Backup__DefaultPath: ${BACKUP_CONTAINER_PATH:-/var/lib/congno/backups/dumps}
+      Backup__DefaultPgBinPath: ${BACKUP_PG_BIN_PATH:-/usr/bin}
+      Observability__ServiceName: ${OBSERVABILITY_SERVICE_NAME:-congno-api}
+      Observability__EnablePrometheusExporter: ${OBSERVABILITY_PROMETHEUS_ENABLED:-true}
+      Observability__PrometheusScrapeEndpointPath: ${OBSERVABILITY_PROMETHEUS_PATH:-/metrics}
+    ports:
+      - "${API_PORT:-8080}:8080"
+    volumes:
+      - ./scripts/db/migrations:/app/scripts/db/migrations:ro
+      - ${BACKUP_HOST_PATH:-./data/backup/dumps}:${BACKUP_CONTAINER_PATH:-/var/lib/congno/backups/dumps}
+    networks:
+      - congno_net
+
+  web:
+    build:
+      context: ./src/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-/api}
+    image: congno-web:latest
+    container_name: congno-web
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_started
+    ports:
+      - "${WEB_PORT:-8081}:80"
+    networks:
+      - congno_net
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: congno-prometheus
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      api:
+        condition: service_started
+      alertmanager:
+        condition: service_started
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle
+    volumes:
+      - ./src/ops/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./src/ops/monitoring/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - congno_net
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: congno-alertmanager
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./src/ops/monitoring/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    ports:
+      - "${ALERTMANAGER_PORT:-9093}:9093"
+    networks:
+      - congno_net
+
+  loki:
+    image: grafana/loki:3.1.1
+    container_name: congno-loki
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command: -config.file=/etc/loki/config.yml
+    volumes:
+      - ./src/ops/monitoring/loki/loki-config.yml:/etc/loki/config.yml:ro
+      - loki_data:/loki
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    networks:
+      - congno_net
+
+  promtail:
+    image: grafana/promtail:3.1.1
+    container_name: congno-promtail
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      loki:
+        condition: service_started
+    volumes:
+      - ./src/ops/monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+    networks:
+      - congno_net
+
+  grafana:
+    image: grafana/grafana:11.1.5
+    container_name: congno-grafana
+    restart: unless-stopped
+    profiles: ["monitoring"]
+    depends_on:
+      prometheus:
+        condition: service_started
+      loki:
+        condition: service_started
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://localhost:3001}
+    volumes:
+      - ./src/ops/monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./src/ops/monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3001}:3000"
+    networks:
+      - congno_net
+
+volumes:
+  congno_db_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+networks:
+  congno_net:
+    driver: bridge

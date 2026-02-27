@@ -40,6 +40,7 @@ public partial class MainWindow : Window
 
     private void InitializeStaticOptions()
     {
+        CmbRuntimeMode.ItemsSource = new[] { "windows-service", "docker" };
         CmbLogLevel.ItemsSource = new[] { "Trace", "Debug", "Information", "Warning", "Error", "Critical" };
         CmbServiceStartMode.ItemsSource = new[] { "auto", "manual", "disabled" };
         CmbRecoveryFirst.ItemsSource = new[] { "restart", "run", "none" };
@@ -70,6 +71,8 @@ public partial class MainWindow : Window
         BtnOpenBackend.Click += OnOpenBackend;
         BtnOpenFrontend.Click += OnOpenFrontend;
         BtnSaveEndpoints.Click += OnSaveEndpoints;
+        BtnSaveRuntimeConfig.Click += OnSaveRuntimeConfig;
+        CmbRuntimeMode.SelectionChanged += OnRuntimeModeChanged;
         BtnLoadBindings.Click += OnLoadBindings;
         BtnApplyBinding.Click += OnApplyBinding;
         BtnSaveIisConfig.Click += OnSaveIisConfig;

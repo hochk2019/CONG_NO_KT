@@ -6,14 +6,14 @@ This document records the technical decisions for the Cong No Golden system (LAN
 ## Decisions (with trade-offs)
 
 1) Backend runtime
-- Decision: .NET 8 Web API on Windows Server (service) with Clean Architecture.
-- Why: strong tooling on Windows, long-term support, good performance for LAN.
-- Trade-offs: Windows-specific ops, .NET skill requirement.
+- Decision: .NET 8 Web API with Clean Architecture, deployed by default via Docker Compose.
+- Why: consistent runtime between local/staging/prod, easier rollout/rollback, fewer host-specific drift issues.
+- Trade-offs: requires container runtime and compose operational knowledge.
 
 2) Frontend stack
-- Decision: React + TypeScript + Vite, hosted by IIS (static files) with reverse proxy to API.
-- Why: fast dev/build, SPA routing, easy deployment in LAN.
-- Trade-offs: requires build pipeline; SPA routing needs IIS rewrite.
+- Decision: React + TypeScript + Vite, served by Nginx in `web` container with `/api` reverse proxy to backend.
+- Why: single-origin access, stable cookie behavior, deployment parity with backend.
+- Trade-offs: requires Nginx/container config management.
 
 3) Database
 - Decision: PostgreSQL 16, UUID primary keys, JSONB for audit/staging, pg_trgm + unaccent.
@@ -26,9 +26,9 @@ This document records the technical decisions for the Cong No Golden system (LAN
 - Trade-offs: two data access styles to maintain.
 
 5) Auth and session
-- Decision: JWT access token stored in HttpOnly cookie; refresh token in HttpOnly cookie; SameSite=Lax; CSRF token for state-changing endpoints when served on same domain.
-- Why: avoids localStorage, simple for SPA behind reverse proxy.
-- Trade-offs: cookie/CSRF handling adds complexity.
+- Decision: short-lived JWT access token in memory (Authorization header); refresh token in HttpOnly cookie (SameSite=Lax, cookie path configurable by runtime: `/auth` direct API, `/` when behind `/api` proxy in Docker).
+- Why: avoids localStorage XSS risk while keeping SPA UX; refresh flow handles reloads/long sessions.
+- Trade-offs: refresh cookie requires CORS credentials and rotation logic; refresh endpoint must be protected.
 
 6) Error format and logging
 - Decision: RFC7807 ProblemDetails + application error codes. Serilog structured logging, correlation-id middleware.
@@ -57,7 +57,7 @@ This document records the technical decisions for the Cong No Golden system (LAN
 
 ## Assumptions
 - Concurrency is low (5-10 users) but correctness is critical.
-- LAN environment with reverse proxy for single-domain access.
+- LAN/private network deployment with Docker Compose as canonical runtime.
 
 ## Open questions
 - Receipt import template format and mapping (fields, default method).

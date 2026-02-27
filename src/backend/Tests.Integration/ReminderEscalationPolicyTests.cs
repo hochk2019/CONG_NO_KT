@@ -137,6 +137,263 @@ public sealed class ReminderEscalationPolicyTests
         Assert.Equal(1, notifications);
     }
 
+    [Fact]
+    public async Task Run_WhenAcknowledged_LocksEscalationAtLevelOne()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("92000000-0000-0000-0000-000000000021");
+        var supervisorId = Guid.Parse("92000000-0000-0000-0000-000000000022");
+        var adminId = Guid.Parse("92000000-0000-0000-0000-000000000023");
+
+        await SeedEscalationScenarioAsync(db, ownerId, supervisorId, adminId);
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(adminId, new[] { "Admin" });
+        var audit = new AuditService(db, currentUser);
+        var service = new ReminderService(
+            new NpgsqlConnectionFactory(_fixture.ConnectionString),
+            db,
+            currentUser,
+            audit,
+            new TestZaloClient());
+
+        await service.UpdateSettingsAsync(
+            new ReminderSettingsUpdateRequest(
+                Enabled: true,
+                FrequencyDays: 7,
+                UpcomingDueDays: 7,
+                EscalationMaxAttempts: 5,
+                EscalationCooldownHours: 0,
+                EscalateToSupervisorAfter: 2,
+                EscalateToAdminAfter: 3,
+                Channels: new[] { "IN_APP" },
+                TargetLevels: new[] { "VERY_HIGH" }),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        var state = await service.UpsertResponseStateAsync(
+            new ReminderResponseStateUpsertRequest(
+                CustomerTaxCode: "CUST-RM-01",
+                Channel: "IN_APP",
+                ResponseStatus: "ACKNOWLEDGED",
+                EscalationLocked: null,
+                ResponseAt: null),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+
+        Assert.Equal("ACKNOWLEDGED", state.ResponseStatus);
+        Assert.True(state.EscalationLocked);
+
+        var sentLogs = await db.ReminderLogs
+            .AsNoTracking()
+            .Where(x => x.Status == "SENT" && x.Channel == "IN_APP")
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(3, sentLogs.Count);
+        Assert.All(sentLogs, log => Assert.Equal(1, log.EscalationLevel));
+
+        var normalTitleCount = await db.Notifications.CountAsync(x =>
+            x.Title == "Nhắc rủi ro công nợ");
+        Assert.Equal(3, normalTitleCount);
+    }
+
+    [Fact]
+    public async Task Run_WhenDisputed_EscalatesWithDisputedReason()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("92000000-0000-0000-0000-000000000024");
+        var supervisorId = Guid.Parse("92000000-0000-0000-0000-000000000025");
+        var adminId = Guid.Parse("92000000-0000-0000-0000-000000000026");
+
+        await SeedEscalationScenarioAsync(db, ownerId, supervisorId, adminId);
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(adminId, new[] { "Admin" });
+        var audit = new AuditService(db, currentUser);
+        var service = new ReminderService(
+            new NpgsqlConnectionFactory(_fixture.ConnectionString),
+            db,
+            currentUser,
+            audit,
+            new TestZaloClient());
+
+        await service.UpdateSettingsAsync(
+            new ReminderSettingsUpdateRequest(
+                Enabled: true,
+                FrequencyDays: 7,
+                UpcomingDueDays: 7,
+                EscalationMaxAttempts: 5,
+                EscalationCooldownHours: 0,
+                EscalateToSupervisorAfter: 2,
+                EscalateToAdminAfter: 3,
+                Channels: new[] { "IN_APP" },
+                TargetLevels: new[] { "VERY_HIGH" }),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        var state = await service.UpsertResponseStateAsync(
+            new ReminderResponseStateUpsertRequest(
+                CustomerTaxCode: "CUST-RM-01",
+                Channel: "IN_APP",
+                ResponseStatus: "DISPUTED",
+                EscalationLocked: null,
+                ResponseAt: null),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+
+        Assert.Equal("DISPUTED", state.ResponseStatus);
+        Assert.False(state.EscalationLocked);
+
+        var sentLogs = await db.ReminderLogs
+            .AsNoTracking()
+            .Where(x => x.Status == "SENT" && x.Channel == "IN_APP")
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(3, sentLogs.Count);
+        Assert.Equal(1, sentLogs[0].EscalationLevel);
+        Assert.Equal(2, sentLogs[1].EscalationLevel);
+        Assert.Equal(3, sentLogs[2].EscalationLevel);
+        Assert.Equal("SUPERVISOR_ESCALATION_DISPUTED", sentLogs[1].EscalationReason);
+        Assert.Equal("ADMIN_ESCALATION_DISPUTED", sentLogs[2].EscalationReason);
+    }
+
+    [Fact]
+    public async Task Run_WhenEscalationLocked_KeepsEscalationLevel()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("92000000-0000-0000-0000-000000000027");
+        var supervisorId = Guid.Parse("92000000-0000-0000-0000-000000000028");
+        var adminId = Guid.Parse("92000000-0000-0000-0000-000000000029");
+
+        await SeedEscalationScenarioAsync(db, ownerId, supervisorId, adminId);
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(adminId, new[] { "Admin" });
+        var audit = new AuditService(db, currentUser);
+        var service = new ReminderService(
+            new NpgsqlConnectionFactory(_fixture.ConnectionString),
+            db,
+            currentUser,
+            audit,
+            new TestZaloClient());
+
+        await service.UpdateSettingsAsync(
+            new ReminderSettingsUpdateRequest(
+                Enabled: true,
+                FrequencyDays: 7,
+                UpcomingDueDays: 7,
+                EscalationMaxAttempts: 5,
+                EscalationCooldownHours: 0,
+                EscalateToSupervisorAfter: 2,
+                EscalateToAdminAfter: 3,
+                Channels: new[] { "IN_APP" },
+                TargetLevels: new[] { "VERY_HIGH" }),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        var state = await service.UpsertResponseStateAsync(
+            new ReminderResponseStateUpsertRequest(
+                CustomerTaxCode: "CUST-RM-01",
+                Channel: "IN_APP",
+                ResponseStatus: "NO_RESPONSE",
+                EscalationLocked: true,
+                ResponseAt: null),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+
+        Assert.Equal("NO_RESPONSE", state.ResponseStatus);
+        Assert.True(state.EscalationLocked);
+
+        var sentLogs = await db.ReminderLogs
+            .AsNoTracking()
+            .Where(x => x.Status == "SENT" && x.Channel == "IN_APP")
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(3, sentLogs.Count);
+        Assert.Equal(1, sentLogs[0].EscalationLevel);
+        Assert.Equal(2, sentLogs[1].EscalationLevel);
+        Assert.Equal(2, sentLogs[2].EscalationLevel);
+        Assert.Equal("ESCALATION_LOCKED", sentLogs[2].EscalationReason);
+    }
+
+    [Fact]
+    public async Task Run_WhenResolved_StopsReminderWithSkipReason()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("92000000-0000-0000-0000-000000000031");
+        var adminId = Guid.Parse("92000000-0000-0000-0000-000000000032");
+
+        await SeedEscalationScenarioAsync(db, ownerId, supervisorId: null, adminId);
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(adminId, new[] { "Admin" });
+        var audit = new AuditService(db, currentUser);
+        var service = new ReminderService(
+            new NpgsqlConnectionFactory(_fixture.ConnectionString),
+            db,
+            currentUser,
+            audit,
+            new TestZaloClient());
+
+        await service.UpdateSettingsAsync(
+            new ReminderSettingsUpdateRequest(
+                Enabled: true,
+                FrequencyDays: 7,
+                UpcomingDueDays: 7,
+                EscalationMaxAttempts: 5,
+                EscalationCooldownHours: 0,
+                EscalateToSupervisorAfter: 2,
+                EscalateToAdminAfter: 3,
+                Channels: new[] { "IN_APP" },
+                TargetLevels: new[] { "VERY_HIGH" }),
+            CancellationToken.None);
+
+        await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        await service.UpsertResponseStateAsync(
+            new ReminderResponseStateUpsertRequest(
+                CustomerTaxCode: "CUST-RM-01",
+                Channel: "IN_APP",
+                ResponseStatus: "RESOLVED",
+                EscalationLocked: null,
+                ResponseAt: null),
+            CancellationToken.None);
+
+        var secondRun = await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
+        Assert.True(secondRun.SkippedCount >= 1);
+        Assert.Equal(0, secondRun.SentCount);
+
+        var logs = await db.ReminderLogs
+            .AsNoTracking()
+            .Where(x => x.Channel == "IN_APP")
+            .OrderBy(x => x.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(2, logs.Count);
+        Assert.Equal("SENT", logs[0].Status);
+        Assert.Equal("SKIPPED", logs[1].Status);
+        Assert.Equal("RESPONSE_RESOLVED", logs[1].ErrorDetail);
+
+        var notifications = await db.Notifications.AsNoTracking().CountAsync();
+        Assert.Equal(1, notifications);
+    }
+
     private async Task SeedEscalationScenarioAsync(
         ConGNoDbContext db,
         Guid ownerId,
@@ -261,6 +518,7 @@ public sealed class ReminderEscalationPolicyTests
     {
         await db.Database.ExecuteSqlRawAsync(
             "TRUNCATE TABLE " +
+            "congno.reminder_response_states, " +
             "congno.notifications, " +
             "congno.reminder_logs, " +
             "congno.reminder_settings, " +

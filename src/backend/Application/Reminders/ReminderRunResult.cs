@@ -5,4 +5,6 @@ public sealed record ReminderRunResult(
     int TotalCandidates,
     int SentCount,
     int FailedCount,
-    int SkippedCount);
+    int SkippedCount,
+    bool DryRun = false,
+    IReadOnlyList<ReminderRunPreviewItem>? PreviewItems = null);

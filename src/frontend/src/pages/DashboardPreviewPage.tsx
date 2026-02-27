@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import './dashboard/dashboard.css'
 
 const kpiPrimary = [
   { label: 'Tổng dư công nợ', value: '128,4 tỷ', meta: '+2,4% so với kỳ trước' },

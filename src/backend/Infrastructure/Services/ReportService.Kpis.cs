@@ -80,7 +80,7 @@ SELECT
             onTimeThreshold = 0.95m
         };
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var row = await connection.QuerySingleAsync<ReportKpiRow>(

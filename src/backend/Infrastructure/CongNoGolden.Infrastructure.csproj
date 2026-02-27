@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="ClosedXML" Version="0.102.2" />
+    <PackageReference Include="Cronos" Version="0.11.1" />
     <PackageReference Include="DbUp" Version="5.0.40" />
     <PackageReference Include="dbup-postgresql" Version="5.0.40" />
     <PackageReference Include="Dapper" Version="2.1.35" />
@@ -15,6 +16,7 @@
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.0" />
     <PackageReference Include="Npgsql" Version="8.0.5" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.8" />
+    <PackageReference Include="QuestPDF" Version="2025.12.4" />
   </ItemGroup>
 
   <ItemGroup>

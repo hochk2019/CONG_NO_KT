@@ -5,7 +5,8 @@ public sealed record RiskRule(
     int MinOverdueDays,
     decimal MinOverdueRatio,
     int MinLateCount,
-    bool IsActive = true);
+    bool IsActive = true,
+    RiskMatchMode MatchMode = RiskMatchMode.Any);
 
 public sealed record RiskMetrics(
     decimal TotalOutstanding,

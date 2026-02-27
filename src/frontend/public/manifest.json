@@ -1,12 +1,38 @@
 {
-  "name": "Cong No Golden",
+  "id": "/",
+  "name": "Cong No Golden - Quản lý công nợ",
   "short_name": "CongNo",
-  "description": "Quản lý công nợ và dòng tiền",
+  "description": "Ứng dụng quản lý công nợ, dòng tiền và cảnh báo rủi ro cho đội vận hành.",
+  "lang": "vi",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
   "background_color": "#f8fafc",
   "theme_color": "#2563eb",
+  "categories": ["business", "finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Tổng quan",
+      "short_name": "Dashboard",
+      "url": "/dashboard",
+      "description": "Xem trạng thái công nợ tổng quan"
+    },
+    {
+      "name": "Nhập liệu",
+      "short_name": "Imports",
+      "url": "/imports",
+      "description": "Tải và kiểm tra dữ liệu nhập liệu"
+    },
+    {
+      "name": "Báo cáo",
+      "short_name": "Reports",
+      "url": "/reports",
+      "description": "Mở nhanh khu vực báo cáo"
+    }
+  ],
   "icons": [
     {
       "src": "/pwa-192.png",

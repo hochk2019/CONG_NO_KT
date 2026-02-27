@@ -1,5 +1,11 @@
 # Backup Scheduler and Restore Flow Fixes Implementation Plan
 
+> [!IMPORTANT]
+> **HISTORICAL EXECUTION PLAN**
+> Tài liệu này là kế hoạch/thực thi theo thời điểm viết, có thể chứa giả định cũ.
+> Nguồn vận hành hiện hành: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `task.md`.
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Prevent duplicate scheduled backups, avoid queued jobs getting stuck on lock contention, and clear restore-in-progress notices on UI failures.
@@ -374,3 +380,4 @@ Plan complete and saved to `docs/plans/2026-02-03-backup-scheduler-restore-fixes
 2. Parallel Session (separate)
 
 Which approach?
+

@@ -1,31 +1,47 @@
 # BACKUP_RESTORE_GUIDE
 
-## Backup (pg_dump)
-1) Create backup folder, e.g. C:\apps\congno\backup\dumps
-2) Example script (daily):
+## Deployment mode
+- Default runtime: Docker Compose.
+- Legacy fallback: direct PostgreSQL on Windows host.
 
-@echo off
-set PGBIN=C:\Program Files\PostgreSQL\16\bin
-set BACKUPDIR=C:\apps\congno\backup\dumps
-set DATESTAMP=%DATE:~-4%%DATE:~3,2%%DATE:~0,2%_%TIME:~0,2%%TIME:~3,2%
-set DATESTAMP=%DATESTAMP: =0%
+## Backup (Docker, recommended)
+1) Ensure backup host folder exists (from `.env`): `BACKUP_HOST_PATH` (default `./data/backup/dumps`).
+2) Create dump from `db` container:
 
-if not exist %BACKUPDIR% mkdir %BACKUPDIR%
-"%PGBIN%\pg_dump.exe" -h localhost -p 5432 -U congno_admin -F c -b -f "%BACKUPDIR%\congno_golden_%DATESTAMP%.dump" congno_golden
-forfiles /p "%BACKUPDIR%" /m *.dump /d -30 /c "cmd /c del @path"
-
-3) Schedule with Task Scheduler (daily at 02:00).
-4) Store password via PGPASSFILE or .pgpass.
-5) Optional: use the checked-in script `scripts/db/backup_daily.bat` and customize paths.
-
-## Restore
-1) Stop API service.
-2) Run:
-pg_restore -h localhost -p 5432 -U congno_admin -d congno_golden -c "C:\apps\congno\backup\dumps\file.dump"
-3) Start API service and verify health.
-4) Optional: use `scripts/db/restore.ps1`:
+```powershell
+$ts = Get-Date -Format "yyyyMMdd_HHmmss"
+$dump = ".\\data\\backup\\dumps\\congno_golden_$ts.dump"
+docker compose exec -T db pg_dump -U "$env:POSTGRES_USER" -F c -b "$env:POSTGRES_DB" > $dump
 ```
-powershell -ExecutionPolicy Bypass -File scripts\db\restore.ps1 -DumpFile "C:\apps\congno\backup\dumps\file.dump"
+
+3) Verify dump file and keep retention policy (e.g. 30 days) via Task Scheduler script.
+
+Notes:
+- Nếu chưa set biến môi trường shell `POSTGRES_USER`/`POSTGRES_DB`, thay trực tiếp bằng giá trị thực tế (ví dụ `congno_app`, `congno_golden`).
+- Có thể dùng Ops Agent backup endpoint nếu đã cấu hình `BACKUP_*` trong compose env.
+
+## Restore (Docker, recommended)
+1) Stop app services to avoid write conflicts:
+```powershell
+docker compose stop api web
+```
+
+2) Copy dump vào DB container và restore:
+```powershell
+docker cp ".\\data\\backup\\dumps\\file.dump" congno-db:/tmp/file.dump
+docker compose exec -T db pg_restore -U "$env:POSTGRES_USER" -d "$env:POSTGRES_DB" --clean --if-exists --no-owner --no-privileges /tmp/file.dump
+```
+
+3) Start services and verify:
+```powershell
+docker compose up -d api web
+```
+- Check `GET /health`, `GET /health/ready`, and frontend home page.
+
+## Legacy restore (non-Docker fallback)
+Nếu bạn chạy PostgreSQL trực tiếp trên Windows host:
+```powershell
+pg_restore -h localhost -p 5432 -U congno_admin -d congno_golden -c "C:\\apps\\congno\\backup\\dumps\\file.dump"
 ```
 
 ## Offsite copy

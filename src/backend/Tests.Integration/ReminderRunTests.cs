@@ -103,10 +103,14 @@ public class ReminderRunTests
             true,
             7,
             7,
+            3,
+            24,
+            2,
+            3,
             new[] { "IN_APP" },
             new[] { "VERY_HIGH" }), CancellationToken.None);
 
-        var result = await service.RunAsync(true, CancellationToken.None);
+        var result = await service.RunAsync(new ReminderRunRequest(Force: true), CancellationToken.None);
 
         Assert.True(result.TotalCandidates > 0);
 
@@ -117,10 +121,101 @@ public class ReminderRunTests
         Assert.NotEmpty(notifications);
     }
 
+    [Fact]
+    public async Task Run_DryRun_DoesNotWrite_Log_Or_Notifications()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("77777777-7777-7777-7777-777777777777");
+        db.Users.Add(new User
+        {
+            Id = ownerId,
+            Username = "owner-dry",
+            PasswordHash = "hash",
+            FullName = "Owner Dry",
+            IsActive = true,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        db.Sellers.Add(new Seller
+        {
+            SellerTaxCode = "SELLER-DRY",
+            Name = "Seller Dry",
+            Status = "ACTIVE",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        db.Customers.Add(new Customer
+        {
+            TaxCode = "CUST-DRY",
+            Name = "Customer Dry",
+            AccountantOwnerId = ownerId,
+            PaymentTermsDays = 0,
+            Status = "ACTIVE",
+            CurrentBalance = 0,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        db.Invoices.Add(new Invoice
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = "SELLER-DRY",
+            CustomerTaxCode = "CUST-DRY",
+            InvoiceNo = "INV-DRY-01",
+            IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-8)),
+            TotalAmount = 200m,
+            OutstandingAmount = 200m,
+            Status = "OPEN",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        db.RiskRules.Add(new RiskRule
+        {
+            Id = Guid.NewGuid(),
+            Level = "HIGH",
+            MinOverdueDays = 1,
+            MinOverdueRatio = 0,
+            MinLateCount = 0,
+            IsActive = true,
+            SortOrder = 1,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+
+        var currentUser = new TestCurrentUser(new[] { "Admin" });
+        var audit = new AuditService(db, currentUser);
+        var connectionFactory = new NpgsqlConnectionFactory(_fixture.ConnectionString);
+        var service = new ReminderService(connectionFactory, db, currentUser, audit, new TestZaloClient());
+
+        var dryRunResult = await service.RunAsync(
+            new ReminderRunRequest(Force: true, DryRun: true, PreviewLimit: 10),
+            CancellationToken.None);
+
+        Assert.True(dryRunResult.DryRun);
+        Assert.True(dryRunResult.TotalCandidates > 0);
+        Assert.NotNull(dryRunResult.PreviewItems);
+        Assert.NotEmpty(dryRunResult.PreviewItems!);
+
+        Assert.Empty(await db.ReminderLogs.AsNoTracking().ToListAsync());
+        Assert.Empty(await db.Notifications.AsNoTracking().ToListAsync());
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
             "TRUNCATE TABLE " +
+            "congno.reminder_response_states, " +
             "congno.notifications, " +
             "congno.reminder_logs, " +
             "congno.reminder_settings, " +

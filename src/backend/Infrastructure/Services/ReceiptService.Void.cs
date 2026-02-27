@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Common;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Receipts;
 using CongNoGolden.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +31,7 @@ public sealed partial class ReceiptService
             throw new ConcurrencyException("Receipt was updated by another user. Please refresh.");
         }
 
-        if (receipt.Status == "VOID")
+        if (receipt.Status == ReceiptStatusCodes.Void)
         {
             throw new InvalidOperationException("Receipt already voided.");
         }
@@ -101,7 +102,7 @@ public sealed partial class ReceiptService
             _db.ReceiptAllocations.RemoveRange(allocations);
         }
 
-        if (previousStatus == "APPROVED")
+        if (previousStatus == ReceiptStatusCodes.Approved)
         {
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
             if (customer is not null)
@@ -110,12 +111,9 @@ public sealed partial class ReceiptService
             }
         }
 
-        receipt.Status = "VOID";
+        receipt.Status = ReceiptStatusCodes.Void;
         receipt.UnallocatedAmount = 0;
         receipt.AllocationStatus = "VOID";
-        receipt.AllocationTargets = null;
-        receipt.AllocationSource = null;
-        receipt.AllocationSuggestedAt = null;
         receipt.DeletedAt = DateTimeOffset.UtcNow;
         receipt.DeletedBy = _currentUser.UserId;
         receipt.UpdatedAt = DateTimeOffset.UtcNow;
@@ -144,6 +142,107 @@ public sealed partial class ReceiptService
             ct);
 
         return new ReceiptVoidResult(reversedAmount, allocationCount);
+    }
+
+    public async Task<ReceiptDto> UnvoidAsync(Guid receiptId, ReceiptUnvoidRequest request, CancellationToken ct)
+    {
+        var receipt = await _db.Receipts.FirstOrDefaultAsync(r => r.Id == receiptId, ct);
+        if (receipt is null)
+        {
+            throw new InvalidOperationException("Receipt not found.");
+        }
+
+        if (request.Version is null)
+        {
+            throw new InvalidOperationException("Receipt version is required.");
+        }
+
+        if (request.Version.Value != receipt.Version)
+        {
+            throw new ConcurrencyException("Receipt was updated by another user. Please refresh.");
+        }
+
+        if (receipt.Status != ReceiptStatusCodes.Void)
+        {
+            throw new InvalidOperationException("Receipt is not voided.");
+        }
+
+        await EnsureCanApproveReceipt(receipt, ct);
+
+        var lockedPeriods = await ReceiptPeriodLock.GetLockedPeriodsAsync(_db, receipt, ct);
+        var overrideApplied = false;
+        var overrideReason = string.Empty;
+        if (lockedPeriods.Count > 0)
+        {
+            if (!request.OverridePeriodLock)
+            {
+                throw new InvalidOperationException(
+                    $"Period is locked for receipt unvoid: {string.Join(", ", lockedPeriods)}.");
+            }
+
+            overrideReason = PeriodLockOverridePolicy.RequireOverride(_currentUser, request.OverrideReason);
+            overrideApplied = true;
+        }
+
+        var hasAllocations = await _db.ReceiptAllocations.AnyAsync(a => a.ReceiptId == receipt.Id, ct);
+        if (hasAllocations)
+        {
+            throw new InvalidOperationException("Receipt has allocations and cannot be unvoided.");
+        }
+
+        var previousStatus = receipt.Status;
+        var hasSelectedTargets = DeserializeTargets(receipt.AllocationTargets)?.Count > 0;
+
+        receipt.Status = ReceiptStatusCodes.Draft;
+        receipt.UnallocatedAmount = 0;
+        receipt.AllocationStatus = hasSelectedTargets
+            ? ReceiptAllocationStatusCodes.Selected
+            : ReceiptAllocationStatusCodes.Unallocated;
+        receipt.AllocationSource = hasSelectedTargets ? "MANUAL" : null;
+        receipt.DeletedAt = null;
+        receipt.DeletedBy = null;
+        receipt.UpdatedAt = DateTimeOffset.UtcNow;
+        receipt.Version += 1;
+
+        await _db.SaveChangesAsync(ct);
+
+        if (overrideApplied)
+        {
+            await _auditService.LogAsync(
+                "PERIOD_LOCK_OVERRIDE",
+                "Receipt",
+                receipt.Id.ToString(),
+                null,
+                new { operation = "RECEIPT_UNVOID", lockedPeriods, reason = overrideReason },
+                ct);
+        }
+
+        await _auditService.LogAsync(
+            "RECEIPT_UNVOID",
+            "Receipt",
+            receipt.Id.ToString(),
+            new { status = previousStatus },
+            new { status = receipt.Status },
+            ct);
+
+        return new ReceiptDto(
+            receipt.Id,
+            receipt.Status,
+            receipt.Version,
+            receipt.Amount,
+            receipt.UnallocatedAmount,
+            receipt.ReceiptNo,
+            receipt.ReceiptDate,
+            receipt.AppliedPeriodStart,
+            receipt.AllocationMode,
+            receipt.AllocationStatus,
+            receipt.AllocationPriority,
+            receipt.AllocationSource,
+            receipt.AllocationSuggestedAt,
+            DeserializeTargets(receipt.AllocationTargets),
+            receipt.Method,
+            receipt.SellerTaxCode,
+            receipt.CustomerTaxCode);
     }
 
     private static void RestoreInvoice(Invoice invoice, decimal amount)

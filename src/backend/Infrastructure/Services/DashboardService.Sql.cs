@@ -32,6 +32,7 @@ invoice_out AS (
     LEFT JOIN invoice_alloc a ON a.invoice_id = i.id
     WHERE i.deleted_at IS NULL
       AND i.status <> 'VOID'
+      AND i.issue_date <= @asOf
       AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
 ),
 advance_out AS (
@@ -45,6 +46,7 @@ advance_out AS (
     LEFT JOIN advance_alloc alloc ON alloc.advance_id = a.id
     WHERE a.deleted_at IS NULL
       AND a.status IN ('APPROVED','PAID')
+      AND a.advance_date <= @asOf
       AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
 ),
 combined AS (
@@ -145,20 +147,12 @@ agg AS (
     private const string DashboardKpiSql = AgingBaseCte + @"
 SELECT
     COALESCE((
-        SELECT SUM(i.outstanding_amount)
-        FROM congno.invoices i
-        JOIN congno.customers c ON c.tax_code = i.customer_tax_code
-        WHERE i.deleted_at IS NULL
-          AND i.status <> 'VOID'
-          AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+        SELECT SUM(CASE WHEN outstanding > 0 THEN outstanding ELSE 0 END)
+        FROM invoice_out
     ), 0) AS outstandingInvoice,
     COALESCE((
-        SELECT SUM(a.outstanding_amount)
-        FROM congno.advances a
-        JOIN congno.customers c ON c.tax_code = a.customer_tax_code
-        WHERE a.deleted_at IS NULL
-          AND a.status IN ('APPROVED','PAID')
-          AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+        SELECT SUM(CASE WHEN outstanding > 0 THEN outstanding ELSE 0 END)
+        FROM advance_out
     ), 0) AS outstandingAdvance,
     COALESCE((
         SELECT SUM(r.amount)

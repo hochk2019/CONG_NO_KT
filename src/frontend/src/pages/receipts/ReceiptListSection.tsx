@@ -5,6 +5,7 @@ import {
   fetchReceiptOpenItems,
   getReceipt,
   listReceipts,
+  unvoidReceipt,
   updateReceiptReminder,
   voidReceipt,
   type ReceiptAllocationDetail,
@@ -85,6 +86,23 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+const collectOverrideOptions = (actionLabel: string) => {
+  const overrideInput = window.prompt(
+    `${actionLabel}: nếu cần vượt khóa kỳ, nhập lý do (bỏ trống nếu không).`,
+    '',
+  )
+  if (overrideInput === null) {
+    return null
+  }
+
+  const reason = overrideInput.trim()
+  if (!reason) {
+    return { overridePeriodLock: false, overrideReason: undefined }
+  }
+
+  return { overridePeriodLock: true, overrideReason: reason }
+}
+
 type ReceiptListSectionProps = {
   token: string
   reloadSignal: number
@@ -126,6 +144,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [cancelRow, setCancelRow] = useState<ReceiptListItem | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [unvoidLoadingId, setUnvoidLoadingId] = useState<string | null>(null)
 
   const [approvalRow, setApprovalRow] = useState<ReceiptListItem | null>(null)
   const [approvalTargets, setApprovalTargets] = useState<ReceiptTargetRef[]>([])
@@ -359,6 +378,66 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     [token],
   )
 
+  const handleUnvoid = useCallback(
+    async (row: ReceiptListItem) => {
+      if (!token || !row.canManage) return
+      setListError(null)
+
+      const confirmed = window.confirm(`Bạn chắc chắn muốn bỏ hủy phiếu thu ${row.receiptNo ?? row.id}?`)
+      if (!confirmed) {
+        return
+      }
+
+      const overrideOptions = collectOverrideOptions(`Bỏ hủy ${row.receiptNo ?? row.id}`)
+      if (!overrideOptions) {
+        return
+      }
+
+      setUnvoidLoadingId(row.id)
+      try {
+        const restored = await unvoidReceipt(token, row.id, {
+          version: row.version,
+          overridePeriodLock: overrideOptions.overridePeriodLock,
+          overrideReason: overrideOptions.overrideReason,
+        })
+
+        setListRows((prev) => {
+          if (listStatus === 'VOID') {
+            return prev.filter((item) => item.id !== row.id)
+          }
+
+          return prev.map((item) =>
+            item.id === row.id
+              ? {
+                  ...item,
+                  status: restored.status,
+                  version: restored.version,
+                  unallocatedAmount: restored.unallocatedAmount,
+                  allocationStatus: restored.allocationStatus,
+                  allocationPriority: restored.allocationPriority,
+                  allocationSource: restored.allocationSource ?? null,
+                  allocationSuggestedAt: restored.allocationSuggestedAt ?? null,
+                }
+              : item,
+          )
+        })
+
+        if (listStatus === 'VOID') {
+          setListTotal((prev) => Math.max(0, prev - 1))
+        }
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setListError(err.message)
+        } else {
+          setListError('Không bỏ hủy được phiếu thu.')
+        }
+      } finally {
+        setUnvoidLoadingId(null)
+      }
+    },
+    [listStatus, token],
+  )
+
   const columns = useMemo(
     () => [
       {
@@ -432,9 +511,19 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
                 Duyệt
               </button>
             )}
-            {row.canManage && (
+            {row.canManage && row.status !== 'VOID' && (
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => setCancelRow(row)}>
                 Hủy
+              </button>
+            )}
+            {row.canManage && row.status === 'VOID' && (
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => void handleUnvoid(row)}
+                disabled={unvoidLoadingId === row.id}
+              >
+                {unvoidLoadingId === row.id ? 'Đang bỏ hủy...' : 'Bỏ hủy'}
               </button>
             )}
             <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleToggleReminder(row)}>
@@ -444,7 +533,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         ),
       },
     ],
-    [handleOpenApprove, handleOpenView, handleToggleReminder],
+    [handleOpenApprove, handleOpenView, handleToggleReminder, handleUnvoid, unvoidLoadingId],
   )
 
   const handleCancelConfirm = async (payload: {

@@ -1,8 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { ApiError } from '../../api/client'
-import { cancelImport, commitImport, fetchPreview, rollbackImport, uploadImport } from '../../api/imports'
+import {
+  cancelImport,
+  commitImport,
+  fetchPreview,
+  rollbackImport,
+  uploadImport,
+  type ImportCommitResult,
+} from '../../api/imports'
 import ImportHistorySection from './ImportHistorySection'
 import ImportPreviewModal from './ImportPreviewModal'
+import { formatRollbackErrorMessage } from './rollbackErrorMessages'
 
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
@@ -76,6 +84,8 @@ const formatValidationMessages = (messages: string[]) =>
   messages.map((message) => validationMessageLabels[message] ?? message).join(', ')
 
 const previewPageSizes = [10, 20, 50, 100, 200]
+const MAX_IMPORT_FILE_SIZE_BYTES = 20 * 1024 * 1024
+const MAX_IMPORT_FILE_SIZE_LABEL = '20MB'
 
 type ImportBatchSectionProps = {
   token: string
@@ -118,11 +128,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
   const [previewPageSize, setPreviewPageSize] = useState(() => getStoredPageSize())
   const [previewLoaded, setPreviewLoaded] = useState(false)
   const [previewLoading, setPreviewLoading] = useState(false)
-  const [commitResult, setCommitResult] = useState<{
-    insertedInvoices: number
-    insertedAdvances: number
-    insertedReceipts: number
-  } | null>(null)
+  const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null)
   const [historyReload, setHistoryReload] = useState(0)
   const [overrideLock, setOverrideLock] = useState(false)
   const [overrideReason, setOverrideReason] = useState('')
@@ -136,6 +142,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
   const [cancelLoading, setCancelLoading] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [isDropzoneActive, setIsDropzoneActive] = useState(false)
 
   const summaryLabel = useMemo(() => {
     if (!staging) return 'Chưa có lô nào.'
@@ -195,6 +202,73 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
       ...prev,
       [field]: message ?? '',
     }))
+  }
+
+  const validateImportFile = (candidate: File) => {
+    const normalizedName = candidate.name.toLowerCase()
+    if (!normalizedName.endsWith('.xlsx')) {
+      return 'Chỉ hỗ trợ file .xlsx.'
+    }
+
+    if (candidate.size > MAX_IMPORT_FILE_SIZE_BYTES) {
+      return `File vượt quá ${MAX_IMPORT_FILE_SIZE_LABEL}.`
+    }
+
+    return null
+  }
+
+  const setSelectedFile = (nextFile: File | null) => {
+    if (!nextFile) {
+      setFile(null)
+      setFieldError('file')
+      return
+    }
+
+    const validationError = validateImportFile(nextFile)
+    if (validationError) {
+      setFile(null)
+      setFieldError('file', validationError)
+      setUploadError(validationError)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+      return
+    }
+
+    setFile(nextFile)
+    setFieldError('file')
+    setUploadError(null)
+  }
+
+  const handleDropzoneDragEnter = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDropzoneActive(true)
+  }
+
+  const handleDropzoneDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    event.dataTransfer.dropEffect = 'copy'
+    setIsDropzoneActive(true)
+  }
+
+  const handleDropzoneDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const nextTarget = event.relatedTarget as Node | null
+    if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+      setIsDropzoneActive(false)
+    }
+  }
+
+  const handleDropzoneDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    setIsDropzoneActive(false)
+    const droppedFile = event.dataTransfer.files?.[0] ?? null
+    if (!droppedFile) return
+    setSelectedFile(droppedFile)
   }
 
   const handleUpload = async () => {
@@ -275,6 +349,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
       }
     }
     setFile(null)
+    setIsDropzoneActive(false)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -345,11 +420,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
       setCommitResult(null)
       setHistoryReload((value) => value + 1)
     } catch (err) {
-      if (err instanceof ApiError) {
-        setCommitError(err.message)
-      } else {
-        setCommitError('Hoàn tác thất bại.')
-      }
+      setCommitError(formatRollbackErrorMessage(err))
     } finally {
       setRollbackLoading(false)
     }
@@ -437,12 +508,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
               ref={fileInputRef}
               type="file"
               accept=".xlsx"
-              onChange={(event) => {
-                setFile(event.target.files?.[0] ?? null)
-                if (event.target.files?.[0]) {
-                  setFieldError('file')
-                }
-              }}
+              onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)}
               aria-invalid={Boolean(fieldErrors.file)}
             />
             {fieldErrors.file && <span className="field-error">{fieldErrors.file}</span>}
@@ -463,6 +529,21 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
               onChange={(event) => setPeriodTo(event.target.value)}
             />
           </label>
+        </div>
+        <div
+          className={`upload-dropzone${isDropzoneActive ? ' upload-dropzone--active' : ''}${fieldErrors.file ? ' upload-dropzone--error' : ''}`}
+          data-testid="import-dropzone"
+          onDragEnter={handleDropzoneDragEnter}
+          onDragOver={handleDropzoneDragOver}
+          onDragLeave={handleDropzoneDragLeave}
+          onDrop={handleDropzoneDrop}
+        >
+          <p className="upload-dropzone__title">Kéo và thả file .xlsx vào đây</p>
+          <p className="muted">Hoặc dùng ô Chọn file phía trên để tải thủ công (tối đa {MAX_IMPORT_FILE_SIZE_LABEL}).</p>
+          <p className="upload-dropzone__meta">
+            {file ? `Đã chọn: ${file.name}` : 'Chưa có file nào được chọn.'}
+          </p>
+          {fieldErrors.file && <p className="field-error">{fieldErrors.file}</p>}
         </div>
         <details className="advanced-panel">
           <summary>Tùy chọn nâng cao</summary>
@@ -595,6 +676,21 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
             Ghi thành công: {commitResult.insertedInvoices} hóa đơn,{' '}
             {commitResult.insertedAdvances} khoản trả hộ KH, {commitResult.insertedReceipts} phiếu
             thu.
+            {typeof commitResult.totalEligibleRows === 'number' && (
+              <div className="muted" style={{ marginTop: 6 }}>
+                Tiến độ commit: {commitResult.committedRows ?? 0}/{commitResult.totalEligibleRows}{' '}
+                dòng, bỏ qua {commitResult.skippedRows ?? 0} dòng.
+              </div>
+            )}
+            {Array.isArray(commitResult.progressSteps) && commitResult.progressSteps.length > 0 && (
+              <ul style={{ marginTop: 8, paddingLeft: 18 }}>
+                {commitResult.progressSteps.map((step, idx) => (
+                  <li key={`${step.stage}-${idx}`}>
+                    {step.percent}% - {step.message}
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
         {commitError && <div className="alert alert--error" role="alert" aria-live="assertive">{commitError}</div>}

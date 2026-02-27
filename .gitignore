@@ -22,6 +22,10 @@ node_modules/
 # User Specific
 *.user
 *.suo
+.env
+.env.*
+!.env.example
+!.env.docker.example
 
 # Project Specific
 tmp/
@@ -34,6 +38,7 @@ tmp/
 backups/
 test-results/
 playwright-report/
+src/frontend/e2e/.auth/
 
 # Temp files
 tmp_*

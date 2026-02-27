@@ -15,7 +15,6 @@ type ReportsKpiSectionProps = {
   kpis: ReportKpi | null
   kpiOrder: string[]
   dueSoonDays: number
-  savingPreferences: boolean
   onMoveKpi: (key: string, direction: 'up' | 'down') => void
   onResetKpiOrder: () => void
   onDueSoonDaysChange: (value: number) => void
@@ -97,7 +96,6 @@ export function ReportsKpiSection({
   kpis,
   kpiOrder,
   dueSoonDays,
-  savingPreferences,
   onMoveKpi,
   onResetKpiOrder,
   onDueSoonDaysChange,
@@ -135,7 +133,6 @@ export function ReportsKpiSection({
           <h3>Tổng quan chỉ số</h3>
           <p className="muted">Các KPI trọng yếu theo bộ lọc đang chọn.</p>
         </div>
-        {savingPreferences && <span className="muted">Đang lưu cấu hình...</span>}
       </div>
       <div className="stat-grid stat-grid--primary">
         {orderedCards.map((card) => (

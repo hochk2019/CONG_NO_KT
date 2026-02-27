@@ -113,6 +113,26 @@ public static class AdvanceEndpoints
         .WithTags("Advances")
         .RequireAuthorization("AdvanceManage");
 
+        app.MapPost("/advances/{id:guid}/unvoid", async (
+            Guid id,
+            [FromBody] AdvanceUnvoidRequest request,
+            IAdvanceService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UnvoidAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("AdvanceUnvoid")
+        .WithTags("Advances")
+        .RequireAuthorization("AdvanceManage");
+
         app.MapPut("/advances/{id:guid}", async (
             Guid id,
             [FromBody] AdvanceUpdateRequest request,

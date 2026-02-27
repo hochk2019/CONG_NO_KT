@@ -4,6 +4,7 @@ import {
   approveAdvance,
   createAdvance,
   listAdvances,
+  unvoidAdvance,
   updateAdvance,
   voidAdvance,
   type AdvanceListItem,
@@ -434,6 +435,41 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     }
   }
 
+  const handleUnvoid = async (row: AdvanceListItem) => {
+    if (!token || !row.canManage) return
+    resetMessages()
+    const confirmed = window.confirm(
+      `Bạn chắc chắn muốn bỏ hủy khoản trả hộ ${shortAdvanceId(row.id)}?`,
+    )
+    if (!confirmed) {
+      return
+    }
+
+    const overrideOptions = collectOverrideOptions(`Bỏ hủy ${shortAdvanceId(row.id)}`)
+    if (!overrideOptions) {
+      return
+    }
+
+    setLoadingAction(`unvoid:${row.id}`)
+    try {
+      await unvoidAdvance(token, row.id, {
+        version: row.version,
+        overridePeriodLock: overrideOptions.overridePeriodLock,
+        overrideReason: overrideOptions.overrideReason,
+      })
+      setActionMessage(`Đã bỏ hủy khoản trả hộ ${shortAdvanceId(row.id)}.`)
+      setListReload((value) => value + 1)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setActionError(err.message)
+      } else {
+        setActionError('Không bỏ hủy được khoản trả hộ.')
+      }
+    } finally {
+      setLoadingAction('')
+    }
+  }
+
   const handleStartEdit = (row: AdvanceListItem) => {
     resetMessages()
     setEditingId(row.id)
@@ -484,6 +520,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     onCancelEdit: handleCancelEdit,
     onApprove: handleApprove,
     onVoid: handleVoid,
+    onUnvoid: handleUnvoid,
     loadingAction,
   })
 

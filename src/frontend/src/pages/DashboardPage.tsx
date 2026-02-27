@@ -1,16 +1,34 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
+  fetchDashboardPreferences,
   fetchDashboardOverview,
   fetchDashboardOverdueGroups,
+  updateDashboardPreferences,
+  type DashboardKpiDelta,
   type DashboardOverview,
+  type DashboardPreferences,
   type DashboardOverdueGroupItem,
   type DashboardTopItem,
 } from '../api/dashboard'
 import { useAuth } from '../context/AuthStore'
+import { useDebouncedValue } from '../hooks/useDebouncedValue'
+import { usePersistedState } from '../hooks/usePersistedState'
 import { formatDateTime, formatMoney } from '../utils/format'
 import { toDateInput } from './reports/reportUtils'
+import AllocationDonutCard from './dashboard/AllocationDonutCard'
+import DashboardWidgetSettings from './dashboard/DashboardWidgetSettings'
+import RoleCockpitSection, { type DashboardRoleView } from './dashboard/RoleCockpitSection'
+import {
+  defaultDashboardWidgetOrder,
+  moveDashboardWidget,
+  normalizeDashboardHiddenWidgets,
+  normalizeDashboardWidgetOrder,
+  type DashboardWidgetId,
+} from './dashboard/dashboardWidgetPreferences'
+import type { AllocationStatusKey, AllocationSummary } from './dashboard/AllocationDonutCard'
+import './dashboard/dashboard.css'
 
 const rangeOptions = [
   { value: '1m', label: 'Tháng này', months: 1 },
@@ -113,6 +131,17 @@ const formatWeekRangeFull = (start: Date, end: Date) =>
 
 const formatMonthLabel = (date: Date) => `${pad2(date.getMonth() + 1)}/${date.getFullYear()}`
 
+const formatPeriodKeyLabel = (period: string) => {
+  if (/^\d{4}-W\d{2}$/i.test(period)) {
+    return `Tuần ${period.slice(-2)}`
+  }
+  if (/^\d{4}-\d{2}$/.test(period)) {
+    const [year, month] = period.split('-')
+    return `${month}/${year}`
+  }
+  return period
+}
+
 const formatUnitValue = (value: number, unit: UnitScale) => {
   const divider = unit === 'billion' ? 1_000_000_000 : 1_000_000
   const scaled = value / divider
@@ -125,11 +154,9 @@ const formatUnitValue = (value: number, unit: UnitScale) => {
 const cashflowStorageKey = {
   granularity: 'dashboard.cashflow.granularity',
 }
-
-const getStoredGranularity = (): TrendGranularity => {
-  if (typeof window === 'undefined') return 'week'
-  const stored = window.localStorage.getItem(cashflowStorageKey.granularity)
-  return stored === 'month' || stored === 'week' ? stored : 'week'
+const receiptsStorageKey = {
+  status: 'pref.receipts.status',
+  allocationStatus: 'pref.receipts.allocationStatus',
 }
 
 
@@ -191,17 +218,101 @@ const renderOverdueGroupList = (
   )
 }
 
+type KpiDeltaDirection = 'higher-better' | 'lower-better'
+
+const resolveRoleView = (roles: string[]): DashboardRoleView => {
+  const normalizedRoles = roles.map((role) => role.toLowerCase())
+  if (normalizedRoles.some((role) => ['director', 'ceo', 'admin'].includes(role))) {
+    return 'director'
+  }
+  if (normalizedRoles.some((role) => ['manager', 'supervisor'].includes(role))) {
+    return 'manager'
+  }
+  return 'operator'
+}
+
+const resolveSummaryTone = (status?: string) => {
+  if (status === 'critical') return 'critical'
+  if (status === 'warning') return 'warning'
+  if (status === 'good') return 'good'
+  return 'stable'
+}
+
+const resolveKpiDeltaTone = (delta: number, direction: KpiDeltaDirection) => {
+  if (delta === 0) return 'neutral'
+  if (direction === 'higher-better') {
+    return delta > 0 ? 'positive' : 'negative'
+  }
+  return delta < 0 ? 'positive' : 'negative'
+}
+
+const formatKpiDeltaValue = (value: number) => {
+  const absolute = Math.abs(value)
+  if (Number.isInteger(absolute)) {
+    return absolute.toLocaleString('vi-VN')
+  }
+
+  return absolute.toLocaleString('vi-VN', { maximumFractionDigits: 1 })
+}
+
+const formatKpiDeltaPercent = (value: number | null) => {
+  if (value === null) return ''
+  const prefix = value > 0 ? '+' : ''
+  return `${prefix}${value.toLocaleString('vi-VN', { maximumFractionDigits: 1 })}%`
+}
+
+const renderMomBadge = (
+  delta: DashboardKpiDelta | undefined,
+  direction: KpiDeltaDirection = 'lower-better',
+) => {
+  if (!delta) {
+    return <div className="kpi-delta kpi-delta--neutral">Chưa có dữ liệu so sánh tháng trước.</div>
+  }
+
+  if (delta.delta === 0) {
+    return <div className="kpi-delta kpi-delta--neutral">Không đổi so với tháng trước.</div>
+  }
+
+  const tone = resolveKpiDeltaTone(delta.delta, direction)
+  const directionText = delta.delta > 0 ? 'Tăng' : 'Giảm'
+  const percent = formatKpiDeltaPercent(delta.deltaPercent)
+
+  return (
+    <div className={`kpi-delta kpi-delta--${tone}`}>
+      {directionText} {formatKpiDeltaValue(delta.delta)}
+      {percent ? ` (${percent})` : ''} so với tháng trước.
+    </div>
+  )
+}
+
+const areDashboardPreferencesEqual = (
+  first: DashboardPreferences | null,
+  second: DashboardPreferences | null,
+) => {
+  if (!first || !second) return false
+  if (first.widgetOrder.length !== second.widgetOrder.length) return false
+  if (first.hiddenWidgets.length !== second.hiddenWidgets.length) return false
+
+  const sameOrder = first.widgetOrder.every((item, index) => item === second.widgetOrder[index])
+  if (!sameOrder) return false
+  return first.hiddenWidgets.every((item, index) => item === second.hiddenWidgets[index])
+}
+
 export default function DashboardPage() {
   const { state } = useAuth()
+  const navigate = useNavigate()
   const token = state.accessToken ?? ''
-  const canViewImports = state.roles.includes('Admin') || state.roles.includes('Supervisor')
-  const canViewLocks = state.roles.includes('Admin') || state.roles.includes('Supervisor')
 
   const [range, setRange] = useState('6m')
   const [topCount, setTopCount] = useState(5)
   const [unit, setUnit] = useState<UnitScale>('billion')
-  const initialGranularity = getStoredGranularity()
-  const [trendGranularity, setTrendGranularity] = useState<TrendGranularity>(initialGranularity)
+  const [trendGranularity, setTrendGranularity] = usePersistedState<TrendGranularity>(
+    cashflowStorageKey.granularity,
+    'week',
+    {
+      validate: (value): value is TrendGranularity => value === 'week' || value === 'month',
+    },
+  )
   const [overview, setOverview] = useState<DashboardOverview | null>(null)
   const [cashflowTrend, setCashflowTrend] = useState<DashboardOverview['trend']>([])
   const [cashflowRange, setCashflowRange] = useState<{ from: string; to: string } | null>(null)
@@ -212,6 +323,19 @@ export default function DashboardPage() {
   const [overdueGroupsError, setOverdueGroupsError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [widgetOrder, setWidgetOrder] = useState<DashboardWidgetId[]>(defaultDashboardWidgetOrder)
+  const [hiddenWidgets, setHiddenWidgets] = useState<DashboardWidgetId[]>([])
+  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
+  const [preferencesError, setPreferencesError] = useState<string | null>(null)
+  const [lastSavedPreferences, setLastSavedPreferences] = useState<DashboardPreferences | null>(null)
+  const pendingPreferences = useMemo<DashboardPreferences>(
+    () => ({
+      widgetOrder,
+      hiddenWidgets,
+    }),
+    [widgetOrder, hiddenWidgets],
+  )
+  const debouncedPreferences = useDebouncedValue(pendingPreferences, 500)
   const trendPeriods = useMemo(
     () => getTrendPeriodsFromRange(range, trendGranularity),
     [range, trendGranularity],
@@ -222,9 +346,79 @@ export default function DashboardPage() {
   }
 
   useEffect(() => {
-    if (typeof window === 'undefined') return
-    window.localStorage.setItem(cashflowStorageKey.granularity, trendGranularity)
-  }, [trendGranularity])
+    if (!token) return
+    let isActive = true
+
+    const loadPreferences = async () => {
+      try {
+        const result = await fetchDashboardPreferences(token)
+        if (!isActive) return
+        const normalizedOrder = normalizeDashboardWidgetOrder(result.widgetOrder)
+        const normalizedHidden = normalizeDashboardHiddenWidgets(result.hiddenWidgets)
+        setWidgetOrder(normalizedOrder)
+        setHiddenWidgets(normalizedHidden)
+        setLastSavedPreferences({
+          widgetOrder: normalizedOrder,
+          hiddenWidgets: normalizedHidden,
+        })
+      } catch {
+        if (!isActive) return
+      } finally {
+        if (isActive) {
+          setPreferencesLoaded(true)
+        }
+      }
+    }
+
+    loadPreferences()
+    return () => {
+      isActive = false
+    }
+  }, [token])
+
+  useEffect(() => {
+    if (!token || !preferencesLoaded) return
+    if (areDashboardPreferencesEqual(lastSavedPreferences, debouncedPreferences)) return
+
+    let isActive = true
+
+    const persistPreferences = async () => {
+      setPreferencesError(null)
+      try {
+        const result = await updateDashboardPreferences(token, debouncedPreferences)
+        if (!isActive) return
+        const normalizedOrder = normalizeDashboardWidgetOrder(result.widgetOrder)
+        const normalizedHidden = normalizeDashboardHiddenWidgets(result.hiddenWidgets)
+        setWidgetOrder(normalizedOrder)
+        setHiddenWidgets(normalizedHidden)
+        setLastSavedPreferences({
+          widgetOrder: normalizedOrder,
+          hiddenWidgets: normalizedHidden,
+        })
+      } catch {
+        if (!isActive) return
+        setPreferencesError('Không lưu được cấu hình widget dashboard.')
+      }
+    }
+
+    persistPreferences()
+    return () => {
+      isActive = false
+    }
+  }, [token, preferencesLoaded, debouncedPreferences, lastSavedPreferences])
+
+  const handleToggleWidgetVisibility = (widgetId: DashboardWidgetId, visible: boolean) => {
+    setHiddenWidgets((prev) => {
+      if (visible) {
+        return prev.filter((item) => item !== widgetId)
+      }
+      return normalizeDashboardHiddenWidgets([...prev, widgetId])
+    })
+  }
+
+  const handleMoveWidget = (widgetId: DashboardWidgetId, direction: 'up' | 'down') => {
+    setWidgetOrder((prev) => moveDashboardWidget(prev, widgetId, direction))
+  }
 
   useEffect(() => {
     if (!token) return
@@ -232,70 +426,8 @@ export default function DashboardPage() {
 
     const loadOverview = async () => {
       setError(null)
-      try {
-        const rangeParams = buildRangeParams(range)
-        const result = await fetchDashboardOverview({
-          token,
-          from: rangeParams.from,
-          to: rangeParams.to,
-          months: rangeParams.months,
-          top: topCount,
-        })
-        if (!isActive) return
-        setOverview(result)
-        setLastUpdated(result.lastUpdatedAt ? new Date(result.lastUpdatedAt) : new Date())
-
-        setOverdueGroupsLoading(true)
-        setOverdueGroupsError(null)
-        try {
-          const asOf = rangeParams.to ?? toDateInput(new Date())
-          const rows = await fetchDashboardOverdueGroups({
-            token,
-            asOf,
-            top: topCount,
-            groupBy: 'owner',
-          })
-          if (!isActive) return
-          setOverdueGroups(rows)
-        } catch (err) {
-          if (!isActive) return
-          if (err instanceof ApiError) {
-            setOverdueGroupsError(
-              err.status === 500
-                ? 'Không tải được thống kê quá hạn theo phụ trách.'
-                : err.message,
-            )
-          } else {
-            setOverdueGroupsError('Không tải được thống kê quá hạn theo phụ trách.')
-          }
-        } finally {
-          if (isActive) {
-            setOverdueGroupsLoading(false)
-          }
-        }
-      } catch (err) {
-        if (!isActive) return
-        if (err instanceof ApiError) {
-          setError(err.status === 500 ? 'Không tải được dữ liệu tổng quan.' : err.message)
-        } else {
-          setError('Không tải được dữ liệu tổng quan.')
-        }
-      }
-    }
-
-    loadOverview()
-    return () => {
-      isActive = false
-    }
-  }, [token, range, topCount])
-
-  useEffect(() => {
-    if (!token) return
-    let isActive = true
-
-    const loadCashflow = async () => {
-      setCashflowLoading(true)
       setCashflowError(null)
+      setCashflowLoading(true)
       try {
         const rangeParams = buildRangeParams(range)
         const result = await fetchDashboardOverview({
@@ -308,11 +440,20 @@ export default function DashboardPage() {
           trendPeriods,
         })
         if (!isActive) return
+        setOverview(result)
         setCashflowTrend(result.trend)
         setCashflowRange({ from: result.trendFrom, to: result.trendTo })
+        setLastUpdated(result.lastUpdatedAt ? new Date(result.lastUpdatedAt) : new Date())
       } catch (err) {
         if (!isActive) return
-        setCashflowError(err instanceof ApiError ? err.message : 'Không thể tải biểu đồ thu')
+        if (err instanceof ApiError) {
+          const message = err.status === 500 ? 'Không tải được dữ liệu tổng quan.' : err.message
+          setError(message)
+          setCashflowError(message)
+        } else {
+          setError('Không tải được dữ liệu tổng quan.')
+          setCashflowError('Không tải được dữ liệu tổng quan.')
+        }
         setCashflowRange(null)
       } finally {
         if (isActive) {
@@ -321,11 +462,52 @@ export default function DashboardPage() {
       }
     }
 
-    loadCashflow()
+    loadOverview()
     return () => {
       isActive = false
     }
   }, [token, range, topCount, trendGranularity, trendPeriods])
+
+  useEffect(() => {
+    if (!token) return
+    let isActive = true
+
+    const loadOverdueGroups = async () => {
+      setOverdueGroupsLoading(true)
+      setOverdueGroupsError(null)
+      try {
+        const rangeParams = buildRangeParams(range)
+        const rows = await fetchDashboardOverdueGroups({
+          token,
+          asOf: rangeParams.to ?? toDateInput(new Date()),
+          top: topCount,
+          groupBy: 'owner',
+        })
+        if (!isActive) return
+        setOverdueGroups(rows)
+      } catch (err) {
+        if (!isActive) return
+        if (err instanceof ApiError) {
+          setOverdueGroupsError(
+            err.status === 500
+              ? 'Không tải được thống kê quá hạn theo phụ trách.'
+              : err.message,
+          )
+        } else {
+          setOverdueGroupsError('Không tải được thống kê quá hạn theo phụ trách.')
+        }
+      } finally {
+        if (isActive) {
+          setOverdueGroupsLoading(false)
+        }
+      }
+    }
+
+    loadOverdueGroups()
+    return () => {
+      isActive = false
+    }
+  }, [token, range, topCount])
 
   const cashflowPoints = useMemo(() => {
     const start = cashflowRange?.from ? parseDateOnly(cashflowRange.from) : null
@@ -359,19 +541,30 @@ export default function DashboardPage() {
         fullLabel,
         invoiced: point.invoicedTotal,
         advanced: point.advancedTotal,
-        revenueTotal: point.invoicedTotal + point.advancedTotal,
-        receipted: point.receiptedTotal,
+        expected: point.expectedTotal,
+        actual: point.actualTotal,
+        variance: point.variance,
       }
     })
   }, [cashflowRange, cashflowTrend, trendGranularity])
+
+  const forecastPoints = useMemo(
+    () =>
+      (overview?.cashflowForecast ?? []).map((point) => ({
+        period: point.period,
+        label: formatPeriodKeyLabel(point.period),
+        expected: point.expectedTotal,
+        actual: point.actualTotal,
+        variance: point.variance,
+      })),
+    [overview],
+  )
 
   const maxCashflowValue = useMemo(() => {
     if (cashflowPoints.length === 0) {
       return 0
     }
-    return Math.max(
-      ...cashflowPoints.flatMap((point) => [point.revenueTotal, point.receipted]),
-    )
+    return Math.max(...cashflowPoints.flatMap((point) => [point.expected, point.actual]))
   }, [cashflowPoints])
 
   const cashflowLabelStep = useMemo(() => {
@@ -385,21 +578,23 @@ export default function DashboardPage() {
       (acc, point) => ({
         invoiced: acc.invoiced + point.invoicedTotal,
         advanced: acc.advanced + point.advancedTotal,
-        receipted: acc.receipted + point.receiptedTotal,
+        expected: acc.expected + point.expectedTotal,
+        actual: acc.actual + point.actualTotal,
       }),
-      { invoiced: 0, advanced: 0, receipted: 0 },
+      { invoiced: 0, advanced: 0, expected: 0, actual: 0 },
     )
 
     if (!totals) {
-      return { invoiced: 0, advanced: 0, receipted: 0, ratio: 0 }
+      return { invoiced: 0, advanced: 0, expected: 0, actual: 0, variance: 0, actualRatio: 0 }
     }
 
-    const denominator = totals.invoiced + totals.advanced
-    const ratio = denominator > 0 ? Math.round((totals.receipted / denominator) * 1000) / 10 : 0
-    return { ...totals, ratio }
+    const variance = totals.actual - totals.expected
+    const actualRatio =
+      totals.expected > 0 ? Math.round((totals.actual / totals.expected) * 1000) / 10 : 0
+    return { ...totals, variance, actualRatio }
   }, [overview])
 
-  const allocationSummary = useMemo(() => {
+  const allocationSummary = useMemo<AllocationSummary>(() => {
     const rows = overview?.allocationStatuses ?? []
     const bucket = {
       ALLOCATED: 0,
@@ -415,113 +610,73 @@ export default function DashboardPage() {
     })
 
     const total = bucket.ALLOCATED + bucket.PARTIAL + bucket.UNALLOCATED
+    const items: AllocationSummary['items'] = [
+      { key: 'ALLOCATED', label: 'Đã phân bổ', amount: bucket.ALLOCATED, percent: 0 },
+      { key: 'PARTIAL', label: 'Phân bổ một phần', amount: bucket.PARTIAL, percent: 0 },
+      { key: 'UNALLOCATED', label: 'Chưa phân bổ', amount: bucket.UNALLOCATED, percent: 0 },
+    ]
 
     return {
       total,
-      items: [
-        { key: 'ALLOCATED', label: 'Đã phân bổ', amount: bucket.ALLOCATED },
-        { key: 'PARTIAL', label: 'Phân bổ một phần', amount: bucket.PARTIAL },
-        { key: 'UNALLOCATED', label: 'Chưa phân bổ', amount: bucket.UNALLOCATED },
-      ].map((item) => ({
+      items: items.map((item) => ({
         ...item,
         percent: total > 0 ? Math.round((item.amount / total) * 1000) / 10 : 0,
       })),
     }
   }, [overview])
 
-  const quickActions = [
-    {
-      id: 'imports',
-      title: 'Nhập liệu',
-      description: 'Tải template, nhập thủ công',
-      to: '/imports',
-      visible: canViewImports || state.roles.includes('Accountant'),
-    },
-    {
-      id: 'customers',
-      title: 'Khách hàng',
-      description: 'Danh sách khách hàng, giao dịch',
-      to: '/customers',
-      visible: true,
-    },
-    {
-      id: 'receipts',
-      title: 'Thu tiền',
-      description: 'Nhập phiếu thu, phân bổ',
-      to: '/receipts',
-      visible: true,
-    },
-    {
-      id: 'reports',
-      title: 'Báo cáo',
-      description: 'Tuổi nợ, tổng hợp',
-      to: '/reports',
-      visible: true,
-    },
-    {
-      id: 'risk',
-      title: 'Cảnh báo rủi ro',
-      description: 'Theo dõi rủi ro công nợ',
-      to: '/risk',
-      visible: true,
-    },
-    {
-      id: 'locks',
-      title: 'Khóa kỳ',
-      description: 'Quản lý kỳ kế toán',
-      to: '/admin/period-locks',
-      visible: canViewLocks,
-    },
-  ]
+  const executiveSummary = overview?.executiveSummary
+  const summaryTone = resolveSummaryTone(executiveSummary?.status)
+  const roleView = resolveRoleView(state.roles)
 
-  const visibleActions = quickActions.filter((item) => item.visible)
+  const handleAllocationDrilldown = (status: AllocationStatusKey) => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.removeItem(receiptsStorageKey.status)
+      window.localStorage.setItem(receiptsStorageKey.allocationStatus, status)
+    }
+    navigate('/receipts')
+  }
 
-  return (
-    <div className="page-stack dashboard-page">
-      <header className="page-header">
-        <div>
-          <h2>Tổng quan công nợ</h2>
-          <p className="muted">
-            Theo dõi tổng quan công nợ, dòng tiền thu và các nhóm cần xử lý.
-          </p>
-          {lastUpdated && (
-            <div className="meta-row text-caption">
-              <span>Cập nhật lúc {formatDateTime(lastUpdated)}</span>
-            </div>
-          )}
+  const widgetSections: Record<DashboardWidgetId, ReactNode> = {
+    executiveSummary: executiveSummary ? (
+      <section className={`dashboard-summary dashboard-summary--${summaryTone}`}>
+        <div className="dashboard-summary__content">
+          <p className="dashboard-summary__label">Tóm tắt điều hành</p>
+          <h3 className="dashboard-summary__title">{executiveSummary.message}</h3>
+          <p className="dashboard-summary__hint">{executiveSummary.actionHint}</p>
         </div>
-        <div className="dashboard-filters">
-          <label className="field">
-            <span>Kỳ hiển thị</span>
-            <select value={range} onChange={(event) => setRange(event.target.value)}>
-              {rangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
+        <div className="dashboard-summary__meta">
+          <span>Cập nhật: {formatDateTime(executiveSummary.generatedAt)}</span>
         </div>
-      </header>
-
-      {error && <div className="alert alert--error" role="alert" aria-live="assertive">{error}</div>}
-
+      </section>
+    ) : null,
+    roleCockpit: (
+      <RoleCockpitSection
+        roleView={roleView}
+        kpis={overview?.kpis}
+        topOverdue={overview?.topOverdueDays ?? []}
+      />
+    ),
+    kpis: (
       <section className="kpi-stack">
         <div className="stat-grid stat-grid--primary">
           <div className="stat-card">
             <div className="stat-card__label">Tổng dư công nợ</div>
             <div className="stat-card__value">{formatMoney(overview?.kpis.totalOutstanding ?? 0)}</div>
             <div className="stat-card__meta">Gồm hóa đơn + trả hộ</div>
+            {renderMomBadge(overview?.kpiMoM?.totalOutstanding, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Dư hóa đơn</div>
             <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingInvoice ?? 0)}</div>
             <div className="stat-card__meta">Chưa phân bổ hết</div>
+            {renderMomBadge(overview?.kpiMoM?.outstandingInvoice, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Dư trả hộ</div>
             <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingAdvance ?? 0)}</div>
             <div className="stat-card__meta">Khoản trả hộ còn lại</div>
+            {renderMomBadge(overview?.kpiMoM?.outstandingAdvance, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Đã thu chưa phân bổ</div>
@@ -531,6 +686,7 @@ export default function DashboardPage() {
             <div className="stat-card__meta">
               {overview?.kpis.unallocatedReceiptsCount ?? 0} phiếu thu treo
             </div>
+            {renderMomBadge(overview?.kpiMoM?.unallocatedReceiptsAmount, 'lower-better')}
           </div>
           <div className={`stat-card${(overview?.kpis.overdueTotal ?? 0) > 0 ? ' stat-card--danger' : ''}`}>
             <div className="stat-card__label">Quá hạn</div>
@@ -538,43 +694,48 @@ export default function DashboardPage() {
             <div className="stat-card__meta">
               {overview?.kpis.overdueCustomers ?? 0} khách hàng đang quá hạn
             </div>
+            {renderMomBadge(overview?.kpiMoM?.overdueTotal, 'lower-better')}
           </div>
         </div>
         <div className="stat-grid stat-grid--secondary">
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Thu trong kỳ</div>
-            <div className="stat-card__value">{formatMoney(periodTotals.receipted)}</div>
+            <div className="stat-card__label">Thu thực tế trong kỳ</div>
+            <div className="stat-card__value">{formatMoney(periodTotals.actual)}</div>
             <div className="stat-card__meta">Theo kỳ đã chọn</div>
           </div>
           <div className="stat-card stat-card--secondary">
             <div className="stat-card__label">KH trả đúng hạn</div>
             <div className="stat-card__value">{overview?.kpis.onTimeCustomers ?? 0}</div>
             <div className="stat-card__meta">≥95% khoản đến hạn trong kỳ</div>
+            {renderMomBadge(overview?.kpiMoM?.onTimeCustomers, 'higher-better')}
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Phát sinh hóa đơn</div>
-            <div className="stat-card__value">{formatMoney(periodTotals.invoiced)}</div>
-            <div className="stat-card__meta">Hóa đơn phát sinh</div>
+            <div className="stat-card__label">Thu kỳ vọng</div>
+            <div className="stat-card__value">{formatMoney(periodTotals.expected)}</div>
+            <div className="stat-card__meta">Invoice + trả hộ</div>
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Phát sinh trả hộ</div>
-            <div className="stat-card__value">{formatMoney(periodTotals.advanced)}</div>
-            <div className="stat-card__meta">Khoản trả hộ mới</div>
+            <div className="stat-card__label">Chênh lệch (Actual - Expected)</div>
+            <div className="stat-card__value">{formatMoney(periodTotals.variance)}</div>
+            <div className="stat-card__meta">
+              {periodTotals.variance >= 0 ? 'Thu vượt kỳ vọng' : 'Thu thấp hơn kỳ vọng'}
+            </div>
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">% Thu/Phải thu</div>
-            <div className="stat-card__value">{periodTotals.ratio}%</div>
-            <div className="stat-card__meta">Tỷ lệ thu hồi</div>
+            <div className="stat-card__label">% Actual/Expected</div>
+            <div className="stat-card__value">{periodTotals.actualRatio}%</div>
+            <div className="stat-card__meta">Hiệu suất thu hồi trong kỳ</div>
           </div>
         </div>
       </section>
-
+    ),
+    cashflow: (
       <section className="dashboard-charts">
         <section className="card cashflow-card">
           <div className="cashflow-header">
             <div>
-              <h3>Luồng tiền thu theo kỳ</h3>
-              <p className="muted">So sánh doanh thu, trả hộ và tiền thu đã duyệt.</p>
+              <h3>Dòng tiền Expected vs Actual</h3>
+              <p className="muted">Theo dõi kỳ vọng thu hồi, thực thu và chênh lệch theo từng kỳ.</p>
             </div>
             <div className="chart-controls chart-controls--cashflow">
               <div className="unit-toggle chart-controls__group" role="group" aria-label="Chế độ kỳ biểu đồ">
@@ -612,9 +773,9 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="chart-legend chart-legend--cashflow">
-            <span style={{ color: 'var(--color-accent)' }}>■ Doanh thu</span>
-            <span style={{ color: 'var(--color-warning)' }}>■ Trả hộ</span>
-            <span style={{ color: 'var(--color-success)' }}>■ Tiền thu được</span>
+            <span style={{ color: 'var(--color-accent)' }}>■ Expected (Kỳ vọng)</span>
+            <span style={{ color: 'var(--color-success)' }}>■ Actual (Thực thu)</span>
+            <span style={{ color: 'var(--color-warning)' }}>■ Variance</span>
             <span className="chart-legend__unit">Đơn vị: {unit === 'billion' ? 'tỷ' : 'triệu'}</span>
           </div>
           {cashflowLoading ? (
@@ -624,79 +785,83 @@ export default function DashboardPage() {
           ) : cashflowPoints.length === 0 ? (
             <div className="empty-state">Không có dữ liệu trong kỳ đã chọn.</div>
           ) : (
-            <div className="cashflow-chart">
-              {cashflowPoints.map((point, index) => {
-                const revenueRatio = maxCashflowValue ? point.revenueTotal / maxCashflowValue : 0
-                const receiptedRatio = maxCashflowValue ? point.receipted / maxCashflowValue : 0
-                const showLabel = index % cashflowLabelStep === 0 || index === cashflowPoints.length - 1
-                const revenueHeight =
-                  point.revenueTotal > 0 ? Math.max(4, revenueRatio * 100) : 0
-                const receiptedHeight =
-                  point.receipted > 0 ? Math.max(4, receiptedRatio * 100) : 0
-                const segmentTotal = point.revenueTotal || 1
-                return (
-                  <div className="cashflow-chart__group" key={point.period}>
-                    <div className="cashflow-chart__bars">
-                      <div
-                        className="cashflow-chart__stack"
-                        style={{ height: `${revenueHeight}%` }}
-                      >
+            <>
+              <div className="cashflow-chart">
+                {cashflowPoints.map((point, index) => {
+                  const expectedRatio = maxCashflowValue ? point.expected / maxCashflowValue : 0
+                  const actualRatio = maxCashflowValue ? point.actual / maxCashflowValue : 0
+                  const showLabel = index % cashflowLabelStep === 0 || index === cashflowPoints.length - 1
+                  const expectedHeight = point.expected > 0 ? Math.max(4, expectedRatio * 100) : 0
+                  const actualHeight = point.actual > 0 ? Math.max(4, actualRatio * 100) : 0
+                  return (
+                    <div className="cashflow-chart__group" key={point.period}>
+                      <div className="cashflow-chart__bars">
                         <div
-                          className="cashflow-chart__segment cashflow-chart__segment--invoice"
-                          style={{ height: `${(point.invoiced / segmentTotal) * 100}%` }}
-                          title={`${point.fullLabel} • Doanh thu: ${formatUnitValue(point.invoiced, unit)}`}
+                          className="cashflow-chart__bar cashflow-chart__bar--expected"
+                          style={{ height: `${expectedHeight}%` }}
+                          title={`${point.fullLabel} • Expected: ${formatUnitValue(point.expected, unit)}`}
                         />
                         <div
-                          className="cashflow-chart__segment cashflow-chart__segment--advance"
-                          style={{ height: `${(point.advanced / segmentTotal) * 100}%` }}
-                          title={`${point.fullLabel} • Trả hộ: ${formatUnitValue(point.advanced, unit)}`}
+                          className="cashflow-chart__bar cashflow-chart__bar--actual"
+                          style={{ height: `${actualHeight}%` }}
+                          title={`${point.fullLabel} • Actual: ${formatUnitValue(point.actual, unit)}`}
                         />
                       </div>
                       <div
-                        className="cashflow-chart__bar cashflow-chart__bar--receipted"
-                        style={{ height: `${receiptedHeight}%` }}
-                        title={`${point.fullLabel} • Tiền thu được: ${formatUnitValue(point.receipted, unit)}`}
-                      />
+                        className={`cashflow-chart__variance ${
+                          point.variance >= 0
+                            ? 'cashflow-chart__variance--positive'
+                            : 'cashflow-chart__variance--negative'
+                        }`}
+                      >
+                        {point.variance >= 0 ? '+' : ''}
+                        {formatUnitValue(point.variance, unit)}
+                      </div>
+                      <div className="cashflow-chart__label">{showLabel ? point.label : ''}</div>
                     </div>
-                    <div className="cashflow-chart__label">{showLabel ? point.label : ''}</div>
+                  )
+                })}
+              </div>
+              {forecastPoints.length > 0 && (
+                <div className="cashflow-forecast">
+                  <h4 className="subsection-title">
+                    Dự báo {trendGranularity === 'week' ? '4 tuần' : '3 tháng'} tới
+                  </h4>
+                  <div className="forecast-grid">
+                    {forecastPoints.map((point) => (
+                      <article className="forecast-card" key={point.period}>
+                        <div className="forecast-card__period">{point.label}</div>
+                        <div className="forecast-card__row">
+                          <span>Kỳ vọng</span>
+                          <strong>{formatMoney(point.expected)}</strong>
+                        </div>
+                        <div className="forecast-card__row">
+                          <span>Thực thu dự kiến</span>
+                          <strong>{formatMoney(point.actual)}</strong>
+                        </div>
+                        <div
+                          className={`forecast-card__row ${
+                            point.variance >= 0
+                              ? 'forecast-card__row--positive'
+                              : 'forecast-card__row--negative'
+                          }`}
+                        >
+                          <span>Variance</span>
+                          <strong>{formatMoney(point.variance)}</strong>
+                        </div>
+                      </article>
+                    ))}
                   </div>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        <section className="card">
-          <h3>Trạng thái phân bổ</h3>
-          <p className="muted">Tỷ trọng phiếu thu theo tình trạng phân bổ.</p>
-          {allocationSummary.total > 0 ? (
-            <div className="chart">
-              {allocationSummary.items.map((item) => (
-                <div className="chart-column" key={item.key}>
-                  <div className="chart-total">{item.percent}%</div>
-                  <div className="chart-bars">
-                    <div
-                      className={`chart-bar ${
-                        item.key === 'ALLOCATED'
-                          ? 'chart-bar--invoice'
-                          : item.key === 'PARTIAL'
-                          ? 'chart-bar--advance'
-                          : 'chart-bar--receipt'
-                      }`}
-                      style={{ height: `${Math.max(6, item.percent)}%` }}
-                      title={`${item.label}: ${formatMoney(item.amount)}`}
-                    />
-                  </div>
-                  <div className="chart-label">{item.label}</div>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">Chưa có dữ liệu phân bổ.</div>
+              )}
+            </>
           )}
         </section>
-      </section>
 
+        <AllocationDonutCard summary={allocationSummary} onDrilldown={handleAllocationDrilldown} />
+      </section>
+    ),
+    panels: (
       <section className="dashboard-panels">
         <section className="card">
           <div className="card-row">
@@ -746,28 +911,55 @@ export default function DashboardPage() {
           </section>
         </div>
       </section>
+    ),
+  }
 
-      <section className="card">
-        <div className="card-row">
-          <div>
-            <h3>Hành động nhanh</h3>
-            <p className="muted">Thao tác nhanh với các mục cần xử lý.</p>
-          </div>
+  return (
+    <div className="page-stack dashboard-page">
+      <header className="page-header">
+        <div>
+          <h2>Tổng quan công nợ</h2>
+          <p className="muted">
+            Theo dõi tổng quan công nợ, dòng tiền thu và các nhóm cần xử lý.
+          </p>
+          {lastUpdated && (
+            <div className="meta-row text-caption">
+              <span>Cập nhật lúc {formatDateTime(lastUpdated)}</span>
+            </div>
+          )}
         </div>
-        {visibleActions.length === 0 ? (
-          <div className="empty-state">Bạn không có quyền thao tác nhanh.</div>
-        ) : (
-          <div className="action-grid">
-            {visibleActions.map((item) => (
-              <Link key={item.id} to={item.to} className="action-card">
-                <span className="action-card__label">Đi tới</span>
-                <span className="action-card__value">{item.title}</span>
-                <span className="action-card__meta">{item.description}</span>
-              </Link>
-            ))}
-          </div>
-        )}
-      </section>
+        <div className="dashboard-filters">
+          <label className="field">
+            <span>Kỳ hiển thị</span>
+            <select value={range} onChange={(event) => setRange(event.target.value)}>
+              {rangeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <DashboardWidgetSettings
+            order={widgetOrder}
+            hiddenWidgets={hiddenWidgets}
+            onToggleVisibility={handleToggleWidgetVisibility}
+            onMove={handleMoveWidget}
+            triggerClassName="dashboard-filters__settings-btn"
+          />
+        </div>
+      </header>
+
+      {error && <div className="alert alert--error" role="alert" aria-live="assertive">{error}</div>}
+      {preferencesError && (
+        <div className="alert alert--error" role="alert" aria-live="assertive">
+          {preferencesError}
+        </div>
+      )}
+
+      {widgetOrder.map((widgetId) => {
+        if (hiddenWidgets.includes(widgetId)) return null
+        return <Fragment key={widgetId}>{widgetSections[widgetId]}</Fragment>
+      })}
     </div>
   )
 }

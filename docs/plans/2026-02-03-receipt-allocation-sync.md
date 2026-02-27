@@ -1,5 +1,11 @@
 # Receipt Allocation Status Sync Implementation Plan
 
+> [!IMPORTANT]
+> **HISTORICAL EXECUTION PLAN**
+> Tài liệu này là kế hoạch/thực thi theo thời điểm viết, có thể chứa giả định cũ.
+> Nguồn vận hành hiện hành: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `task.md`.
+
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 **Goal:** Ensure receipt/advance allocation state is consistent across Receipts, Customers, and Reports after allocations are applied.
@@ -187,3 +193,4 @@ Plan complete and saved to `docs/plans/2026-02-03-receipt-allocation-sync.md`.
 Two execution options:
 1) Subagent-Driven (this session)
 2) Parallel Session (executing-plans)
+

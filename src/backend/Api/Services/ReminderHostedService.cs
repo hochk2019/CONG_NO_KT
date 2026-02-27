@@ -43,7 +43,7 @@ public sealed class ReminderHostedService : BackgroundService
             {
                 using var scope = _scopeFactory.CreateScope();
                 var service = scope.ServiceProvider.GetRequiredService<IReminderService>();
-                await service.RunAsync(false, stoppingToken);
+                await service.RunAsync(new ReminderRunRequest(Force: false), stoppingToken);
                 var receiptAutomation = scope.ServiceProvider.GetRequiredService<IReceiptAutomationService>();
                 await receiptAutomation.RunAsync(stoppingToken);
             }

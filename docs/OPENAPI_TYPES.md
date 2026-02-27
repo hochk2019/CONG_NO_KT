@@ -6,7 +6,8 @@
 
 ## Cách dùng (Dev)
 1) Chạy backend (có swagger):
-   - URL mặc định: `http://localhost:8080/swagger/v1/swagger.json`
+   - Docker mặc định (`API_PORT=8080`): `http://localhost:8080/swagger/v1/swagger.json`
+   - Nếu override port trong `.env` (ví dụ `API_PORT=18080`): đổi URL tương ứng.
 2) Tạo types:
    - `npm --prefix src/frontend run openapi:gen`
 

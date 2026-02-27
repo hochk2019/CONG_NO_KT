@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
 import CustomerEditModal from '../CustomerEditModal'
@@ -208,10 +209,25 @@ describe('customers modules', () => {
 
   it('renders customers page with auth context', () => {
     render(
-      <AuthContext.Provider value={baseAuth}>
-        <CustomersPage />
-      </AuthContext.Provider>,
+      <MemoryRouter initialEntries={['/customers']}>
+        <AuthContext.Provider value={baseAuth}>
+          <CustomersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
     )
     expect(screen.getByText('Tra cứu MST và công nợ')).toBeInTheDocument()
+  })
+
+  it('applies deep-link taxCode/tab/doc in customers page', () => {
+    render(
+      <MemoryRouter initialEntries={['/customers?taxCode=2301098313&tab=receipts&doc=PT-001']}>
+        <AuthContext.Provider value={baseAuth}>
+          <CustomersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('tab', { name: 'Phiếu thu' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('textbox', { name: /Tìm chứng từ \(PT \/ HD \/ TH\)/i })).toHaveValue('PT-001')
   })
 })

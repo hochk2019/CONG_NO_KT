@@ -84,4 +84,47 @@ public class AllocationEngineTests
         Assert.Equal(25, result.Lines[0].Amount);
         Assert.Equal(15, result.UnallocatedAmount);
     }
+
+    [Fact]
+    public void ProRata_Distributes_By_Outstanding_Ratio()
+    {
+        var first = new AllocationTarget(Guid.NewGuid(), AllocationTargetType.Invoice, new DateOnly(2025, 1, 1), 100);
+        var second = new AllocationTarget(Guid.NewGuid(), AllocationTargetType.Invoice, new DateOnly(2025, 1, 2), 300);
+
+        var request = new AllocationRequest(200, AllocationMode.ProRata, null, null);
+        var result = AllocationEngine.Allocate(request, new[] { first, second });
+
+        Assert.Equal(2, result.Lines.Count);
+        Assert.Equal(first.Id, result.Lines[0].TargetId);
+        Assert.Equal(50, result.Lines[0].Amount);
+        Assert.Equal(second.Id, result.Lines[1].TargetId);
+        Assert.Equal(150, result.Lines[1].Amount);
+        Assert.Equal(0, result.UnallocatedAmount);
+    }
+
+    [Fact]
+    public void ProRata_Respects_Selected_Targets_Subset()
+    {
+        var first = new AllocationTarget(Guid.NewGuid(), AllocationTargetType.Invoice, new DateOnly(2025, 1, 1), 100);
+        var second = new AllocationTarget(Guid.NewGuid(), AllocationTargetType.Invoice, new DateOnly(2025, 1, 2), 100);
+        var third = new AllocationTarget(Guid.NewGuid(), AllocationTargetType.Invoice, new DateOnly(2025, 1, 3), 100);
+
+        var request = new AllocationRequest(
+            90,
+            AllocationMode.ProRata,
+            null,
+            new[]
+            {
+                new AllocationTargetRef(first.Id, AllocationTargetType.Invoice),
+                new AllocationTargetRef(third.Id, AllocationTargetType.Invoice)
+            });
+
+        var result = AllocationEngine.Allocate(request, new[] { first, second, third });
+
+        Assert.Equal(2, result.Lines.Count);
+        Assert.Equal(first.Id, result.Lines[0].TargetId);
+        Assert.Equal(45, result.Lines[0].Amount);
+        Assert.Equal(third.Id, result.Lines[1].TargetId);
+        Assert.Equal(45, result.Lines[1].Amount);
+    }
 }

@@ -30,10 +30,16 @@ public sealed partial class ReportExportService : IReportExportService
         var from = request.From ?? new DateOnly(1900, 1, 1);
         var to = request.To ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var asOf = request.AsOfDate ?? to;
+
+        if (request.Format == ReportExportFormat.Pdf)
+        {
+            return await ExportSummaryPdfAsync(request, from, to, asOf, ct);
+        }
+
         var exportKind = request.Kind;
         var templatePath = ResolveTemplatePath(exportKind);
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var parameters = new

@@ -5,6 +5,7 @@ public sealed record RiskRuleUpdateItem(
     int MinOverdueDays,
     decimal MinOverdueRatio,
     int MinLateCount,
-    bool IsActive);
+    bool IsActive,
+    string? MatchMode = null);
 
 public sealed record RiskRulesUpdateRequest(IReadOnlyList<RiskRuleUpdateItem> Rules);

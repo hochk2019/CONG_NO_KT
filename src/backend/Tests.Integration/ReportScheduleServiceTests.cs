@@ -43,10 +43,12 @@ public sealed class ReportScheduleServiceTests
 
         var currentUser = new TestCurrentUser(userId, new[] { "Admin" });
         var exportService = new FakeReportExportService();
+        var emailSender = new FakeEmailSender();
         var service = new ReportScheduleService(
             db,
             currentUser,
             exportService,
+            emailSender,
             NullLogger<ReportScheduleService>.Instance);
 
         var schedule = await service.CreateAsync(
@@ -89,6 +91,8 @@ public sealed class ReportScheduleServiceTests
         Assert.Equal(userId, notification.UserId);
         Assert.Equal("REPORT", notification.Source);
         Assert.Equal("INFO", notification.Severity);
+        Assert.Single(emailSender.Messages);
+        Assert.Equal("summary-report.xlsx", emailSender.Messages[0].Attachment.FileName);
     }
 
     [Fact]
@@ -115,10 +119,12 @@ public sealed class ReportScheduleServiceTests
 
         var currentUser = new TestCurrentUser(userId, new[] { "Admin" });
         var exportService = new FakeReportExportService();
+        var emailSender = new FakeEmailSender();
         var service = new ReportScheduleService(
             db,
             currentUser,
             exportService,
+            emailSender,
             NullLogger<ReportScheduleService>.Instance);
 
         var due = await service.CreateAsync(
@@ -167,6 +173,68 @@ public sealed class ReportScheduleServiceTests
 
         var notifications = await db.Notifications.AsNoTracking().CountAsync();
         Assert.Equal(1, notifications);
+        Assert.Single(emailSender.Messages);
+    }
+
+    [Fact]
+    public async Task RunNow_WhenEmailSendFails_MarksRunFailed()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("91000000-0000-0000-0000-000000000003");
+        var now = DateTimeOffset.UtcNow;
+
+        db.Users.Add(new User
+        {
+            Id = userId,
+            Username = "report_email_fail",
+            PasswordHash = "hash",
+            FullName = "Report Email Fail",
+            IsActive = true,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Version = 1
+        });
+        await db.SaveChangesAsync();
+
+        var currentUser = new TestCurrentUser(userId, new[] { "Admin" });
+        var exportService = new FakeReportExportService();
+        var emailSender = new FakeEmailSender
+        {
+            Result = new ReportDeliveryEmailSendResult(
+                Sent: false,
+                Skipped: false,
+                RecipientCount: 1,
+                Detail: "SMTP unavailable")
+        };
+        var service = new ReportScheduleService(
+            db,
+            currentUser,
+            exportService,
+            emailSender,
+            NullLogger<ReportScheduleService>.Instance);
+
+        var schedule = await service.CreateAsync(
+            new ReportDeliveryScheduleUpsertRequest(
+                ReportExportKind.Summary,
+                ReportExportFormat.Xlsx,
+                "* * * * *",
+                "UTC",
+                new[] { "acct@example.local" },
+                null,
+                true),
+            CancellationToken.None);
+
+        var run = await service.RunNowAsync(schedule.Id, CancellationToken.None);
+
+        Assert.Equal("FAILED", run.Status);
+        Assert.Null(run.Artifact);
+        Assert.Contains("SMTP unavailable", run.ErrorDetail, StringComparison.OrdinalIgnoreCase);
+
+        var notification = await db.Notifications.AsNoTracking().SingleAsync();
+        Assert.Equal("ALERT", notification.Severity);
+        Assert.Contains("SMTP unavailable", notification.Body, StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task ResetAsync(ConGNoDbContext db)
@@ -203,7 +271,26 @@ public sealed class ReportScheduleServiceTests
             Requests.Add(request);
             return Task.FromResult(new ReportExportResult(
                 Content: new byte[] { 1, 2, 3, 4 },
-                FileName: "summary-report.xlsx"));
+            FileName: "summary-report.xlsx"));
+        }
+    }
+
+    private sealed class FakeEmailSender : IReportDeliveryEmailSender
+    {
+        public List<ReportDeliveryEmailMessage> Messages { get; } = [];
+
+        public ReportDeliveryEmailSendResult Result { get; set; } = new(
+            Sent: true,
+            Skipped: false,
+            RecipientCount: 1,
+            Detail: null);
+
+        public Task<ReportDeliveryEmailSendResult> SendAsync(
+            ReportDeliveryEmailMessage message,
+            CancellationToken ct)
+        {
+            Messages.Add(message);
+            return Task.FromResult(Result);
         }
     }
 }

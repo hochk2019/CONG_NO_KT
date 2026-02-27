@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -22,7 +23,7 @@ public sealed class AdvanceService : IAdvanceService
 
     public async Task<AdvanceDto> CreateAsync(AdvanceCreateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         if (request.Amount <= 0)
         {
@@ -90,7 +91,7 @@ public sealed class AdvanceService : IAdvanceService
 
     public async Task<AdvanceDto> ApproveAsync(Guid advanceId, AdvanceApproveRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var advance = await _db.Advances.FirstOrDefaultAsync(a => a.Id == advanceId && a.DeletedAt == null, ct);
         if (advance is null)
@@ -178,7 +179,7 @@ public sealed class AdvanceService : IAdvanceService
 
     public async Task<AdvanceDto> VoidAsync(Guid advanceId, AdvanceVoidRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
@@ -271,9 +272,89 @@ public sealed class AdvanceService : IAdvanceService
         return Map(advance);
     }
 
+    public async Task<AdvanceDto> UnvoidAsync(Guid advanceId, AdvanceUnvoidRequest request, CancellationToken ct)
+    {
+        _currentUser.EnsureUser();
+
+        var advance = await _db.Advances.FirstOrDefaultAsync(a => a.Id == advanceId, ct);
+        if (advance is null)
+        {
+            throw new InvalidOperationException("Advance not found.");
+        }
+
+        if (request.Version is null)
+        {
+            throw new InvalidOperationException("Advance version is required.");
+        }
+
+        if (request.Version.Value != advance.Version)
+        {
+            throw new ConcurrencyException("Advance was updated by another user. Please refresh.");
+        }
+
+        if (advance.Status != "VOID")
+        {
+            throw new InvalidOperationException("Advance is not voided.");
+        }
+
+        await EnsureCanApproveAdvance(advance, ct);
+
+        var lockedPeriods = await AdvancePeriodLock.GetLockedPeriodsAsync(_db, advance, ct);
+        var overrideApplied = false;
+        var overrideReason = string.Empty;
+        if (lockedPeriods.Count > 0)
+        {
+            if (!request.OverridePeriodLock)
+            {
+                throw new InvalidOperationException(
+                    $"Period is locked for advance unvoid: {string.Join(", ", lockedPeriods)}.");
+            }
+
+            overrideReason = PeriodLockOverridePolicy.RequireOverride(_currentUser, request.OverrideReason);
+            overrideApplied = true;
+        }
+
+        var hasAllocations = await _db.ReceiptAllocations.AnyAsync(r => r.AdvanceId == advance.Id, ct);
+        if (hasAllocations)
+        {
+            throw new InvalidOperationException("Advance has allocations and cannot be unvoided.");
+        }
+
+        var previousStatus = advance.Status;
+        advance.Status = "DRAFT";
+        advance.OutstandingAmount = advance.Amount;
+        advance.DeletedAt = null;
+        advance.DeletedBy = null;
+        advance.UpdatedAt = DateTimeOffset.UtcNow;
+        advance.Version += 1;
+
+        await _db.SaveChangesAsync(ct);
+
+        if (overrideApplied)
+        {
+            await _auditService.LogAsync(
+                "PERIOD_LOCK_OVERRIDE",
+                "Advance",
+                advance.Id.ToString(),
+                null,
+                new { operation = "ADVANCE_UNVOID", lockedPeriods, reason = overrideReason },
+                ct);
+        }
+
+        await _auditService.LogAsync(
+            "ADVANCE_UNVOID",
+            "Advance",
+            advance.Id.ToString(),
+            new { status = previousStatus },
+            new { status = advance.Status },
+            ct);
+
+        return Map(advance);
+    }
+
     public async Task<AdvanceUpdateResult> UpdateAsync(Guid advanceId, AdvanceUpdateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var advance = await _db.Advances.FirstOrDefaultAsync(a => a.Id == advanceId && a.DeletedAt == null, ct);
         if (advance is null)
@@ -322,12 +403,17 @@ public sealed class AdvanceService : IAdvanceService
 
     public async Task<PagedResult<AdvanceListItem>> ListAsync(AdvanceListRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var page = request.Page <= 0 ? 1 : request.Page;
         var pageSize = request.PageSize <= 0 ? 20 : Math.Min(request.PageSize, 200);
+        var statusFilter = request.Status?.Trim().ToUpperInvariant();
+        var includeVoided = statusFilter == "VOID";
 
-        var query = _db.Advances.AsNoTracking().Where(a => a.DeletedAt == null);
+        var query = _db.Advances.AsNoTracking();
+        query = includeVoided
+            ? query.Where(a => a.DeletedAt != null)
+            : query.Where(a => a.DeletedAt == null);
 
         if (!string.IsNullOrWhiteSpace(request.SellerTaxCode))
         {
@@ -341,10 +427,9 @@ public sealed class AdvanceService : IAdvanceService
             query = query.Where(a => a.CustomerTaxCode == customer);
         }
 
-        if (!string.IsNullOrWhiteSpace(request.Status))
+        if (!string.IsNullOrWhiteSpace(statusFilter))
         {
-            var status = request.Status.Trim().ToUpperInvariant();
-            query = query.Where(a => a.Status == status);
+            query = query.Where(a => a.Status == statusFilter);
         }
 
         if (!string.IsNullOrWhiteSpace(request.AdvanceNo))
@@ -388,11 +473,10 @@ public sealed class AdvanceService : IAdvanceService
             }
         }
 
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        var isAdmin = roles.Contains("Admin") || roles.Contains("Supervisor");
-        var userId = _currentUser.UserId;
+        var isAdmin = _currentUser.HasAnyRole("Admin", "Supervisor");
+        var userId = _currentUser.EnsureUser();
 
-        if (!isAdmin && userId.HasValue)
+        if (!isAdmin)
         {
             query = query.Where(a => _db.Customers
                 .Any(c => c.TaxCode == a.CustomerTaxCode && c.AccountantOwnerId == userId));
@@ -453,7 +537,7 @@ public sealed class AdvanceService : IAdvanceService
                 ? name
                 : null;
 
-            var canManage = isAdmin || (userId.HasValue && customer?.AccountantOwnerId == userId);
+            var canManage = isAdmin || customer?.AccountantOwnerId == userId;
             var sourceType = r.SourceBatchId.HasValue ? "IMPORT" : "MANUAL";
 
             return new AdvanceListItem(
@@ -477,23 +561,15 @@ public sealed class AdvanceService : IAdvanceService
         return new PagedResult<AdvanceListItem>(items, page, pageSize, total);
     }
 
-    private void EnsureUser()
-    {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
-    }
-
     private async Task EnsureCanApproveAdvance(Advance advance, CancellationToken ct)
     {
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        if (roles.Contains("Admin") || roles.Contains("Supervisor"))
+        var userId = _currentUser.EnsureUser();
+        if (_currentUser.HasAnyRole("Admin", "Supervisor"))
         {
             return;
         }
 
-        if (roles.Contains("Accountant"))
+        if (_currentUser.HasAnyRole("Accountant"))
         {
             var ownerId = await _db.Customers
                 .AsNoTracking()
@@ -501,7 +577,7 @@ public sealed class AdvanceService : IAdvanceService
                 .Select(c => c.AccountantOwnerId)
                 .FirstOrDefaultAsync(ct);
 
-            if (ownerId.HasValue && ownerId.Value == _currentUser.UserId)
+            if (ownerId.HasValue && ownerId.Value == userId)
             {
                 return;
             }

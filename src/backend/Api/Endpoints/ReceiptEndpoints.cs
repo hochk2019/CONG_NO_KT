@@ -99,6 +99,26 @@ public static class ReceiptEndpoints
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 
+        app.MapPut("/receipts/{id:guid}/draft", async (
+            Guid id,
+            [FromBody] ReceiptDraftUpdateRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UpdateDraftAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptDraftUpdate")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
         app.MapGet("/receipts/open-items", async (
             string? sellerTaxCode,
             string? customerTaxCode,
@@ -160,6 +180,25 @@ public static class ReceiptEndpoints
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 
+        app.MapPost("/receipts/approve-bulk", async (
+            [FromBody] ReceiptBulkApproveRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.ApproveBulkAsync(request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptApproveBulk")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
         app.MapPost("/receipts/{id:guid}/void", async (
             Guid id,
             [FromBody] ReceiptVoidRequest request,
@@ -177,6 +216,26 @@ public static class ReceiptEndpoints
             }
         })
         .WithName("ReceiptVoid")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
+        app.MapPost("/receipts/{id:guid}/unvoid", async (
+            Guid id,
+            [FromBody] ReceiptUnvoidRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UnvoidAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptUnvoid")
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 

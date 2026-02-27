@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Receipts;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -10,7 +11,7 @@ public sealed partial class ReceiptService
         string customerTaxCode,
         CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var seller = sellerTaxCode?.Trim() ?? string.Empty;
         var customer = customerTaxCode?.Trim() ?? string.Empty;
@@ -72,20 +73,18 @@ public sealed partial class ReceiptService
         return invoiceItems.Concat(advanceItems).ToList();
     }
 
-    private async Task EnsureCanManageCustomer(string customerTaxCode, CancellationToken ct)
+    private async Task EnsureCanManageCustomer(
+        string customerTaxCode,
+        CancellationToken ct,
+        string? unauthorizedMessage = null)
     {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
-
-        var roles = new HashSet<string>(_currentUser.Roles, StringComparer.OrdinalIgnoreCase);
-        if (roles.Contains("Admin") || roles.Contains("Supervisor"))
+        var userId = _currentUser.EnsureUser();
+        if (_currentUser.HasAnyRole("Admin", "Supervisor"))
         {
             return;
         }
 
-        if (roles.Contains("Accountant"))
+        if (_currentUser.HasAnyRole("Accountant"))
         {
             var ownerId = await _db.Customers
                 .AsNoTracking()
@@ -93,12 +92,13 @@ public sealed partial class ReceiptService
                 .Select(c => c.AccountantOwnerId)
                 .FirstOrDefaultAsync(ct);
 
-            if (ownerId.HasValue && ownerId.Value == _currentUser.UserId)
+            if (ownerId.HasValue && ownerId.Value == userId)
             {
                 return;
             }
         }
 
-        throw new UnauthorizedAccessException("Not allowed to manage this customer.");
+        throw new UnauthorizedAccessException(
+            unauthorizedMessage ?? "Not allowed to manage this customer.");
     }
 }

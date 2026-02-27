@@ -44,7 +44,7 @@ DO UPDATE SET preferences = CAST(@preferences AS jsonb), updated_at = now();
 
     public async Task<ReportPreferencesDto> GetPreferencesAsync(Guid userId, CancellationToken ct)
     {
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var payload = await connection.ExecuteScalarAsync<object?>(
@@ -142,7 +142,7 @@ DO UPDATE SET preferences = CAST(@preferences AS jsonb), updated_at = now();
             json = JsonSerializer.Serialize(new { kpiOrder = normalizedOrder, dueSoonDays = normalizedDays });
         }
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateWrite();
         await connection.OpenAsync(ct);
 
         await connection.ExecuteAsync(

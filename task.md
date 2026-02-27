@@ -7,6 +7,10 @@
 
 # TASKS - Cong No Golden
 
+> [!IMPORTANT]
+> Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
+> Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
+
 ## Phase 0 - Spec alignment (done)
 - [x] Quy ước ADJUST lưu số âm + constraint DB.
 - [x] Import RECEIPT included in scope (staging/preview/commit).
@@ -92,9 +96,83 @@
 
 ## Nice-to-have backlog
 - [x] Progress bar + lazy preview cho file import lớn.
-- [ ] Keyboard shortcuts (Enter/Esc/Arrows).
+- [x] Keyboard shortcuts (Enter/Esc/Arrows).
 - [x] Dashboard trend chart 6 tháng.
-- [ ] Undo/Un-void (reversal) cho receipts/advances.
+- [x] Undo/Un-void (reversal) cho receipts/advances.
+
+## Phase 17 - Opus 4.6 remediation (2026-02-11)
+- [x] Xác thực nhận định Opus theo code thực tế, phân loại ĐÚNG/SAI/MỘT PHẦN.
+- [x] Lập kế hoạch remediation chi tiết: `docs/plans/2026-02-11-opus-remediation.md`.
+- [x] P1 security: thêm rate limiting cho `/auth/login` và `/auth/refresh`.
+- [x] P1 security: thêm guard validate JWT secret (min length + chặn placeholder ngoài Development).
+- [x] P1 security: harden refresh cookie (`SameSite`, `Path`) qua cấu hình.
+- [x] P1 devops: thêm CI workflow (`.github/workflows/ci.yml`) cho backend/frontend.
+- [x] P1 config: bổ sung `appsettings.Production.json` + cập nhật `ENV_SAMPLE.md`, `RUN_BACKEND.md`.
+- [x] P2 data integrity: thêm reconcile job cho `current_balance`.
+- [x] P2 reliability: thêm retry/backoff cho Zalo client.
+- [x] P2 UX: cải thiện responsive nav (collapse/hamburger rõ ràng).
+- [x] P3 refactor part 1: tách helper user-context dùng chung (`EnsureUser`, `ResolveOwnerFilter`) và áp dụng cho Risk/Reminder services.
+- [x] P3 refactor part 2: tiếp tục gom helper trùng lặp cho Advance/Receipt/Dashboard/PeriodLock.
+- [x] P3 refactor part 3: đánh giá và giảm API round-trips dashboard/risk/reports (composite endpoint khi phù hợp). *(Dashboard 3→2 call; Reports gộp KPI/charts/insights qua `/reports/overview`; Risk thêm `/risk/bootstrap` để gom dữ liệu khởi tạo).*
+
+## Phase 18 - Opus follow-up hardening (2026-02-11)
+- [x] Lập kế hoạch triển khai follow-up: `docs/plans/2026-02-11-opus-follow-up-hardening-plan.md`.
+- [x] P1 security: externalize JWT secret hoàn toàn cho production + fail-fast guard.
+- [x] P1 security: bổ sung password complexity policy + absolute expiry cho refresh token.
+- [x] P1 data integrity: thêm explicit transaction cho luồng `ReceiptService.ApproveAsync`.
+- [x] P1 frontend performance: route-level code splitting (`React.lazy` + `Suspense`) cho trang nặng.
+- [x] P2 refactor: rà soát service phụ trợ còn helper trùng lặp và migrate sang `CurrentUserAccessExtensions`.
+- [x] P2 observability: thiết lập baseline metrics/tracing + readiness diagnostics.
+- [x] Cập nhật lại `Opus_4.6_review.md` sau mỗi nhóm thay đổi để tránh trạng thái mâu thuẫn.
+
+### Deferred/Out of scope cho Phase 18 (có lý do)
+- [x] Zalo circuit breaker nâng cao — đã triển khai threshold + cooldown có cấu hình (2026-02-11).
+- [x] IP/device binding cho refresh token — đã triển khai dual-signal binding (device fingerprint + IP prefix) với rule giảm false-positive (2026-02-11).
+- [x] DB partition/retention automation — hoàn tất trong Phase 28: migration `022_audit_logs_partition.sql` + auto-ensure partition theo tháng (2026-02-12).
+- [x] Containerization — hoàn tất trong Phase 28: Dockerfile backend/frontend + compose + env mẫu + guide (2026-02-12).
+- [x] AI risk scoring — ban đầu out of scope của hardening Phase 18; đã triển khai ở Phase 50 (baseline) và Phase 51 (full ML pipeline).
+
+## Phase 27 - Opus deferred follow-up execution (2026-02-11)
+- [x] Tạo bead epic + task con cho 3 hạng mục deferred cần thực hiện (`cng-9ww`, `.1`, `.2`, `.3`).
+- [x] Auth hardening: thêm context binding cho refresh token (IP prefix + device fingerprint hash) và chặn khi lệch đồng thời cả 2.
+- [x] Zalo reliability: thêm circuit breaker (failure threshold + cooldown) bên cạnh retry/backoff.
+- [x] Data lifecycle: thêm data retention service + hosted scheduler + admin trigger `/admin/health/run-retention`.
+- [x] Cập nhật migration scripts cho refresh token binding + retention indexes (`020`, `021`).
+- [x] Bổ sung/điều chỉnh test cho AuthService, ZaloClient, DataRetentionService.
+- [x] Đồng bộ trạng thái vào `Opus_4.6_review.md`, `task.md`, beads.
+
+## Phase 28 - Opus remaining execution (2026-02-12)
+- [x] Lập kế hoạch chi tiết vòng triển khai: `docs/plans/2026-02-12-opus-remaining-execution-plan.md`.
+- [x] Tạo bead epic + task con cho phần còn lại (`cng-jib`, `.1`, `.2`, `.3`, `.4`).
+- [x] DB hardening: triển khai partition theo tháng cho `congno.audit_logs` + migration an toàn dữ liệu hiện hữu.
+- [x] Containerization: thêm Dockerfile backend/frontend + `docker-compose.yml` + `.dockerignore` + hướng dẫn chạy/deploy.
+- [x] Ops update: thêm hỗ trợ runtime Docker trong Ops Agent/Console (status/start/stop/restart) song song mode Windows Service.
+- [x] Đồng bộ trạng thái vào `Opus_4.6_review.md`, `docs/OPS_ADMIN_CONSOLE.md`, `task.md`, beads.
+
+### Không triển khai trong Phase 28 (có lý do)
+- [x] AI risk scoring / dự báo trễ hạn (đã chuyển sang Phase 50 + 51 và hoàn tất).
+  - Ghi chú: tách riêng khỏi hardening vòng 28 để giảm rủi ro, sau đó triển khai đầy đủ theo phase riêng.
+
+## Phase 29 - Ops Docker quick setup (2026-02-12)
+- [x] Thêm script chuyển runtime Ops Agent sang Docker mode (`scripts/ops/set-runtime-mode.ps1`).
+- [x] Thêm script tạo/cập nhật profile Ops Console từ agent config (`scripts/ops/set-console-profile.ps1`).
+- [x] Cập nhật `docs/OPS_ADMIN_CONSOLE.md` với quy trình quick setup Docker runtime.
+
+## Phase 30 - Zalo + E2E stabilization (2026-02-12)
+- [x] E2E: sửa `dashboard.spec.ts` theo heading mới `Tổng quan công nợ`.
+- [x] E2E: thêm `VITE_API_PROXY_TARGET` vào `vite.config.ts` + `playwright.config.ts` để chạy đúng backend Docker (`127.0.0.1:18080`).
+- [x] E2E: harden helper đăng nhập `loginAsDefaultUser` (xác nhận shell đăng nhập thật + retry/backoff khi 429).
+- [x] E2E: sửa selector `receipts-flow.spec.ts` để tránh strict-mode violation (scope vào card `Thông tin phiếu thu`).
+- [x] Zalo Docker: map đủ env `Zalo__OaId`, `Zalo__ApiBaseUrl`, `Zalo__AccessToken`, `Zalo__WebhookToken` trong `docker-compose.yml` + `.env.docker.example` + guide.
+- [x] Zalo local smoke: `link/request` -> webhook `LINK <code>` -> `link/status` linked=true (đóng bead `cng-j1t.3`).
+- [x] Zalo OA thật: cấu hình AccessToken/WebhookToken/OaId môi trường staging/prod (`cng-j1t.1`) — tạm đóng 2026-02-13 theo quyết định chưa có tài khoản OA.
+- [x] Zalo OA thật: khai báo callback webhook từ OA dashboard (`cng-j1t.2`) — tạm đóng 2026-02-13 theo quyết định chưa có tài khoản OA.
+- [x] Zalo OA thật: chạy `/reminders/run` và xác nhận log `SENT` qua OA thật (`cng-j1t.4`) — tạm đóng 2026-02-13 theo quyết định chưa có tài khoản OA.
+- [x] Verify runtime local (2026-02-13): `docker compose config` map đủ biến `Zalo__*`; container API đang chạy với `Zalo__Enabled=false`, `Zalo__OaId/AccessToken/WebhookToken` rỗng.
+- [x] Verify endpoint local (2026-02-13): `/health`, `/health/ready`, `/webhooks/zalo` trả `200`; `/zalo/link/status` đang `linked=true`.
+- [x] Verify reminder local (2026-02-13): chạy `/reminders/run` trả `totalCandidates=22`, `sentCount=2`, `failedCount=0`, `skippedCount=42`; filter log `channel=ZALO,status=SENT` hiện `0`.
+- [x] E2E smoke (2026-02-13): `npx playwright test e2e/auth-login.spec.ts e2e/dashboard.spec.ts e2e/receipts-flow.spec.ts` => 2 passed, 1 skipped.
+- [x] Full E2E regression (2026-02-13): ổn định E2E auth bằng cache `congno_refresh` giữa test + retry/backoff khi 429 trong `e2e/support/auth.ts`, cấu hình `workers: 1`; chạy `npx playwright test` => `11 passed, 1 skipped`.
 
 
 
@@ -216,10 +294,10 @@
 - [x] Backup admin endpoints + auth policies.
 - [x] Frontend admin page: settings, manual backup, jobs, restore, audit.
 - [x] Tests: backend unit + frontend.
-- [ ] Cấu hình Zalo OA sau khi duyệt: AccessToken, WebhookToken, Enabled=true, kiểm tra OaId.
-- [ ] Khai báo webhook OA trỏ `/webhooks/zalo?token=...` và xác nhận callback.
-- [ ] Test liên kết: tạo mã → nhắn "LINK <code>" → kiểm tra user_id đã lưu.
-- [ ] Test gửi nhắc Zalo: chạy `/reminders/run` và kiểm tra log trạng thái SENT.
+- [x] Cấu hình Zalo OA sau khi duyệt: AccessToken, WebhookToken, Enabled=true, kiểm tra OaId. (tạm đóng 2026-02-13 do chưa có tài khoản OA)
+- [x] Khai báo webhook OA trỏ `/webhooks/zalo?token=...` và xác nhận callback. (tạm đóng 2026-02-13 do chưa có tài khoản OA)
+- [x] Test liên kết: tạo mã → nhắn "LINK <code>" → kiểm tra user_id đã lưu (đã xác nhận lại ở Phase 30).
+- [x] Test gửi nhắc Zalo: chạy `/reminders/run` và kiểm tra log trạng thái SENT. (tạm đóng 2026-02-13 do chưa có tài khoản OA)
 - [x] Chạy migration và kiểm tra bảng: risk_rules, reminder_settings, reminder_logs, notifications.
 
 ## Phase 13 - Import lifecycle UX (2026-01-17)
@@ -228,8 +306,8 @@
 - [x] Bổ sung hủy lô STAGING (API + UI) + lưu metadata hủy.
 - [x] Thêm cột/trường cancel: cancelled_at/cancelled_by/cancel_reason cho import_batches.
 - [x] Chạy migration 009_import_cancel.sql và 010_import_status_cancelled.sql, xác nhận cột + check constraint.
-- [ ] Tự động dọn import_staging_rows cũ theo TTL.
-- [ ] Hiển thị rõ lý do không thể hoàn tác (approved/allocated/khóa kỳ) trên UI.
+- [x] Tự động dọn import_staging_rows cũ theo TTL.
+- [x] Hiển thị rõ lý do không thể hoàn tác (approved/allocated/khóa kỳ) trên UI.
 
 ## Phase 14 - Đồng bộ dữ liệu FE/BE/DB (2026-01-19)
 ### P1 - Ưu tiên cao (triển khai trước)
@@ -318,8 +396,8 @@
 - [x] Cập nhật OpenAPI schema + regenerate types FE.
 
 ### P3 - Database (nếu cần)
-- [ ] Không bắt buộc thay đổi schema (dùng `source_batch_id` để suy luận).
-- [ ] Nếu cần báo cáo sâu: cân nhắc thêm `source_type` stored/enum (đánh giá sau).
+- [x] Không bắt buộc thay đổi schema (dùng `source_batch_id` để suy luận).
+- [x] Nếu cần báo cáo sâu: cân nhắc thêm `source_type` stored/enum (đánh giá sau, hiện chưa cần).
 
 ### P4 - Simplify manual advances UX
 - [x] Rút gọn hành động: ưu tiên "Tạo", "Tạo & duyệt" (auto approve), "Hủy" rõ ràng.
@@ -344,7 +422,7 @@
 - [x] Cancel receipt: cho phép hủy mọi trạng thái, bắt buộc lý do; rollback phân bổ + balances + audit.
 - [x] RBAC: Accountant create/approve/cancel **chỉ** khách hàng mình phụ trách; Supervisor/Admin full; Viewer read-only.
 - [x] Notifications: gửi cho user + supervisor khi auto-allocate & khi cần duyệt (10 ngày).
-- [ ] OpenAPI cập nhật + regenerate types FE.
+- [x] OpenAPI cập nhật + regenerate types FE.
 
 ### P2 - Database
 - [x] Bổ sung/chuẩn hóa receipt allocations + allocation_status + unallocated_amount.
@@ -361,8 +439,8 @@
 
 ### P4 - Tests
 - [x] Unit tests cho allocation rules (issue_date, due_date, tie-break invoice trước).
-- [ ] Integration tests: create/approve/cancel receipts + open-items API + RBAC.
-- [ ] E2E: chọn KH → popup phân bổ → lưu nháp/duyệt → hủy → nhắc duyệt.
+- [x] Integration tests: create/approve/cancel receipts + open-items API + RBAC.
+- [x] E2E: chọn KH → popup phân bổ → lưu nháp/duyệt → hủy → nhắc duyệt.
 
 ## Phase 21 - Notification Center (2026-01-23)
 ### P0 - Data + API
@@ -571,3 +649,477 @@
 - [x] Thêm endpoint tạo database + chạy migrations trong Ops Agent.
 - [x] Bổ sung UI khởi tạo CSDL (kiểm tra DB/tạo DB/migrations).
 - [x] Thêm hướng dẫn quy trình triển khai lần đầu trong tab Triển khai.
+
+## Phase 50 - AI risk scoring baseline (2026-02-12)
+- [x] Backend: thêm AI risk scorer explainable và mở rộng payload `/risk/customers`, `/risk/bootstrap`.
+- [x] Frontend: hiển thị xác suất trễ hạn + tín hiệu AI tại bảng cảnh báo rủi ro.
+- [x] Test + docs: thêm unit test scorer, cập nhật Opus review với trạng thái + giới hạn phạm vi.
+
+## Phase 51 - Full ML risk model training + seasonality + MLOps (2026-02-12) [bead: cng-iva]
+- [x] DB schema: thêm `risk_ml_models`, `risk_ml_training_runs` + migration an toàn. [bead: cng-mtd.7]
+- [x] ML trainer: pipeline snapshot features + label horizon + seasonality (sin/cos) + logistic regression. [bead: cng-mtd.5]
+- [x] ML serving: tích hợp model active vào `RiskService` (fallback heuristic), thêm admin endpoints train/list/activate + scheduler retrain. [bead: cng-mtd.4]
+- [x] Quality + tracking: bổ sung unit tests, chạy verify, cập nhật `Opus_4.6_review.md`, `task.md`, beads với trạng thái cuối. [bead: cng-mtd.6]
+
+## Phase 52 - Staging migration + risk-ml smoke + Docker rollout (2026-02-12) [bead: cng-pwb]
+- [x] Staging DB: tạo backup và chạy migration `019`→`023`, xác nhận schema mới (`refresh_tokens` + `risk_ml_*`). [bead: cng-pwb.1]
+- [x] Smoke `/admin/risk-ml/*`: xác thực login admin, train/list/activate model trên dữ liệu staging. [bead: cng-pwb.2]
+- [x] Rollout Docker: build + up compose, fix mount migration scripts, xác nhận `health` + `health/ready` + frontend. [bead: cng-pwb.3]
+- [x] Đồng bộ tài liệu/bằng chứng thực thi vào `Opus_4.6_review.md`, `DEPLOYMENT_GUIDE_DOCKER.md`, `docs/OPS_ADMIN_CONSOLE.md`, `task.md`, beads. [bead: cng-pwb.4]
+
+## Phase 53 - Backup restore compatibility on Docker (2026-02-12) [bead: cng-8nq]
+- [x] Fix restore dump cũ: reset schema trước restore (`DROP SCHEMA ... CASCADE`) để tránh xung đột constraint/object khi DB hiện tại có bảng mới hơn dump. [bead: cng-8nq.1]
+- [x] Harden command `pg_restore`: thêm `--clean --if-exists --no-owner --no-privileges --exit-on-error` để restore portable qua môi trường/role. [bead: cng-8nq.1]
+- [x] Harden command `pg_dump`: thêm `-O -x` để backup mới không phụ thuộc owner/privileges của role nguồn. [bead: cng-8nq.1]
+- [x] Chạy auto migration ngay sau restore để schema được nâng về version runtime hiện tại, tránh lỗi API sau restore dump cũ. [bead: cng-8nq.1]
+- [x] Bổ sung unit tests cho restore/dump argument builder + verify e2e `upload -> restore -> login`. [bead: cng-8nq.1]
+
+## Phase 53 - Docker compatibility re-audit after restore (2026-02-12)
+- [x] Re-verify runtime containers (db,api,web) after backup restore.
+- [x] Re-run smoke test via direct API (:18080) and proxy API (:18081/api).
+- [x] Re-check web route fallback (/, /reports) on Nginx container.
+- [x] Re-check Docker log/backup paths in API container.
+- [x] Sync status to Opus_4.6_review.md + beads (cng-iyn).
+
+## Phase 54 - Opus medium/low backlog execution (excluding Email) (2026-02-13)
+- [x] Task 1: Hoàn tất custom hooks foundation (`usePersistedState`, `usePagination`, `useQuery`) + refactor page liên quan + test.
+- [x] Task 2: Monitoring/APM uplift (OpenTelemetry + Prometheus exporter/config + `/metrics`).
+- [x] Task 3: Dashboard expected vs actual + variance + cashflow forecast (BE+FE+test).
+- [x] Task 4: Report export PDF cho Summary (`format=pdf`) + UI nút tải PDF + test backend.
+- [x] Task 5: Dark mode (light/dark/system), toggle AppShell, persisted theme + test.
+- [x] Task 6: ERP integration baseline (status + sync summary manual), config `ErpIntegration`, admin route/page + test module mới.
+- [x] Task 7: PWA upgrade (service worker caching strategy, `offline.html`, manifest shortcuts, SW lifecycle update check).
+- [x] Task 8: Full verification + cập nhật tracker/docs.
+
+### Verification evidence (2026-02-13)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`94/94`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`36/36`).
+- [x] `npm run --prefix src/frontend test -- --run` => pass (`83/83`).
+- [x] `npm run --prefix src/frontend build` => pass.
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+
+## Phase 55 - Tech-debt follow-up: bundle/CSS/backend split (2026-02-13) [bead: cng-qc0]
+- [x] Bundle optimization: giới hạn font subset về latin/vietnamese trong `main.tsx` và thêm budget gate `npm run --prefix src/frontend build:budget`.
+- [x] CSS architecture: tách layout shell khỏi `index.css` sang `src/frontend/src/styles/layout-shell.css` và import tại `AppShell`.
+- [x] Backend service split: refactor `BackupService` thành partial (`BackupService.cs` + `BackupService.InternalOps.cs`) để đưa module chính về <= 800 dòng.
+- [x] Đồng bộ trạng thái vào `Opus_4.6_review.md` (mục refactor + critical issue bundle).
+
+### Verification evidence (2026-02-13, phase 55)
+- [x] `npm run --prefix src/frontend build:budget` => pass (bundle budget check passed).
+- [x] `npm run --prefix src/frontend test -- --run` => pass (`83/83`).
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`94/94`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`36/36`).
+
+## Phase 56 - Reports CSS split from global stylesheet (2026-02-13) [bead: cng-1lf]
+- [x] Tạo `src/frontend/src/pages/reports/reports.css` và di chuyển toàn bộ selector `reports-*` từ `src/frontend/src/index.css`.
+- [x] Import CSS route-scoped tại `src/frontend/src/pages/ReportsPage.tsx`.
+- [x] Giữ `kpi-stack` ở global do đang dùng chung cho Dashboard và Reports.
+- [x] Re-verify frontend build/test/budget sau refactor.
+
+### Verification evidence (2026-02-13, phase 56)
+- [x] `npm run --prefix src/frontend build` => pass.
+- [x] `npm run --prefix src/frontend test -- --run` => pass (`83/83`).
+- [x] `npm run --prefix src/frontend build:budget` => pass (bundle budget check passed).
+
+## Phase 57 - Dashboard CSS split from global stylesheet (2026-02-13) [bead: cng-qcb]
+- [x] Tạo `src/frontend/src/pages/dashboard/dashboard.css` cho các selector Dashboard/Cashflow/Forecast.
+- [x] Import CSS mới tại `src/frontend/src/pages/DashboardPage.tsx` và `src/frontend/src/pages/DashboardPreviewPage.tsx`.
+- [x] Rút các selector dashboard-specific khỏi `src/frontend/src/index.css`, giữ lại selector dùng chung (`kpi-stack`, `line-chart`, `filter-chip`).
+- [x] Xác nhận `index.css` giảm thêm xuống 2203 dòng.
+
+### Verification evidence (2026-02-13, phase 57)
+- [x] `npm run --prefix src/frontend build` => pass.
+- [x] `npm run --prefix src/frontend test -- --run` => pass (`83/83`).
+- [x] `npm run --prefix src/frontend build:budget` => pass (bundle budget check passed).
+
+## Phase 58 - ReminderService partial split and tech-debt closure (2026-02-13) [bead: cng-395]
+- [x] Refactor `ReminderService` thành partial theo trách nhiệm:
+  - `ReminderService.cs`: constructor + settings API + log listing + normalization helpers.
+  - `ReminderService.Execution.cs`: runtime flow `RunAsync` + candidate loading + delivery/logging.
+- [x] Giữ nguyên behavior nhắc nợ quá hạn và nhắc đến hạn; không đổi contract API.
+- [x] Cập nhật `Opus_4.6_review.md` để đóng 3 mục còn mở: CSS architecture, backend service files, frontend bundle size.
+
+### Verification evidence (2026-02-13, phase 58)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`94/94`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`36/36`).
+- [x] `npm run --prefix src/frontend build:budget` => pass (bundle budget check passed).
+
+## Phase 59 - Opus review v2 validation + execution plan (2026-02-13) [bead: cng-4uj]
+- [x] Đối chiếu `Opus_review_v2.md` với codebase thực tế (snapshot ngày 13/02/2026), phân loại nhận định theo nhóm: ĐÚNG / MỘT PHẦN / KHÔNG CÒN ĐÚNG.
+- [x] Tạo epic + bead con để triển khai backlog còn hiệu lực:
+  - `cng-4uj.1` P0 - Reconcile + retention memory-safe batching.
+  - `cng-4uj.2` P0 - Transactional audit integrity for receipt approve.
+  - `cng-4uj.3` P0 - Risk classifier configurable match mode.
+  - `cng-4uj.4` P0 - Security hardening round 3.
+  - `cng-4uj.5` P1 - Receipt workflow enhancements (draft edit, bulk actions feasibility, reminder dry-run, commit progress visibility).
+  - `cng-4uj.6` P1 - Frontend refactor for dashboard/queries (`useMutation`, split page lớn, allocation donut/drill-down).
+  - `cng-4uj.7` P1 - Observability enrichment (correlation id, custom business metrics, readiness checks).
+  - `cng-4uj.8` P2 - Monitoring stack baseline (Grafana/Loki/Alertmanager hoặc tương đương).
+  - `cng-4uj.9` P1 - Backend contract hardening (status constants + API versioning strategy).
+  - `cng-4uj.10` P2 - Allocation Pro-rata mode.
+- [x] Cập nhật `Opus_review_v2.md` với phụ lục xác thực của Codex, chỉ rõ các mục đúng/sai/một phần và lộ trình triển khai.
+
+### Kế hoạch triển khai chi tiết theo ưu tiên
+- [x] P0 - Correctness + reliability + security baseline
+  - [x] [bead: cng-4uj.1] Refactor `CustomerBalanceReconcileService` và `DataRetentionService` sang batch/chunk processing, tránh full materialization và `RemoveRange` trên tập lớn.
+  - [x] [bead: cng-4uj.2] Đưa audit nghiệp vụ receipt approve vào cùng transaction boundary; thêm integration test đảm bảo rollback khi audit fail.
+  - [x] [bead: cng-4uj.3] Bổ sung `MatchMode` (Any/All) cho `RiskRule`, đồng bộ logic domain + SQL evaluation path, thêm test ngăn false-positive.
+  - [x] [bead: cng-4uj.4] Triển khai lockout policy, middleware security headers, CORS đọc từ config theo môi trường.
+- [x] P1 - Workflow + architecture hardening
+  - [x] [bead: cng-4uj.5] Bổ sung luồng sửa phiếu thu ở trạng thái DRAFT; đánh giá/triển khai bulk approve có kiểm soát; thêm reminder dry-run; bổ sung trạng thái tiến trình commit import.
+  - [x] [bead: cng-4uj.6] Tạo `useMutation`, tách `DashboardPage`/`ReportsPage`/`RiskAlertsPage` thành sub-components, thay chart phân bổ từ bar sang donut + drill-down.
+  - [x] [bead: cng-4uj.7] Thêm correlation id middleware, metric nghiệp vụ OTel (approval, import, reminder, reconcile), mở rộng readiness checks.
+  - [x] [bead: cng-4uj.9] Chuẩn hóa constants/enum trạng thái và thiết kế lộ trình API versioning (`/api/v1`) tương thích ngược.
+- [x] P2 - Scale/readiness enhancements
+  - [x] [bead: cng-4uj.8] Thiết lập baseline dashboard/alert tối thiểu cho Prometheus metrics + logs.
+  - [x] [bead: cng-4uj.10] Thêm mode phân bổ Pro-rata, đảm bảo không phá behavior hiện tại của FIFO/ByInvoice/ByPeriod/Manual.
+
+### Verification gate (áp dụng cho từng bead trước khi đóng)
+- [x] Backend: `dotnet build src/backend/Api/CongNoGolden.Api.csproj`.
+- [x] Backend tests: `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` và `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj`.
+- [x] Frontend tests/build: `npm run --prefix src/frontend test -- --run`, `npm run --prefix src/frontend build`, `npm run --prefix src/frontend build:budget`.
+- [x] Đồng bộ tracker: cập nhật `task.md`, `Opus_review_v2.md`, trạng thái bead (`bd update`/`bd close`) sau mỗi cụm task hoàn tất.
+
+### Verification evidence (2026-02-13, phase 59 - cng-4uj.1)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerBalanceReconcileServiceTests|FullyQualifiedName~DataRetentionServiceTests"` => pass (`5/5`, RED->GREEN cycle).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`98/98`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`36/36`).
+
+### Verification evidence (2026-02-13, phase 59 - cng-4uj.2/.3/.4)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptLifecycleRbacTests"` => pass (`4/4`) cho transactional audit integrity.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~RiskClassifierTests"` => pass (`2/2`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~RiskRulesTests"` => pass (`2/2`) với case `ALL` giảm false-positive.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~AuthServiceTests|FullyQualifiedName~SecurityHeadersMiddlewareTests"` => pass (`9/9`) cho lockout + security headers.
+- [x] Full backend verify:
+  - `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`104/104`).
+  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`38/38`).
+- [x] Frontend verify:
+  - `npm run --prefix src/frontend test -- --run` => pass (`86/86`).
+  - `npm run --prefix src/frontend build` => pass.
+  - `npm run --prefix src/frontend build:budget` => pass.
+
+### Verification evidence (2026-02-13, phase 59 - cng-4uj.5/.6/.7/.8/.9/.10)
+- [x] Backend verify:
+  - `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`115/115`).
+  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`41/41`).
+- [x] Frontend verify:
+  - `npm run --prefix src/frontend test -- --run` => pass (`88/88`).
+  - `npm run --prefix src/frontend build` => pass.
+  - `npm run --prefix src/frontend build:budget` => pass.
+- [x] Monitoring baseline verify:
+  - `docker compose --profile monitoring config` => pass.
+  - `docker compose --profile monitoring up -d alertmanager prometheus loki grafana` => image/provision thành công cho đa số services; `loki` fail do host port `3100` đang bị chiếm, đã bổ sung hướng dẫn fallback `LOKI_PORT=13100` trong `docs/OPS_MONITORING_BASELINE.md`.
+  - Hoàn tất triển khai local bằng fallback ports:
+    - `LOKI_PORT=13100`, `GRAFANA_PORT=13001` + `docker compose --profile monitoring up -d loki prometheus grafana` => services chạy ổn định.
+    - Health check: `http://localhost:13100/ready` => `200`, `http://localhost:9090/-/ready` => `200`, `http://localhost:13001/api/health` => `200`.
+
+## Phase 60 - ERP integration config UI + API (2026-02-13) [bead: cng-fwg]
+- [x] Thêm bảng cấu hình ERP `erp_integration_settings` và wire vào `ConGNoDbContext`.
+- [x] Mở rộng `IErpIntegrationService` với luồng đọc/cập nhật cấu hình kết nối (provider/baseUrl/companyCode/apiKey/timeout/enabled).
+- [x] Bổ sung API:
+  - [x] `GET /admin/erp-integration/config`
+  - [x] `PUT /admin/erp-integration/config`
+- [x] Thêm khu vực `Cấu hình kết nối` trên UI `AdminErpIntegrationPage` để xem/sửa cấu hình ngay trên giao diện.
+- [x] Bổ sung test:
+  - [x] Unit test backend cho persist/keep API key behavior.
+  - [x] Frontend test cho flow lưu cấu hình.
+
+### Verification evidence (2026-02-13, phase 60)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter ErpIntegrationServiceTests` => pass (`4/4`).
+- [x] `npm --prefix src/frontend run test -- --run src/pages/__tests__/admin-erp-integration-page.test.tsx` => pass (`2/2`).
+- [x] `npm --prefix src/frontend run build` => pass.
+
+## Phase 61 - Docker-first documentation synchronization (2026-02-14) [bead: cng-fou]
+- [x] Đồng bộ tài liệu vận hành để phản ánh Docker Compose là phương thức deploy mặc định.
+- [x] Chuyển toàn bộ mô tả IIS/Windows Service còn dùng ở tài liệu vận hành sang trạng thái legacy/fallback.
+- [x] Cập nhật quyết định kỹ thuật (`TECH_DECISIONS`) theo runtime Docker-first.
+- [x] Cập nhật runbook + backup/restore guide theo quy trình Docker.
+- [x] Chuẩn hóa wording trong docs liên quan (`README`, `RUN_BACKEND`, `RUN_FRONTEND`, `OPS_ADMIN_CONSOLE`, deployment guides).
+
+### Verification evidence (2026-02-14, phase 61)
+- [x] `rg -n "\\bIIS\\b|Windows Service|windows-service" -S . -g "*.md" -g "!extracted_specs/**" -g "!docs/beads-starter/**" -g "!docs/plans/**" -g "!progress.md" -g "!task.md" -g "!TASKS.md" -g "!Opus_*.md" -g "!findings.md"` => tài liệu vận hành hiện hành chỉ còn nhắc IIS ở ngữ cảnh legacy/fallback.
+
+## Phase 62 - Historical label for archive documents (2026-02-14) [bead: cng-oes]
+- [x] Gắn banner `HISTORICAL DOCUMENT` cho toàn bộ tài liệu `extracted_specs/*`.
+- [x] Gắn banner `HISTORICAL DOCUMENT` cho `progress.md`.
+- [x] Gắn banner `HISTORICAL DOCUMENT` cho `Opus_4.6_review.md`, `Opus_review_v2.md`.
+- [x] Đảm bảo banner trỏ về nguồn chuẩn hiện hành: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
+
+### Verification evidence (2026-02-14, phase 62)
+- [x] `rg -n "HISTORICAL DOCUMENT" progress.md Opus_4.6_review.md Opus_review_v2.md extracted_specs` => tất cả file mục tiêu đã có nhãn historical.
+
+## Phase 63 - Cleanup tài liệu legacy <= 2026-01-29 (2026-02-14) [bead: cng-0vy]
+- [x] Xóa tài liệu scratch/duplicate cũ không còn phù hợp với trạng thái hệ thống hiện tại:
+  - [x] `TASKS.md` (trùng vai trò với `task.md`, nội dung cũ dễ gây nhầm).
+  - [x] `findings.md` (nhật ký khám phá theo phiên cũ, không còn là nguồn chuẩn).
+  - [x] `PERFORMANCE_NOTES.md` (kết quả perf sample rất sớm, không phản ánh runtime hiện tại).
+  - [x] `task_plan.md` (kế hoạch phiên cũ đã hoàn thành, không còn hiệu lực vận hành).
+- [x] Giữ `task.md` làm tracker chính.
+- [x] Chuẩn hóa `QA_REPORT.md` để phân biệt historical baseline (2026-01-08) với verification mới (2026-02-13 Docker runtime).
+- [x] Bổ sung cảnh báo historical trong `task.md` và `progress.md` để tránh đọc nhầm các mốc <= 2026-01-29 là trạng thái vận hành hiện tại.
+
+### Verification evidence (2026-02-14, phase 63)
+- [x] `git rm -f TASKS.md findings.md PERFORMANCE_NOTES.md task_plan.md` => removed.
+- [x] `rg -n "findings\\.md|PERFORMANCE_NOTES\\.md|TASKS\\.md" -S task.md README.md RUNBOOK.md docs` => không còn tham chiếu vận hành hiện hành đến các file đã xóa.
+- [x] `rg -n "HISTORICAL DOCUMENT|Phase 63" progress.md task.md` => các cảnh báo historical mới đã có mặt.
+
+## Phase 64 - Rà soát tài liệu > 2026-01-29 (2026-02-14) [bead: cng-ui5]
+- [x] Rà toàn bộ nhóm tài liệu sau 2026-01-29 để đối chiếu với trạng thái hệ thống hiện tại.
+- [x] Gắn nhãn `HISTORICAL EXECUTION PLAN` cho toàn bộ `docs/plans/*.md` để tránh nhầm với runbook vận hành hiện tại.
+- [x] Đồng bộ drift nội dung giữa `API_CONTRACT_NOTES.md` và `docs/API_CONTRACT_NOTES.md`.
+- [x] Cập nhật `docs/OPENAPI_TYPES.md` theo thực tế Docker/env (URL swagger theo `API_PORT`).
+- [x] Cập nhật `DEPLOYMENT_GUIDE_DOCKER.md` để endpoint dùng biến cổng `WEB_PORT`/`API_PORT` rõ ràng.
+- [x] Chuẩn hóa `DEPLOYMENT_GUIDE_DOCKER.md` dùng `.env.example` làm template chính (giữ `.env.docker.example` ở trạng thái legacy compatibility).
+
+### Verification evidence (2026-02-14, phase 64)
+- [x] `rg -n "HISTORICAL EXECUTION PLAN" -S docs/plans -g "*.md"` => tất cả execution plan đã có nhãn historical.
+- [x] `Get-FileHash API_CONTRACT_NOTES.md` == `Get-FileHash docs/API_CONTRACT_NOTES.md` => không còn drift.
+- [x] `rg -n "API_PORT|WEB_PORT|swagger/v1/swagger.json" DEPLOYMENT_GUIDE_DOCKER.md docs/OPENAPI_TYPES.md` => nội dung đã đồng bộ theo cấu hình cổng runtime.
+
+## Phase 65 - Dashboard allocation donut layout refinement (2026-02-14) [bead: cng-23z]
+- [x] Chuyển layout khu vực `Trạng thái phân bổ` từ ngang sang dọc: donut ở trên, danh sách trạng thái ở dưới.
+- [x] Tăng kích thước donut + tâm donut để tận dụng không gian card và cân đối thị giác sau khi đổi bố cục.
+- [x] Tinh chỉnh legend item (spacing/grid) để dễ đọc khi đặt dưới biểu đồ.
+- [x] Giữ drilldown behavior hiện tại, chỉ thay đổi presentation/layout.
+
+### Verification evidence (2026-02-14, phase 65)
+- [x] `npm run --prefix src/frontend test -- --run src/pages/__tests__/dashboard-page.test.tsx` => pass (`1/1`).
+- [x] `npm run --prefix src/frontend build` => pass.
+
+## Phase 66 - Quality gate + tracker synchronization (2026-02-23)
+- [x] Áp dụng workflow skills phù hợp cho lượt xử lý đa bước:
+  - [x] `planning-with-files` (khôi phục sổ tay phiên: `task_plan.md`, `findings.md`, `progress.md`).
+  - [x] `plan-writing` (lập task list + done criteria rõ ràng).
+  - [x] `lint-and-validate` (chạy lại lint/test/build sau chỉnh sửa).
+  - [x] `verification-before-completion` (chỉ chốt sau khi có evidence command mới).
+- [x] Sửa lỗi lint frontend:
+  - [x] `src/frontend/src/hooks/useTheme.ts`: bỏ `setState` đồng bộ trong `useEffect` để tránh `react-hooks/set-state-in-effect`.
+  - [x] `src/frontend/src/pages/RiskAlertsPage.tsx`: refactor bootstrap guard bằng `bootstrapInFlightRef` để xử lý warning dependency của `useEffect`.
+- [x] Đồng bộ tracker công việc:
+  - [x] Đóng bead `cng-fwg` (ERP integration) sau khi xác thực lại test/build.
+  - [x] Cập nhật tài liệu trạng thái (`task.md`, `QA_REPORT.md`, `progress.md`, `task_plan.md`, `findings.md`).
+
+### Verification evidence (2026-02-23, phase 66)
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run test -- --run` => pass (`90/90`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --nologo --verbosity minimal` => pass (`116/116`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --nologo --verbosity minimal` => pass (`41/41`).
+- [x] `bd ready --json` => `[]`.
+
+## Phase 67 - Scale readiness roadmap planning (2026-02-23) [bead: cng-oiw]
+- [x] Tạo epic + task con trên bead cho toàn bộ lộ trình mở rộng:
+  - [x] `cng-oiw` (epic): Scale readiness roadmap.
+  - [x] `cng-oiw.1`: Baseline tải + SLO bằng k6.
+  - [x] `cng-oiw.2`: Redis cache cho read-heavy endpoints.
+  - [x] `cng-oiw.3`: Queue worker cho job nặng.
+  - [x] `cng-oiw.4`: Read-replica + tách read/write path.
+  - [x] `cng-oiw.5`: Autoscaling + guardrail vận hành.
+- [x] Tạo tài liệu kế hoạch chi tiết, dễ theo dõi cho người không chuyên:
+  - [x] `docs/plans/2026-02-23-scale-readiness-roadmap.md`.
+- [x] Triển khai chặng A (k6 baseline + SLO) theo bead `cng-oiw.1`.
+- [x] Triển khai chặng B (Redis cache) theo bead `cng-oiw.2`.
+- [x] Triển khai chặng C (Queue/Worker) theo bead `cng-oiw.3`.
+- [x] Triển khai chặng D (Read replica) theo bead `cng-oiw.4`.
+- [x] Triển khai chặng E (Autoscaling + guardrail) theo bead `cng-oiw.5`.
+
+### Verification evidence (2026-02-23, phase 67 planning)
+- [x] `bd create --type epic ...` => tạo epic `cng-oiw`.
+- [x] `bd create --type task --parent cng-oiw ...` => tạo các task `cng-oiw.1` -> `cng-oiw.5`.
+- [x] `bd update cng-oiw --status in_progress` => epic chuyển sang `in_progress`.
+
+### Verification evidence (2026-02-23, phase 67 execution)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`127/127`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj` => pass (`41/41`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run test -- --run` => pass (`90/90`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `npm --prefix src/frontend run build:budget` => pass.
+- [x] Thêm async maintenance queue/worker + metrics:
+  - `POST /admin/health/reconcile-balances/queue`
+  - `POST /admin/health/run-retention/queue`
+  - `GET /admin/maintenance/jobs`
+  - `GET /admin/maintenance/jobs/{jobId}`
+- [x] Hoàn tất docs scale readiness:
+  - `docs/performance/QUEUE_WORKER_OPERATIONS.md`
+  - `docs/performance/READ_REPLICA_ROUTING.md`
+  - `docs/performance/AUTOSCALING_GUARDRAILS.md`
+- [x] `bd close cng-oiw.1 ... cng-oiw.5` + `bd close cng-oiw` => closed.
+- [x] `bd ready --json` => `[]`.
+
+## Phase 68 - Opus review v3 validation + tracker synchronization (2026-02-24) [bead: cng-rlx]
+- [x] Đối chiếu `Opus_review_v3.md` với codebase hiện tại và thêm bảng phân loại claim theo 3 nhóm: `OUTDATED`, `PARTIAL`, `CONFIRMED GAP`.
+- [x] Xác nhận các nhận định đã lỗi thời (không cần làm lại):
+  - [x] Risk AI explainability + action recommendation.
+  - [x] Dashboard executive summary + KPI MoM.
+  - [x] Risk page tab layout (Overview/Config/History).
+  - [x] Notification Center route/view-all.
+- [x] Chốt nhóm gap còn hiệu lực trong V3 review:
+  - [x] Global search đa thực thể.
+  - [x] Onboarding tour/coachmarks.
+  - [x] Import drag-and-drop UX.
+  - [x] Report print layout + scheduled report delivery.
+  - [x] Risk score delta alert theo thời gian.
+  - [x] Dashboard widget customization/reorder.
+- [x] Cập nhật tài liệu điều phối: `opus-review-v3-remediation.md`, `task.md`, `task_plan.md`, `findings.md`, `progress.md`.
+- [x] Đóng toàn bộ bead liên quan `cng-rlx.1` -> `cng-rlx.5` và epic `cng-rlx`.
+
+### Verification evidence (2026-02-24, phase 68)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj --nologo` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --nologo --verbosity minimal` => pass (`127/127`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --nologo --verbosity minimal` => pass (`42/42`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run test -- --run` => pass (`92/92`).
+- [x] `npm --prefix src/frontend run build` => pass.
+
+## Phase 69 - Opus V3 remaining gaps execution (2026-02-24) [bead: cng-los]
+- [x] Re-validate `Opus_review_v3.md` against current code; split claims into `OUTDATED` / `PARTIAL` / `CONFIRMED GAP`.
+- [x] Create remediation plan for remaining gaps:
+  - [x] `docs/plans/2026-02-24-opus-v3-remaining-gaps-implementation-plan.md`.
+- [x] Create/align beads for execution:
+  - [x] `cng-los` (epic, closed)
+  - [x] `cng-los.1` Backend: scheduled reports + risk delta alerts + reminder escalation (closed)
+  - [x] `cng-los.2` Global search (closed)
+  - [x] `cng-los.3` Onboarding + import drag-drop (closed)
+  - [x] `cng-los.4` Dashboard widget customization + report print (closed)
+  - [x] `cng-los.5` Verification + tracker sync (closed)
+
+### Planned execution checklist (do dần theo bead)
+- [x] `cng-los.1` - Backend foundation
+  - [x] Add migrations `027/028/029` for report schedules, risk snapshots/delta alerts, reminder escalation policy.
+  - [x] Implement scheduled report delivery service + hosted worker + run logs.
+  - [x] Implement risk delta snapshot/alert pipeline + notification integration.
+  - [x] Upgrade reminder execution to escalation-aware policy with cooldown.
+  - [x] Add backend unit/integration tests for all above.
+- [x] `cng-los.2` - Global search
+  - [x] Add unified backend search endpoint (customer/invoice/receipt).
+  - [x] Add frontend command palette (`Ctrl/Cmd + K`) + quick navigation.
+  - [x] Add backend integration + frontend RTL tests.
+- [x] `cng-los.3` - Onboarding + import UX
+  - [x] Add first-run onboarding tour with skip/replay state.
+  - [x] Add drag-and-drop upload flow in Import Batch section.
+  - [x] Add RTL tests for onboarding and dropzone behaviors.
+- [x] `cng-los.4` - Dashboard + reports UX
+  - [x] Add dashboard widget visibility/order preferences (API + UI).
+  - [x] Add report print-friendly layout and print action.
+  - [x] Add backend/frontend tests for preference + print trigger/smoke.
+- [x] `cng-los.5` - Verification + sync
+  - [x] Run build/lint/test suite backend + frontend.
+  - [x] Update `task.md`, `progress.md`, `findings.md`, and close beads.
+
+### Verification evidence (phase 69 planning)
+- [x] `bd ready --json` => shows `cng-los` epic + tasks `.1` -> `.5` with expected statuses.
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter RiskDeltaAlertsTests` => pass (`2/2`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter RiskBootstrapEndpointTests` => pass (`1/1`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter ReportScheduleServiceTests` => pass (`4/4`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "ReportScheduleServiceTests|ReminderEscalationPolicyTests"` => pass (`4/4`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter GlobalSearchServiceIntegrationTests` => pass (`2/2`).
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/customers/__tests__/customers-modules.test.tsx` => pass (`11/11`).
+
+### Verification evidence (2026-02-26, phase 69 completion)
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj --nologo` => pass.
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --nologo --verbosity minimal` => pass (`134/134`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --nologo --verbosity minimal` => pass (`52/52`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run test -- --run` => pass (`99/99`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `bd close cng-los.3; bd close cng-los.4; bd close cng-los.5; bd close cng-los` => pass.
+- [x] `bd ready --json` => `[]` (không còn bead mở cho phase 69).
+- [x] Frontend lint hardening bổ sung để pass full-suite:
+  - [x] `src/frontend/src/layouts/AppShell.tsx`: bỏ setState trong mount effect, chuyển sang lazy initializer.
+  - [x] `src/frontend/src/pages/customers/CustomersPage.tsx`: bỏ setState đồng bộ theo query trong effect.
+
+## Phase 70 - Response-aware reminder escalation residual (2026-02-26) [bead: cng-d3e]
+- [x] `cng-d3e.2`: triển khai luồng escalation theo response state trong ReminderService:
+  - [x] thêm entity + DbSet + migration `030_reminder_response_states.sql`.
+  - [x] thêm API/contract quản lý response state (`GET/PUT /reminders/response-state`).
+  - [x] refactor execution flow dùng response-state (`ACKNOWLEDGED`, `DISPUTED`, `RESOLVED`, `ESCALATION_LOCKED`).
+  - [x] bổ sung integration tests cho acknowledged/resolved.
+- [x] Sửa compile error `EnsureUser` bằng namespace đúng `CongNoGolden.Infrastructure.Services.Common`.
+- [x] Verification targeted:
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~Reminder"` => pass (`6/6`).
+  - [x] `npm --prefix src/frontend run test -- risk-alerts-page-tabs` => pass (`1/1`).
+- [x] Đồng bộ bead: `bd close cng-d3e.2`.
+- [x] `cng-d3e.3`: bổ sung test transition còn thiếu + sync docs/tracker:
+  - [x] thêm integration tests `Run_WhenDisputed_EscalatesWithDisputedReason` và `Run_WhenEscalationLocked_KeepsEscalationLevel` trong `ReminderEscalationPolicyTests`.
+  - [x] cập nhật `Opus_review_v3.md` cho claim reminder escalation (`PARTIAL` -> `OUTDATED (đã có 2026-02-26)`).
+  - [x] chạy lại verification targeted backend/frontend.
+- [x] Đồng bộ bead: `bd close cng-d3e.1`, `bd close cng-d3e.3`, `bd close cng-d3e`.
+- Trạng thái bead liên quan sau phiên:
+  - `cng-d3e.1`: `closed`
+  - `cng-d3e.2`: `closed`
+  - `cng-d3e.3`: `closed`
+  - `cng-d3e` (epic): `closed`
+
+## Phase 71 - Import validation UX hardening (2026-02-26) [bead: cng-9y1]
+- [x] Bổ sung trạng thái visual lỗi cho dropzone import:
+  - [x] thêm class `.upload-dropzone--error` trong `src/frontend/src/index.css`.
+- [x] Mở rộng test validation import invalid file:
+  - [x] reject non-`.xlsx` khi drag-drop.
+  - [x] reject `.xlsx` vượt `20MB` qua file input.
+  - [x] reject `.xlsx` vượt `20MB` qua drag-drop.
+  - [x] xác nhận invalid cases không gọi API `uploadImport`.
+- [x] Chạy quality gate frontend cho thay đổi:
+  - [x] `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx`.
+  - [x] `npm run lint`.
+- [x] Đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md`.
+- [x] Đóng bead `cng-9y1`.
+
+### Verification evidence (2026-02-26, phase 71)
+- [x] `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` => pass (`4/4`).
+- [x] `npm run lint` => pass.
+- [x] `bd close cng-9y1` => pass.
+
+## Phase 72 - Collection queue + reports mobile cards (2026-02-26)
+- [x] Hoàn thiện wiring cho Collection Task Queue:
+  - [x] register `ICollectionTaskQueue` trong `Infrastructure/DependencyInjection.cs`.
+  - [x] map `app.MapCollectionEndpoints()` trong `Api/Program.cs`.
+- [x] Sửa logic enqueue từ risk để tránh đếm trùng task khi cùng khách hàng xuất hiện nhiều lần trong một lần generate.
+- [x] Bổ sung unit tests cho queue mới:
+  - [x] dedupe theo customer tax code.
+  - [x] không tạo task mới khi đã có task OPEN.
+  - [x] transition status DONE/OPEN và `CompletedAt`.
+- [x] Bổ sung mobile-optimized table cards cho Reports:
+  - [x] thêm `data-label` cho cell ở summary/statement/aging tables.
+  - [x] thêm CSS responsive card layout (`.table--mobile-cards`) cho màn hình nhỏ.
+  - [x] cập nhật test `reports-modules` kiểm tra `data-label`.
+
+### Verification evidence (2026-02-26, phase 72)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CollectionTaskQueueTests` => pass (`3/3`).
+- [x] `npm --prefix src/frontend run test -- reports-modules.test.tsx` => pass (`9/9`).
+
+## Phase 73 - Role cockpit UX refinement (2026-02-27) [bead: cng-cb2]
+- [x] Review nhanh luong thao tac dashboard theo 3 goc nhin: director / manager / user.
+- [x] Refactor UI dashboard:
+  - [x] Them widget `roleCockpit` vao bo widget preference.
+  - [x] Tao module moi `RoleCockpitSection.tsx` de tach logic khoi `DashboardPage.tsx`.
+  - [x] Hien thi decision cards + workflow step + diem nong theo vai tro.
+  - [x] Cap nhat CSS responsive cho cockpit section.
+- [x] Cap nhat test dashboard:
+  - [x] Dong bo `defaultWidgetOrder` co `roleCockpit`.
+  - [x] Bo sung test render cockpit cho role director.
+
+### Verification evidence (2026-02-27, phase 73)
+- [x] `npm run test -- src/pages/__tests__/dashboard-page.test.tsx` => pass (`4/4`).
+- [x] `npm run lint` => pass.
+- [x] `npm run build` => pass.
+
+## Phase 74 - Header navigation simplification + dashboard settings modal (2026-02-27) [bead: cng-dcx]
+- [x] Loại bỏ quick navigation chips ở header AppShell và dọn code/CSS/test liên quan.
+- [x] Đổi chuyển đổi theme `Sáng/Tối/Hệ thống` từ segmented buttons sang dropdown.
+- [x] Chuyển `Tùy chỉnh Dashboard` từ section inline sang nút mở popup/modal.
+- [x] Giảm nhiễu trạng thái auto-save để không còn nháy `Đang lưu cấu hình...` liên tục.
+- [x] Chạy test/lint/build frontend và đồng bộ lại bead + tracker.
+
+### Verification evidence (2026-02-27, phase 74)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/dashboard-page.test.tsx src/pages/reports/__tests__/reports-modules.test.tsx` => pass (`20/20`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+

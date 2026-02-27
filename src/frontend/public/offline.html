@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ngoại tuyến - Cong No Golden</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+        background: linear-gradient(140deg, #f8fafc, #e2e8f0);
+        color: #0f172a;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+
+      main {
+        width: min(540px, 100%);
+        background: #ffffff;
+        border: 1px solid #dbeafe;
+        border-radius: 16px;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.12);
+        padding: 24px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.4rem;
+      }
+
+      p {
+        margin: 0 0 16px;
+        color: #334155;
+        line-height: 1.5;
+      }
+
+      button {
+        border: 0;
+        border-radius: 10px;
+        background: #2563eb;
+        color: #fff;
+        padding: 10px 16px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      button:hover {
+        background: #1d4ed8;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Bạn đang ngoại tuyến</h1>
+      <p>
+        Ứng dụng không thể kết nối tới máy chủ lúc này. Hãy kiểm tra mạng và thử lại.
+      </p>
+      <button type="button" onclick="window.location.reload()">Thử lại</button>
+    </main>
+  </body>
+</html>

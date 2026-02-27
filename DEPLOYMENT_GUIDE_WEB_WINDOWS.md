@@ -1,15 +1,19 @@
-# DEPLOYMENT_GUIDE_WEB_WINDOWS - Cong No Golden (Web + PostgreSQL on Windows)
+# DEPLOYMENT_GUIDE_WEB_WINDOWS - Cong No Golden (LEGACY/FALLBACK)
 
-This guide describes a simple production deployment on Windows Server:
+This guide describes legacy deployment on Windows Server:
 - PostgreSQL as the database.
 - .NET 8 backend API as a Windows service.
 - React frontend served by IIS (static site) with optional reverse proxy to the API.
+
+Deployment mặc định hiện tại là Docker Compose.
+- Primary guide: `DEPLOYMENT_GUIDE_DOCKER.md`
+- Chỉ dùng guide này nếu bạn bắt buộc phải chạy môi trường Windows Service + IIS cũ.
 
 ## 1) Requirements
 - Windows Server 2019/2022
 - .NET 8 Runtime (ASP.NET Core Runtime)
 - PostgreSQL 16+
-- IIS + URL Rewrite (and ARR if you want reverse proxy)
+- IIS + URL Rewrite (and ARR if you want reverse proxy, legacy path)
 
 ## 2) Database setup (PostgreSQL)
 1) Create database + roles:
@@ -97,6 +101,9 @@ Then set frontend env:
 ```
 VITE_API_BASE_URL=/api
 ```
+
+## Note
+- Nếu không có yêu cầu đặc thù về IIS, quay lại dùng `DEPLOYMENT_GUIDE_DOCKER.md` để giảm sai lệch vận hành giữa môi trường.
 
 ## 6) Smoke test
 Use the smoke script after deployment:

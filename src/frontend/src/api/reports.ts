@@ -72,6 +72,12 @@ export type ReportInsights = {
   overdueByOwner: ReportOverdueGroup[]
 }
 
+export type ReportOverview = {
+  kpis: ReportKpi
+  charts: ReportCharts
+  insights: ReportInsights
+}
+
 export type ReportPreferences = {
   kpiOrder: string[]
   dueSoonDays: number
@@ -145,6 +151,53 @@ export type ReportPagedParams = ReportFilterParams & {
 }
 
 export type ReportExportKind = 'Full' | 'Overview' | 'Summary' | 'Statement' | 'Aging'
+export type ReportExportFormat = 'Xlsx' | 'Pdf'
+
+const stripWrappingQuotes = (value: string) => {
+  const trimmed = value.trim()
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1)
+  }
+  return trimmed
+}
+
+const sanitizeFileName = (value: string) => {
+  const cleaned = stripWrappingQuotes(value).replace(/[\r\n]/g, '').trim()
+  if (!cleaned) return null
+  return cleaned.replace(/[\\/:*?"<>|]/g, '_')
+}
+
+const decodeFilenameStar = (value: string) => {
+  const cleaned = stripWrappingQuotes(value)
+  const encodedMatch = /^[^']*'[^']*'(.*)$/.exec(cleaned)
+  const encodedValue = encodedMatch?.[1] ?? cleaned
+  try {
+    return decodeURIComponent(encodedValue)
+  } catch {
+    return encodedValue
+  }
+}
+
+const parseContentDispositionFileName = (contentDisposition: string) => {
+  if (!contentDisposition.trim()) return null
+
+  const filenameStarMatch = /(?:^|;)\s*filename\*\s*=\s*([^;]+)/i.exec(contentDisposition)
+  if (filenameStarMatch?.[1]) {
+    const decoded = decodeFilenameStar(filenameStarMatch[1])
+    const sanitized = sanitizeFileName(decoded)
+    if (sanitized) return sanitized
+  }
+
+  const filenameMatch = /(?:^|;)\s*filename\s*=\s*([^;]+)/i.exec(contentDisposition)
+  if (filenameMatch?.[1]) {
+    return sanitizeFileName(filenameMatch[1])
+  }
+
+  return null
+}
 
 const buildQuery = (params: ReportFilterParams) => {
   const query = new URLSearchParams()
@@ -222,6 +275,11 @@ export const fetchReportInsights = async (token: string, params: ReportFilterPar
   return apiFetch<ReportInsights>(`/reports/insights?${query.toString()}`, { token })
 }
 
+export const fetchReportOverview = async (token: string, params: ReportFilterParams) => {
+  const query = buildQuery(params)
+  return apiFetch<ReportOverview>(`/reports/overview?${query.toString()}`, { token })
+}
+
 export const fetchReportPreferences = async (token: string) => {
   return apiFetch<ReportPreferences>('/reports/preferences', { token })
 }
@@ -244,15 +302,17 @@ export const exportReport = async (
   token: string,
   params: ReportFilterParams,
   kind: ReportExportKind = 'Full',
+  format: ReportExportFormat = 'Xlsx',
 ) => {
   const query = buildQuery(params)
   if (kind) query.append('kind', kind)
+  if (format) query.append('format', format)
   const { blob, headers } = await apiFetchBlob(`/reports/export?${query.toString()}`, {
     token,
   })
   const contentDisposition = headers.get('content-disposition') ?? ''
-  const match = /filename="?([^"]+)"?/i.exec(contentDisposition)
-  const fileName = match?.[1] || 'congno_report_export.xlsx'
+  const fallbackName = format === 'Pdf' ? 'congno_report_export.pdf' : 'congno_report_export.xlsx'
+  const fileName = parseContentDispositionFileName(contentDisposition) ?? fallbackName
 
   return { blob, fileName }
 }

@@ -61,6 +61,18 @@ export type ImportCommitResult = {
   insertedInvoices: number
   insertedAdvances: number
   insertedReceipts: number
+  totalEligibleRows?: number
+  committedRows?: number
+  skippedRows?: number
+  progressSteps?: ImportCommitProgressStep[]
+}
+
+export type ImportCommitProgressStep = {
+  stage: string
+  percent: number
+  processedRows: number
+  totalRows: number
+  message: string
 }
 
 export type ImportBatchHistoryItem = {

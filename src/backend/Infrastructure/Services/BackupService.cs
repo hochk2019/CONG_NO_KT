@@ -5,6 +5,7 @@ using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Migrations;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -13,13 +14,19 @@ using System.Data;
 
 namespace CongNoGolden.Infrastructure.Services;
 
-public sealed class BackupService : IBackupService
+public sealed partial class BackupService : IBackupService
 {
+    private const string WindowsDefaultBackupPath = @"C:\apps\congno\backup\dumps";
+    private const string LinuxDefaultBackupPath = "/var/lib/congno/backups/dumps";
+    private const string WindowsDefaultPgBinPath = @"C:\Program Files\PostgreSQL\16\bin";
+    private const string LinuxDefaultPgBinPath = "/usr/bin";
+
     private static readonly TimeSpan DefaultTokenTtl = TimeSpan.FromMinutes(30);
     private static readonly TimeSpan UploadTtl = TimeSpan.FromHours(24);
     private const int LogLimit = 20000;
     private const string BackupLockKey = "backup_job";
     private const string RestoreLockKey = "backup_restore";
+    private const string DefaultSchema = "congno";
 
     private readonly ConGNoDbContext _db;
     private readonly ICurrentUser _currentUser;
@@ -59,7 +66,7 @@ public sealed class BackupService : IBackupService
     {
         var settings = await GetOrCreateSettingsAsync(ct);
 
-        var backupPath = (request.BackupPath ?? string.Empty).Trim();
+        var backupPath = NormalizeBackupPathForRuntime(request.BackupPath);
         if (string.IsNullOrWhiteSpace(backupPath))
         {
             throw new InvalidOperationException("Backup path is required.");
@@ -80,15 +87,15 @@ public sealed class BackupService : IBackupService
             throw new InvalidOperationException("Invalid schedule time.");
         }
 
-        var pgBinPath = (request.PgBinPath ?? string.Empty).Trim();
+        var pgBinPath = NormalizePgBinPathForRuntime(request.PgBinPath);
         if (string.IsNullOrWhiteSpace(pgBinPath))
         {
             throw new InvalidOperationException("pg_bin_path is required.");
         }
 
-        var dumpExe = Path.Combine(pgBinPath, "pg_dump.exe");
-        var restoreExe = Path.Combine(pgBinPath, "pg_restore.exe");
-        if (!File.Exists(dumpExe) || !File.Exists(restoreExe))
+        var dumpTool = ResolvePgToolPath(pgBinPath, "pg_dump");
+        var restoreTool = ResolvePgToolPath(pgBinPath, "pg_restore");
+        if (!ToolPathLooksValid(dumpTool) || !ToolPathLooksValid(restoreTool))
         {
             throw new InvalidOperationException("pg_bin_path is invalid.");
         }
@@ -414,6 +421,8 @@ public sealed class BackupService : IBackupService
             {
                 throw new InvalidOperationException(BuildRestoreFailureMessage(result));
             }
+
+            ApplyMigrationsAfterRestore();
         }
         finally
         {
@@ -454,6 +463,28 @@ public sealed class BackupService : IBackupService
         var settings = await _db.BackupSettings.FirstOrDefaultAsync(ct);
         if (settings is not null)
         {
+            var normalizedBackupPath = NormalizeBackupPathForRuntime(settings.BackupPath);
+            var normalizedPgBinPath = NormalizePgBinPathForRuntime(settings.PgBinPath);
+            var changed = false;
+
+            if (!string.Equals(settings.BackupPath, normalizedBackupPath, StringComparison.Ordinal))
+            {
+                settings.BackupPath = normalizedBackupPath;
+                changed = true;
+            }
+
+            if (!string.Equals(settings.PgBinPath, normalizedPgBinPath, StringComparison.Ordinal))
+            {
+                settings.PgBinPath = normalizedPgBinPath;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                settings.UpdatedAt = DateTimeOffset.UtcNow;
+                await _db.SaveChangesAsync(ct);
+            }
+
             return settings;
         }
 
@@ -461,12 +492,12 @@ public sealed class BackupService : IBackupService
         {
             Id = Guid.NewGuid(),
             Enabled = false,
-            BackupPath = @"C:\apps\congno\backup\dumps",
+            BackupPath = GetDefaultBackupPath(),
             RetentionCount = 10,
             ScheduleDayOfWeek = (int)DayOfWeek.Monday,
             ScheduleTime = "02:00",
             Timezone = TimeZoneInfo.Local.Id,
-            PgBinPath = @"C:\Program Files\PostgreSQL\16\bin",
+            PgBinPath = GetDefaultPgBinPath(),
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -563,10 +594,10 @@ public sealed class BackupService : IBackupService
     {
         var connection = GetMigrationConnectionString();
         var builder = new NpgsqlConnectionStringBuilder(connection);
-        var exePath = Path.Combine(settings.PgBinPath, "pg_dump.exe");
-        if (!File.Exists(exePath))
+        var exePath = ResolvePgToolPath(settings.PgBinPath, "pg_dump");
+        if (!ToolPathLooksValid(exePath))
         {
-            throw new InvalidOperationException("pg_dump.exe not found.");
+            throw new InvalidOperationException("pg_dump not found.");
         }
         if (string.IsNullOrWhiteSpace(builder.Database))
         {
@@ -576,7 +607,7 @@ public sealed class BackupService : IBackupService
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,
-            Arguments = $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -F c -b -f \"{filePath}\" {builder.Database}",
+            Arguments = BuildPgDumpArguments(builder, filePath),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -595,10 +626,11 @@ public sealed class BackupService : IBackupService
     {
         var connection = GetMigrationConnectionString();
         var builder = new NpgsqlConnectionStringBuilder(connection);
-        var exePath = Path.Combine(settings.PgBinPath, "pg_restore.exe");
-        if (!File.Exists(exePath))
+        await ResetSchemaBeforeRestoreAsync(builder, ct);
+        var exePath = ResolvePgToolPath(settings.PgBinPath, "pg_restore");
+        if (!ToolPathLooksValid(exePath))
         {
-            throw new InvalidOperationException("pg_restore.exe not found.");
+            throw new InvalidOperationException("pg_restore not found.");
         }
         if (string.IsNullOrWhiteSpace(builder.Database))
         {
@@ -608,7 +640,7 @@ public sealed class BackupService : IBackupService
         var startInfo = new ProcessStartInfo
         {
             FileName = exePath,
-            Arguments = $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -d {builder.Database} -c \"{filePath}\"",
+            Arguments = BuildPgRestoreArguments(builder, filePath),
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -623,37 +655,14 @@ public sealed class BackupService : IBackupService
         return await _processRunner.RunAsync(startInfo, ct);
     }
 
-    private string GetMigrationConnectionString()
+    private static string BuildPgDumpArguments(NpgsqlConnectionStringBuilder builder, string filePath)
     {
-        var connection = _configuration.GetConnectionString("Migrations");
-        if (string.IsNullOrWhiteSpace(connection))
-        {
-            connection = _configuration.GetConnectionString("Default");
-        }
-
-        if (string.IsNullOrWhiteSpace(connection))
-        {
-            throw new InvalidOperationException("Connection string is not configured.");
-        }
-
-        return connection;
+        return $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -F c -b -O -x -f \"{filePath}\" {builder.Database}";
     }
 
-    private async Task WriteAuditAsync(string action, string result, object details, CancellationToken ct)
+    private static string BuildPgRestoreArguments(NpgsqlConnectionStringBuilder builder, string filePath)
     {
-        var payload = JsonSerializer.Serialize(details);
-        var audit = new BackupAudit
-        {
-            Id = Guid.NewGuid(),
-            Action = action,
-            ActorId = _currentUser.UserId,
-            Result = result,
-            Details = payload,
-            CreatedAt = DateTimeOffset.UtcNow
-        };
-
-        _db.BackupAudits.Add(audit);
-        await _db.SaveChangesAsync(ct);
+        return $"-h {builder.Host} -p {builder.Port} -U {builder.Username} -d {builder.Database} --clean --if-exists --no-owner --no-privileges --exit-on-error \"{filePath}\"";
     }
 
     private static string? Truncate(string? value)
@@ -693,145 +702,83 @@ public sealed class BackupService : IBackupService
         return message;
     }
 
-    private async Task<bool> TryAcquireAdvisoryLockAsync(string key, CancellationToken ct)
+    private string GetDefaultBackupPath()
     {
-        var connection = (NpgsqlConnection)_db.Database.GetDbConnection();
-        var shouldClose = connection.State != ConnectionState.Open;
-        if (shouldClose)
+        var configured = _configuration["Backup:DefaultPath"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            await connection.OpenAsync(ct);
+            return configured;
         }
 
-        await using var command = new NpgsqlCommand("SELECT pg_try_advisory_lock(hashtext(@key))", connection);
-        command.Parameters.AddWithValue("key", key);
-        var result = await command.ExecuteScalarAsync(ct);
-        if (shouldClose)
-        {
-            await connection.CloseAsync();
-        }
-
-        return result is bool acquired && acquired;
+        return OperatingSystem.IsWindows()
+            ? WindowsDefaultBackupPath
+            : LinuxDefaultBackupPath;
     }
 
-    private async Task<string?> ResolveRestoreFileAsync(BackupRestoreRequest request, CancellationToken ct)
+    private string GetDefaultPgBinPath()
     {
-        if (request.JobId is Guid jobId)
+        var configured = _configuration["Backup:DefaultPgBinPath"]?.Trim();
+        if (!string.IsNullOrWhiteSpace(configured))
         {
-            var job = await _db.BackupJobs.AsNoTracking()
-                .FirstOrDefaultAsync(j => j.Id == jobId, ct);
-            if (job?.Status == "success" && !string.IsNullOrWhiteSpace(job.FilePath))
-            {
-                return job.FilePath;
-            }
+            return configured;
         }
 
-        if (request.UploadId is Guid uploadId)
-        {
-            var upload = await _db.BackupUploads.AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Id == uploadId, ct);
-            if (upload is null || upload.ExpiresAt < DateTimeOffset.UtcNow)
-            {
-                return null;
-            }
-            return upload.FilePath;
-        }
-
-        return null;
+        return OperatingSystem.IsWindows()
+            ? WindowsDefaultPgBinPath
+            : LinuxDefaultPgBinPath;
     }
 
-    private async Task NotifyBackupFailureAsync(BackupJob job, CancellationToken ct)
+    private string NormalizeBackupPathForRuntime(string? rawPath)
     {
-        var recipients = new HashSet<Guid>();
-
-        if (job.CreatedBy.HasValue)
+        var candidate = string.IsNullOrWhiteSpace(rawPath) ? GetDefaultBackupPath() : rawPath.Trim();
+        if (!OperatingSystem.IsWindows() && IsWindowsStylePath(candidate))
         {
-            recipients.Add(job.CreatedBy.Value);
-        }
-        else
-        {
-            var adminIds = await LoadAdminSupervisorIdsAsync(ct);
-            foreach (var adminId in adminIds)
-            {
-                recipients.Add(adminId);
-            }
+            return GetDefaultBackupPath();
         }
 
-        var allowedRecipients = await FilterRecipientsAsync(recipients, ct);
-        if (allowedRecipients.Count == 0)
-        {
-            return;
-        }
-
-        var metadata = JsonSerializer.Serialize(new
-        {
-            jobId = job.Id,
-            jobType = job.Type,
-            status = job.Status,
-            errorMessage = job.ErrorMessage
-        });
-
-        var body = string.IsNullOrWhiteSpace(job.ErrorMessage)
-            ? "Sao lưu dữ liệu thất bại."
-            : $"Sao lưu dữ liệu thất bại: {job.ErrorMessage}";
-        var now = DateTimeOffset.UtcNow;
-
-        foreach (var userId in allowedRecipients)
-        {
-            _db.Notifications.Add(new Notification
-            {
-                Id = Guid.NewGuid(),
-                UserId = userId,
-                Title = "Sao lưu thất bại",
-                Body = body,
-                Severity = "ALERT",
-                Source = "SYSTEM",
-                Metadata = metadata,
-                CreatedAt = now
-            });
-        }
-
-        await _db.SaveChangesAsync(ct);
+        return candidate;
     }
 
-    private async Task<IReadOnlyList<Guid>> LoadAdminSupervisorIdsAsync(CancellationToken ct)
+    private string NormalizePgBinPathForRuntime(string? rawPath)
     {
-        return await _db.UserRoles
-            .Join(_db.Roles,
-                userRole => userRole.RoleId,
-                role => role.Id,
-                (userRole, role) => new { userRole.UserId, role.Code })
-            .Where(r => r.Code == "Admin" || r.Code == "Supervisor")
-            .Select(r => r.UserId)
-            .Distinct()
-            .ToListAsync(ct);
-    }
-
-    private async Task<IReadOnlyList<Guid>> FilterRecipientsAsync(
-        IReadOnlySet<Guid> recipients,
-        CancellationToken ct)
-    {
-        if (recipients.Count == 0)
+        var candidate = string.IsNullOrWhiteSpace(rawPath) ? GetDefaultPgBinPath() : rawPath.Trim();
+        if (!OperatingSystem.IsWindows() && IsWindowsStylePath(candidate))
         {
-            return Array.Empty<Guid>();
+            return GetDefaultPgBinPath();
         }
 
-        var ids = recipients.ToArray();
-        var existingUsers = await _db.Users
-            .AsNoTracking()
-            .Where(u => ids.Contains(u.Id))
-            .Select(u => u.Id)
-            .ToListAsync(ct);
-        if (existingUsers.Count == 0)
+        return candidate;
+    }
+
+    private static string ResolvePgToolPath(string pgBinPath, string toolBaseName)
+    {
+        var executableName = OperatingSystem.IsWindows() ? $"{toolBaseName}.exe" : toolBaseName;
+        if (string.IsNullOrWhiteSpace(pgBinPath))
         {
-            return Array.Empty<Guid>();
+            return executableName;
         }
 
-        var disabled = await _db.NotificationPreferences
-            .AsNoTracking()
-            .Where(p => existingUsers.Contains(p.UserId) && !p.ReceiveNotifications)
-            .Select(p => p.UserId)
-            .ToListAsync(ct);
-
-        return existingUsers.Where(id => !disabled.Contains(id)).ToList();
+        return Path.Combine(pgBinPath, executableName);
     }
+
+    private static bool ToolPathLooksValid(string toolPath)
+    {
+        if (string.IsNullOrWhiteSpace(toolPath))
+        {
+            return false;
+        }
+
+        if (Path.IsPathRooted(toolPath))
+        {
+            return File.Exists(toolPath);
+        }
+
+        return true;
+    }
+
+    private static bool IsWindowsStylePath(string value)
+    {
+        return value.Length >= 2 && char.IsLetter(value[0]) && value[1] == ':';
+    }
+
 }

@@ -119,6 +119,26 @@ export const voidAdvance = async (
   })
 }
 
+export const unvoidAdvance = async (
+  token: string,
+  advanceId: string,
+  payload: {
+    version: number
+    overridePeriodLock?: boolean
+    overrideReason?: string
+  },
+) => {
+  return apiFetch<AdvanceDto>(`/advances/${advanceId}/unvoid`, {
+    method: 'POST',
+    token,
+    body: {
+      version: payload.version,
+      override_period_lock: payload.overridePeriodLock ?? false,
+      override_reason: payload.overrideReason ?? null,
+    },
+  })
+}
+
 export const updateAdvance = async (
   token: string,
   advanceId: string,

@@ -1,17 +1,16 @@
 using System.Text.Json;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
 
 public sealed class ImportCommitService : IImportCommitService
 {
-    private const string StatusCommitted = "COMMITTED";
-    private const string StatusStaging = "STAGING";
-
     private readonly ConGNoDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _auditService;
@@ -31,12 +30,14 @@ public sealed class ImportCommitService : IImportCommitService
             throw new InvalidOperationException("Batch not found.");
         }
 
-        if (batch.Status == StatusCommitted)
+        if (batch.Status == ImportBatchStatusCodes.Committed)
         {
-            return ParseSummary(batch.SummaryData);
+            var committedSummary = ParseSummary(batch.SummaryData);
+            RecordImportCommitMetrics(batch.Type, committedSummary);
+            return committedSummary;
         }
 
-        if (batch.Status != StatusStaging)
+        if (batch.Status != ImportBatchStatusCodes.Staging)
         {
             throw new InvalidOperationException("Batch status is not eligible for commit.");
         }
@@ -63,13 +64,31 @@ public sealed class ImportCommitService : IImportCommitService
         }
 
         var eligible = rows.Where(r => r.ActionSuggestion != "SKIP").ToList();
+        var progressSteps = new List<ImportCommitProgressStep>
+        {
+            new(
+                "VALIDATION",
+                15,
+                eligible.Count,
+                rows.Count,
+                $"Validated {rows.Count} staging rows; {eligible.Count} eligible for commit.")
+        };
+
         if (eligible.Count == 0)
         {
-            batch.Status = StatusCommitted;
+            progressSteps.Add(new ImportCommitProgressStep(
+                "FINALIZE",
+                100,
+                0,
+                0,
+                "No eligible rows to commit."));
+
+            var emptySummary = new ImportCommitResult(0, 0, 0, 0, 0, 0, progressSteps);
+            batch.Status = ImportBatchStatusCodes.Committed;
             batch.CommittedAt = DateTimeOffset.UtcNow;
             batch.ApprovedBy = _currentUser.UserId;
             batch.ApprovedAt = DateTimeOffset.UtcNow;
-            batch.SummaryData = JsonSerializer.Serialize(new ImportCommitResult(0, 0, 0));
+            batch.SummaryData = JsonSerializer.Serialize(emptySummary);
             await _db.SaveChangesAsync(ct);
             await _auditService.LogAsync(
                 "IMPORT_COMMIT",
@@ -78,8 +97,9 @@ public sealed class ImportCommitService : IImportCommitService
                 new { status = previousStatus },
                 new { status = batch.Status, summary = batch.SummaryData },
                 ct);
-            await NotifyImportCommittedAsync(batch, new ImportCommitResult(0, 0, 0), ct);
-            return new ImportCommitResult(0, 0, 0);
+            await NotifyImportCommittedAsync(batch, emptySummary, ct);
+            RecordImportCommitMetrics(batch.Type, emptySummary);
+            return emptySummary;
         }
 
         var commitRows = eligible;
@@ -97,13 +117,38 @@ public sealed class ImportCommitService : IImportCommitService
             }
         }
 
+        var skippedRows = Math.Max(0, eligible.Count - commitRows.Count);
+        progressSteps.Add(new ImportCommitProgressStep(
+            "DEDUPE",
+            30,
+            commitRows.Count,
+            eligible.Count,
+            skippedRows > 0
+                ? $"Skipped {skippedRows} duplicate rows."
+                : "No duplicate rows detected."));
+
         if (commitRows.Count == 0)
         {
-            batch.Status = StatusCommitted;
+            progressSteps.Add(new ImportCommitProgressStep(
+                "FINALIZE",
+                100,
+                0,
+                0,
+                "All eligible rows were deduplicated."));
+
+            var dedupOnlySummary = new ImportCommitResult(
+                0,
+                0,
+                0,
+                eligible.Count,
+                0,
+                skippedRows,
+                progressSteps);
+            batch.Status = ImportBatchStatusCodes.Committed;
             batch.CommittedAt = DateTimeOffset.UtcNow;
             batch.ApprovedBy = _currentUser.UserId;
             batch.ApprovedAt = DateTimeOffset.UtcNow;
-            batch.SummaryData = JsonSerializer.Serialize(new ImportCommitResult(0, 0, 0));
+            batch.SummaryData = JsonSerializer.Serialize(dedupOnlySummary);
             await _db.SaveChangesAsync(ct);
             await _auditService.LogAsync(
                 "IMPORT_COMMIT",
@@ -112,8 +157,9 @@ public sealed class ImportCommitService : IImportCommitService
                 new { status = previousStatus },
                 new { status = batch.Status, summary = batch.SummaryData },
                 ct);
-            await NotifyImportCommittedAsync(batch, new ImportCommitResult(0, 0, 0), ct);
-            return new ImportCommitResult(0, 0, 0);
+            await NotifyImportCommittedAsync(batch, dedupOnlySummary, ct);
+            RecordImportCommitMetrics(batch.Type, dedupOnlySummary);
+            return dedupOnlySummary;
         }
 
         var lockedPeriods = await ImportCommitPeriodLock.GetLockedPeriodsAsync(_db, batch.Type, commitRows, ct);
@@ -140,6 +186,9 @@ public sealed class ImportCommitService : IImportCommitService
         var insertedAdvances = 0;
         var insertedReceipts = 0;
         var now = DateTimeOffset.UtcNow;
+        var processedRows = 0;
+        var totalCommitRows = commitRows.Count;
+        var progressCheckpoint = Math.Max(1, totalCommitRows / 4);
 
         var seenInvoiceKeys = existingInvoiceKeys ?? new HashSet<InvoiceKey>();
         foreach (var row in commitRows)
@@ -197,13 +246,39 @@ public sealed class ImportCommitService : IImportCommitService
                 _db.Receipts.Add(receipt);
                 insertedReceipts++;
             }
+
+            processedRows += 1;
+            if (processedRows == totalCommitRows || processedRows % progressCheckpoint == 0)
+            {
+                var percent = 30 + (int)Math.Round((processedRows / (double)totalCommitRows) * 60, MidpointRounding.AwayFromZero);
+                progressSteps.Add(new ImportCommitProgressStep(
+                    "APPLY_ROWS",
+                    Math.Clamp(percent, 31, 95),
+                    processedRows,
+                    totalCommitRows,
+                    $"Committed {processedRows}/{totalCommitRows} rows."));
+            }
         }
 
-        batch.Status = StatusCommitted;
+        batch.Status = ImportBatchStatusCodes.Committed;
         batch.CommittedAt = DateTimeOffset.UtcNow;
         batch.ApprovedBy = _currentUser.UserId;
         batch.ApprovedAt = DateTimeOffset.UtcNow;
-        var summary = new ImportCommitResult(insertedInvoices, insertedAdvances, insertedReceipts);
+        progressSteps.Add(new ImportCommitProgressStep(
+            "FINALIZE",
+            100,
+            totalCommitRows,
+            totalCommitRows,
+            "Batch committed successfully."));
+
+        var summary = new ImportCommitResult(
+            insertedInvoices,
+            insertedAdvances,
+            insertedReceipts,
+            eligible.Count,
+            totalCommitRows,
+            skippedRows,
+            progressSteps);
         batch.SummaryData = JsonSerializer.Serialize(summary);
 
         await _db.SaveChangesAsync(ct);
@@ -229,6 +304,7 @@ public sealed class ImportCommitService : IImportCommitService
             ct);
 
         await NotifyImportCommittedAsync(batch, summary, ct);
+        RecordImportCommitMetrics(batch.Type, summary);
 
         return summary;
     }
@@ -525,5 +601,14 @@ public sealed class ImportCommitService : IImportCommitService
         {
             return new ImportCommitResult(0, 0, 0);
         }
+    }
+
+    private static void RecordImportCommitMetrics(string? batchType, ImportCommitResult summary)
+    {
+        BusinessMetrics.RecordImportCommit(
+            batchType,
+            summary.TotalEligibleRows,
+            summary.CommittedRows,
+            summary.SkippedRows);
     }
 }

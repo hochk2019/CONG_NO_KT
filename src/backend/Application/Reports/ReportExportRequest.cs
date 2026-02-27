@@ -8,5 +8,6 @@ public sealed record ReportExportRequest(
     string? CustomerTaxCode,
     Guid? OwnerId,
     string? FilterText,
-    ReportExportKind Kind = ReportExportKind.Full
+    ReportExportKind Kind = ReportExportKind.Full,
+    ReportExportFormat Format = ReportExportFormat.Xlsx
 );

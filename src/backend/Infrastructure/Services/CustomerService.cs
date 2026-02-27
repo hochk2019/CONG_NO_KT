@@ -178,6 +178,152 @@ public sealed class CustomerService : ICustomerService
             customer.UpdatedAt);
     }
 
+    public async Task<Customer360Dto?> Get360Async(string taxCode, CancellationToken ct)
+    {
+        var key = taxCode.Trim();
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return null;
+        }
+
+        var customer = await _db.Customers
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.TaxCode == key, ct);
+
+        if (customer is null)
+        {
+            return null;
+        }
+
+        var owner = customer.AccountantOwnerId.HasValue
+            ? await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == customer.AccountantOwnerId.Value, ct)
+            : null;
+
+        var manager = customer.ManagerUserId.HasValue
+            ? await _db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == customer.ManagerUserId.Value, ct)
+            : null;
+
+        var ownerName = owner is null
+            ? null
+            : string.IsNullOrWhiteSpace(owner.FullName) ? owner.Username : owner.FullName;
+
+        var managerName = manager is null
+            ? null
+            : string.IsNullOrWhiteSpace(manager.FullName) ? manager.Username : manager.FullName;
+
+        var openInvoices = await _db.Invoices
+            .AsNoTracking()
+            .Where(i =>
+                i.DeletedAt == null &&
+                i.CustomerTaxCode == key &&
+                i.OutstandingAmount > 0m &&
+                i.Status != "VOID")
+            .Select(i => new
+            {
+                i.OutstandingAmount,
+                i.IssueDate
+            })
+            .ToListAsync(ct);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var paymentTermsDays = Math.Max(customer.PaymentTermsDays, 0);
+
+        var overdueAmount = 0m;
+        var totalOutstanding = 0m;
+        var maxDaysPastDue = 0;
+        var nextDueDate = (DateOnly?)null;
+        foreach (var invoice in openInvoices)
+        {
+            totalOutstanding += invoice.OutstandingAmount;
+
+            var dueDate = invoice.IssueDate.AddDays(paymentTermsDays);
+            if (dueDate >= today)
+            {
+                nextDueDate = nextDueDate is null || dueDate < nextDueDate.Value ? dueDate : nextDueDate;
+            }
+
+            var daysPastDue = today.DayNumber - dueDate.DayNumber;
+            if (daysPastDue <= 0)
+            {
+                continue;
+            }
+
+            overdueAmount += invoice.OutstandingAmount;
+            if (daysPastDue > maxDaysPastDue)
+            {
+                maxDaysPastDue = daysPastDue;
+            }
+        }
+
+        var overdueRatio = totalOutstanding <= 0m ? 0m : overdueAmount / totalOutstanding;
+
+        var latestSnapshot = await _db.RiskScoreSnapshots
+            .AsNoTracking()
+            .Where(s => s.CustomerTaxCode == key)
+            .OrderByDescending(s => s.AsOfDate)
+            .ThenByDescending(s => s.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+
+        var reminderTimeline = await _db.ReminderLogs
+            .AsNoTracking()
+            .Where(log => log.CustomerTaxCode == key)
+            .OrderByDescending(log => log.CreatedAt)
+            .Take(20)
+            .Select(log => new Customer360ReminderLogDto(
+                log.Id,
+                log.Channel,
+                log.Status,
+                log.RiskLevel,
+                log.EscalationLevel,
+                log.EscalationReason,
+                log.Message,
+                log.SentAt,
+                log.CreatedAt))
+            .ToListAsync(ct);
+
+        var responseStates = await _db.ReminderResponseStates
+            .AsNoTracking()
+            .Where(state => state.CustomerTaxCode == key)
+            .OrderBy(state => state.Channel)
+            .Select(state => new Customer360ResponseStateDto(
+                state.Channel,
+                state.ResponseStatus,
+                state.LatestResponseAt,
+                state.EscalationLocked,
+                state.AttemptCount,
+                state.CurrentEscalationLevel,
+                state.LastSentAt,
+                state.UpdatedAt))
+            .ToListAsync(ct);
+
+        return new Customer360Dto(
+            customer.TaxCode,
+            customer.Name,
+            customer.Status,
+            customer.CurrentBalance,
+            customer.PaymentTermsDays,
+            customer.CreditLimit,
+            ownerName,
+            managerName,
+            new Customer360SummaryDto(
+                totalOutstanding,
+                overdueAmount,
+                overdueRatio,
+                maxDaysPastDue,
+                openInvoices.Count,
+                nextDueDate),
+            new Customer360RiskSnapshotDto(
+                latestSnapshot?.Score,
+                latestSnapshot?.Signal,
+                latestSnapshot?.AsOfDate,
+                latestSnapshot?.ModelVersion,
+                latestSnapshot?.CreatedAt),
+            reminderTimeline,
+            responseStates);
+    }
+
     public async Task<PagedResult<CustomerInvoiceDto>> ListInvoicesAsync(
         string taxCode,
         CustomerRelationRequest request,

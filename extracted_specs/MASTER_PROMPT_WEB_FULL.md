@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # MASTER_PROMPT_WEB_FULL — Công nợ Golden (WEB + PostgreSQL + Windows LAN)
 
 Bạn là Senior Solution Architect + Tech Lead + Full-stack Engineer.  
@@ -31,3 +38,5 @@ Mỗi phase: ticket list + artefacts + tick acceptance + assumptions + risks.
 Nếu thiếu thông tin: hỏi tối đa 5 câu.
 
 Bắt đầu PHASE 1 theo `prompt_antigravity_phases.md`.
+
+

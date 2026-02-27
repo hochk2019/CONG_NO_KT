@@ -204,7 +204,7 @@ SELECT * FROM base
             ownerId = request.OwnerId
         };
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         var rows = await connection.QueryAsync<ReportAgingRow>(
@@ -232,7 +232,7 @@ SELECT * FROM base
         parameters.Add("offset", offset, DbType.Int32);
         parameters.Add("pageSize", pageSize, DbType.Int32);
 
-        await using var connection = _connectionFactory.Create();
+        await using var connection = _connectionFactory.CreateRead();
         await connection.OpenAsync(ct);
 
         using var multi = await connection.QueryMultipleAsync(

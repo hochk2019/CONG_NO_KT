@@ -82,12 +82,15 @@ agg_ratio AS (
 rules AS (
     SELECT
         COUNT(*) FILTER (WHERE is_active = true) AS active_count,
+        COALESCE(MAX(CASE WHEN level = 'VERY_HIGH' THEN match_mode END), 'ANY') AS vh_mode,
         COALESCE(MAX(CASE WHEN level = 'VERY_HIGH' THEN min_overdue_days END), 0) AS vh_days,
         COALESCE(MAX(CASE WHEN level = 'VERY_HIGH' THEN min_overdue_ratio END), 0) AS vh_ratio,
         COALESCE(MAX(CASE WHEN level = 'VERY_HIGH' THEN min_late_count END), 0) AS vh_late,
+        COALESCE(MAX(CASE WHEN level = 'HIGH' THEN match_mode END), 'ANY') AS h_mode,
         COALESCE(MAX(CASE WHEN level = 'HIGH' THEN min_overdue_days END), 0) AS h_days,
         COALESCE(MAX(CASE WHEN level = 'HIGH' THEN min_overdue_ratio END), 0) AS h_ratio,
         COALESCE(MAX(CASE WHEN level = 'HIGH' THEN min_late_count END), 0) AS h_late,
+        COALESCE(MAX(CASE WHEN level = 'MEDIUM' THEN match_mode END), 'ANY') AS m_mode,
         COALESCE(MAX(CASE WHEN level = 'MEDIUM' THEN min_overdue_days END), 0) AS m_days,
         COALESCE(MAX(CASE WHEN level = 'MEDIUM' THEN min_overdue_ratio END), 0) AS m_ratio,
         COALESCE(MAX(CASE WHEN level = 'MEDIUM' THEN min_late_count END), 0) AS m_late
@@ -106,16 +109,40 @@ classified AS (
            a.late_count,
            CASE
                WHEN r.active_count = 0 THEN 'LOW'
-               WHEN a.max_days_past_due >= r.vh_days OR a.overdue_ratio >= r.vh_ratio OR a.late_count >= r.vh_late THEN 'VERY_HIGH'
-               WHEN a.max_days_past_due >= r.h_days OR a.overdue_ratio >= r.h_ratio OR a.late_count >= r.h_late THEN 'HIGH'
-               WHEN a.max_days_past_due >= r.m_days OR a.overdue_ratio >= r.m_ratio OR a.late_count >= r.m_late THEN 'MEDIUM'
+               WHEN (
+                   (r.vh_mode = 'ALL' AND a.max_days_past_due >= r.vh_days AND a.overdue_ratio >= r.vh_ratio AND a.late_count >= r.vh_late)
+                   OR
+                   (r.vh_mode <> 'ALL' AND (a.max_days_past_due >= r.vh_days OR a.overdue_ratio >= r.vh_ratio OR a.late_count >= r.vh_late))
+               ) THEN 'VERY_HIGH'
+               WHEN (
+                   (r.h_mode = 'ALL' AND a.max_days_past_due >= r.h_days AND a.overdue_ratio >= r.h_ratio AND a.late_count >= r.h_late)
+                   OR
+                   (r.h_mode <> 'ALL' AND (a.max_days_past_due >= r.h_days OR a.overdue_ratio >= r.h_ratio OR a.late_count >= r.h_late))
+               ) THEN 'HIGH'
+               WHEN (
+                   (r.m_mode = 'ALL' AND a.max_days_past_due >= r.m_days AND a.overdue_ratio >= r.m_ratio AND a.late_count >= r.m_late)
+                   OR
+                   (r.m_mode <> 'ALL' AND (a.max_days_past_due >= r.m_days OR a.overdue_ratio >= r.m_ratio OR a.late_count >= r.m_late))
+               ) THEN 'MEDIUM'
                ELSE 'LOW'
            END AS risk_level,
            CASE
                WHEN r.active_count = 0 THEN 1
-               WHEN a.max_days_past_due >= r.vh_days OR a.overdue_ratio >= r.vh_ratio OR a.late_count >= r.vh_late THEN 4
-               WHEN a.max_days_past_due >= r.h_days OR a.overdue_ratio >= r.h_ratio OR a.late_count >= r.h_late THEN 3
-               WHEN a.max_days_past_due >= r.m_days OR a.overdue_ratio >= r.m_ratio OR a.late_count >= r.m_late THEN 2
+               WHEN (
+                   (r.vh_mode = 'ALL' AND a.max_days_past_due >= r.vh_days AND a.overdue_ratio >= r.vh_ratio AND a.late_count >= r.vh_late)
+                   OR
+                   (r.vh_mode <> 'ALL' AND (a.max_days_past_due >= r.vh_days OR a.overdue_ratio >= r.vh_ratio OR a.late_count >= r.vh_late))
+               ) THEN 4
+               WHEN (
+                   (r.h_mode = 'ALL' AND a.max_days_past_due >= r.h_days AND a.overdue_ratio >= r.h_ratio AND a.late_count >= r.h_late)
+                   OR
+                   (r.h_mode <> 'ALL' AND (a.max_days_past_due >= r.h_days OR a.overdue_ratio >= r.h_ratio OR a.late_count >= r.h_late))
+               ) THEN 3
+               WHEN (
+                   (r.m_mode = 'ALL' AND a.max_days_past_due >= r.m_days AND a.overdue_ratio >= r.m_ratio AND a.late_count >= r.m_late)
+                   OR
+                   (r.m_mode <> 'ALL' AND (a.max_days_past_due >= r.m_days OR a.overdue_ratio >= r.m_ratio OR a.late_count >= r.m_late))
+               ) THEN 2
                ELSE 1
            END AS risk_rank
     FROM agg_ratio a

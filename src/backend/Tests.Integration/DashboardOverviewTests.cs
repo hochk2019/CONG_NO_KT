@@ -95,7 +95,18 @@ public sealed class DashboardOverviewTests
         var february = result.Trend.Single(point => point.Period == "2025-02");
 
         Assert.Equal(0, january.ReceiptedTotal);
+        Assert.Equal(0, january.ExpectedTotal);
+        Assert.Equal(0, january.ActualTotal);
+        Assert.Equal(0, january.Variance);
         Assert.Equal(1_200_000, february.ReceiptedTotal);
+        Assert.Equal(0, february.ExpectedTotal);
+        Assert.Equal(1_200_000, february.ActualTotal);
+        Assert.Equal(1_200_000, february.Variance);
+
+        var marchForecast = Assert.Single(result.CashflowForecast.Where(point => point.Period == "2025-03"));
+        Assert.Equal(0, marchForecast.ExpectedTotal);
+        Assert.Equal(600_000, marchForecast.ActualTotal);
+        Assert.Equal(600_000, marchForecast.Variance);
     }
 
     [Fact]
@@ -144,6 +155,61 @@ public sealed class DashboardOverviewTests
         Assert.Equal(2, result.Trend.Count);
         Assert.Equal(2, result.Trend.Select(point => point.Period).Distinct().Count());
         Assert.Equal(900_000, result.Trend.Sum(point => point.ReceiptedTotal));
+        Assert.Equal(4, result.CashflowForecast.Count);
+        Assert.All(result.CashflowForecast, point => Assert.StartsWith("2025-W", point.Period));
+    }
+
+    [Fact]
+    public async Task Overview_ReturnsExecutiveSummaryAndMomDelta()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+        var previousInvoiceId = await SeedInvoiceAsync(
+            db,
+            seller.SellerTaxCode,
+            customer.TaxCode,
+            2_000_000,
+            new DateOnly(2025, 1, 15));
+
+        await SeedFullyAllocatedReceiptAsync(
+            db,
+            seller.SellerTaxCode,
+            customer.TaxCode,
+            previousInvoiceId,
+            2_000_000,
+            new DateOnly(2025, 2, 10),
+            new DateTimeOffset(2025, 2, 10, 0, 0, 0, TimeSpan.Zero));
+
+        await SeedInvoiceAsync(
+            db,
+            seller.SellerTaxCode,
+            customer.TaxCode,
+            1_000_000,
+            new DateOnly(2025, 2, 20));
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(new[] { "Admin" });
+        var service = new DashboardService(new NpgsqlConnectionFactory(_fixture.ConnectionString), currentUser);
+
+        var result = await service.GetOverviewAsync(
+            new DashboardOverviewRequest(
+                new DateOnly(2025, 2, 1),
+                new DateOnly(2025, 2, 28),
+                null,
+                5,
+                null,
+                null),
+            CancellationToken.None);
+
+        Assert.NotNull(result.ExecutiveSummary);
+        Assert.False(string.IsNullOrWhiteSpace(result.ExecutiveSummary.Message));
+        Assert.Equal(1_000_000, result.Kpis.TotalOutstanding);
+        Assert.Equal(1_000_000, result.KpiMoM.TotalOutstanding.Current);
+        Assert.Equal(2_000_000, result.KpiMoM.TotalOutstanding.Previous);
+        Assert.Equal(-1_000_000, result.KpiMoM.TotalOutstanding.Delta);
+        Assert.Equal(-50m, result.KpiMoM.TotalOutstanding.DeltaPercent);
     }
 
     private static async Task ResetAsync(ConGNoDbContext db)
@@ -220,15 +286,18 @@ public sealed class DashboardOverviewTests
         ConGNoDbContext db,
         string sellerTaxCode,
         string customerTaxCode,
-        decimal amount)
+        decimal amount,
+        DateOnly? issueDate = null)
     {
+        var resolvedIssueDate = issueDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
         var invoice = new Invoice
         {
             Id = Guid.NewGuid(),
             SellerTaxCode = sellerTaxCode,
             CustomerTaxCode = customerTaxCode,
             InvoiceNo = "INV-TEST",
-            IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            IssueDate = resolvedIssueDate,
             RevenueExclVat = amount,
             VatAmount = 0,
             TotalAmount = amount,
@@ -251,15 +320,18 @@ public sealed class DashboardOverviewTests
         string sellerTaxCode,
         string customerTaxCode,
         Guid invoiceId,
-        decimal amount)
+        decimal amount,
+        DateOnly? receiptDate = null,
+        DateTimeOffset? approvedAt = null)
     {
+        var resolvedReceiptDate = receiptDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var receiptId = Guid.NewGuid();
         db.Receipts.Add(new Receipt
         {
             Id = receiptId,
             SellerTaxCode = sellerTaxCode,
             CustomerTaxCode = customerTaxCode,
-            ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            ReceiptDate = resolvedReceiptDate,
             Amount = amount,
             Method = "BANK",
             AllocationMode = "MANUAL",
@@ -267,6 +339,7 @@ public sealed class DashboardOverviewTests
             AllocationPriority = "ISSUE_DATE",
             Status = "APPROVED",
             UnallocatedAmount = 0,
+            ApprovedAt = approvedAt,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0

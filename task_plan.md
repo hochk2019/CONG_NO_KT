@@ -1,179 +1,123 @@
-# Task Plan: Full system review + fixes (FE/BE/DB/UX)
-<!-- 
-  WHAT: This is your roadmap for the entire task. Think of it as your "working memory on disk."
-  WHY: After 50+ tool calls, your original goals can get forgotten. This file keeps them fresh.
-  WHEN: Create this FIRST, before starting any work. Update after each phase completes.
--->
+# Task Plan - 2026-02-23
 
 ## Goal
-<!-- 
-  WHAT: One clear sentence describing what you're trying to achieve.
-  WHY: This is your north star. Re-reading this keeps you focused on the end state.
-  EXAMPLE: "Create a Python CLI todo app with add, list, and delete functionality."
--->
-Hoàn tất review toàn hệ thống, xử lý lỗi ưu tiên (groupBy dashboard, UI notifications), rà BE services+migrations và UI chính, ghi lại issue/fix kèm test.
+Tự động xử lý các vấn đề chất lượng còn tồn tại sau lần rà soát gần nhất, cập nhật trạng thái công việc và đồng bộ tài liệu vận hành.
 
-## Current Phase
-<!-- 
-  WHAT: Which phase you're currently working on (e.g., "Phase 1", "Phase 3").
-  WHY: Quick reference for where you are in the task. Update this as you progress.
--->
-Phase 5
+## Tasks
+- [x] Áp dụng skill workflow (`planning-with-files`, `plan-writing`, `lint-and-validate`, `verification-before-completion`).
+- [x] Xác thực trạng thái tracker (`task.md` + beads) để tìm việc còn mở.
+- [x] Sửa lỗi chất lượng mã đang fail (`eslint` frontend).
+- [x] Chạy lại verification đầy đủ cho backend/frontend.
+- [x] Đóng bead mở còn lại nếu đã có đủ bằng chứng pass.
+- [x] Cập nhật tài liệu liên quan (`task.md`, `QA_REPORT.md`, `progress.md`, `task_plan.md`, `findings.md`).
 
-## Phases
-<!-- 
-  WHAT: Break your task into 3-7 logical phases. Each phase should be completable.
-  WHY: Breaking work into phases prevents overwhelm and makes progress visible.
-  WHEN: Update status after completing each phase: pending → in_progress → complete
--->
+## Done When
+- [x] Không còn bead `ready/in_progress` cho phạm vi đang xử lý.
+- [x] Frontend lint pass.
+- [x] Backend + frontend test/build pass.
+- [x] Tài liệu trạng thái phản ánh đúng kết quả mới nhất.
 
-### Phase 1: Requirements & Discovery
-<!-- 
-  WHAT: Understand what needs to be done and gather initial information.
-  WHY: Starting without understanding leads to wasted effort. This phase prevents that.
--->
-- [x] Understand user intent (làm cả 3: groupBy, BE review, UI review)
-- [x] Identify constraints (theo AGENTS.md: test, module <800 LOC, cập nhật task+beads)
-- [x] Document findings in findings.md
-- **Status:** complete
-<!-- 
-  STATUS VALUES:
-  - pending: Not started yet
-  - in_progress: Currently working on this
-  - complete: Finished this phase
--->
+---
 
-### Phase 2: Planning & Structure
-<!-- 
-  WHAT: Decide how you'll approach the problem and what structure you'll use.
-  WHY: Good planning prevents rework. Document decisions so you remember why you chose them.
--->
-- [x] Define approach + order (groupBy bugfix → BE review → UI review)
-- [x] Document decisions with rationale
-- **Status:** complete
+## Goal (Update 2026-02-23 - Scale Planning)
+Lập kế hoạch mở rộng hệ thống theo lộ trình có thể triển khai dần, có tracker bead + tài liệu cho người không chuyên theo dõi.
 
-### Phase 3: Implementation
-<!-- 
-  WHAT: Actually build/create/write the solution.
-  WHY: This is where the work happens. Break into smaller sub-tasks if needed.
--->
-- [x] Fix dashboard overdue groupBy
-- [x] Add integration test for overdue groups
-- [x] Review BE services + migrations, log issues/fixes
-- [x] Review UI pages (Dashboard/Customers/Imports/Receipts/Admin/Notifications) + fixes
-- [x] Run backend tests after groupBy change
-- **Status:** complete
+## Tasks (Update 2026-02-23 - Scale Planning)
+- [x] Tạo epic và task con cho scale readiness trong bead.
+- [x] Viết execution plan trong `docs/plans` với ngôn ngữ dễ hiểu.
+- [x] Đồng bộ `task.md` để phản ánh roadmap mới và các chặng triển khai kế tiếp.
 
-### Phase 4: Testing & Verification
-<!-- 
-  WHAT: Verify everything works and meets requirements.
-  WHY: Catching issues early saves time. Document test results in progress.md.
--->
-- [x] Verify requirements met
-- [x] Document test results in progress.md
-- [x] Fix remaining issues
-- **Status:** complete
+## Done When (Update 2026-02-23 - Scale Planning)
+- [x] Có epic `cng-oiw` và task `cng-oiw.1` -> `cng-oiw.5`.
+- [x] Có tài liệu kế hoạch: `docs/plans/2026-02-23-scale-readiness-roadmap.md`.
+- [x] Có Phase 67 trong `task.md` để theo dõi tiến độ triển khai.
 
-### Phase 5: Delivery
-<!-- 
-  WHAT: Final review and handoff to user.
-  WHY: Ensures nothing is forgotten and deliverables are complete.
--->
-- [x] Review outputs
-- [x] Update task.md + beads status
-- [ ] Deliver to user
-- **Status:** in_progress
+---
 
-## Key Questions
-<!-- 
-  WHAT: Important questions you need to answer during the task.
-  WHY: These guide your research and decision-making. Answer them as you go.
-  EXAMPLE: 
-    1. Should tasks persist between sessions? (Yes - need file storage)
-    2. What format for storing tasks? (JSON file)
--->
-1. Nên hỗ trợ groupBy nào cho Dashboard overdue? (owner/customer/seller) hay chỉ owner
-2. BE review sẽ ưu tiên khu vực nào (imports/receipts/risk/notifications) nếu phát hiện nhiều issue?
+## Goal (Update 2026-02-23 - Scale Execution)
+Triển khai toàn bộ roadmap scale readiness (`cng-oiw.1` -> `cng-oiw.5`) với code + verification + tài liệu vận hành.
 
-## Decisions Made
-<!-- 
-  WHAT: Technical and design decisions you've made, with the reasoning behind them.
-  WHY: You'll forget why you made choices. This table helps you remember and justify decisions.
-  WHEN: Update whenever you make a significant choice (technology, approach, structure).
-  EXAMPLE:
-    | Use JSON for storage | Simple, human-readable, built-in Python support |
--->
-| Decision | Rationale |
-|---|---|
-| Fix groupBy before reviews | Bug trực tiếp ảnh hưởng dashboard, ít scope |
-| BE review sau groupBy | tránh thay đổi song song chồng chéo |
+## Tasks (Update 2026-02-23 - Scale Execution)
+- [x] Hoàn tất baseline load test assets + SLO docs (`cng-oiw.1`).
+- [x] Triển khai Redis read-model cache + invalidation (`cng-oiw.2`).
+- [x] Triển khai queue/worker cho maintenance jobs + endpoint theo dõi (`cng-oiw.3`).
+- [x] Hoàn tất read-replica routing cho read-heavy services (`cng-oiw.4`).
+- [x] Hoàn tất tài liệu autoscaling + guardrails + rollback/game-day (`cng-oiw.5`).
+- [x] Chạy verification backend/frontend trước khi cập nhật tracker.
 
-## Errors Encountered
-<!-- 
-  WHAT: Every error you encounter, what attempt number it was, and how you resolved it.
-  WHY: Logging errors prevents repeating the same mistakes. This is critical for learning.
-  WHEN: Add immediately when an error occurs, even if you fix it quickly.
-  EXAMPLE:
-    | FileNotFoundError | 1 | Check if file exists, create empty list if not |
-    | JSONDecodeError | 2 | Handle empty file case explicitly |
--->
-| Error | Attempt | Resolution |
-|-------|---------|------------|
-| CustomerEntities.cs not found | 1 | Sẽ tìm đúng file entity theo thư mục `Infrastructure/Data/Entities` |
-| dotnet test timeout | 1 | Sẽ chạy lại với timeout dài hơn / scope Tests.Integration |
-| dotnet test failed (DLL locked by API process) | 2 | Thử chạy `dotnet test --no-build` hoặc dừng API đang chạy |
-| Get-Content không hỗ trợ -Skip | 1 | Dùng `Get-Content | Select-Object -Skip/-First` thay thế |
-| rg path src/backend/Tests không tồn tại | 1 | Dùng đúng thư mục Tests.Unit và Tests.Integration |
-| dotnet test bị khóa DLL (CongNoGolden.Api đang chạy) | 3 | Cần dừng API rồi chạy lại test |
-| web.run find invalid ref_id | 1 | Mở lại URL để lấy ref_id mới rồi tìm |
-| web.run find invalid ref_id (lần 2) | 2 | Sẽ mở URL lại và dùng ref_id mới từ open |
-| rg regex parse error (role="presentation".*onClick) | 1 | Escape regex đúng hoặc dùng Find-String đơn giản |
-| Add-Content thất bại do quoting | 1 | Dùng single quotes/escape khi value có ký tự đặc biệt |
-| Add-Content JSONL bead update lỗi escape | 1 | Dùng here-string để ghi JSONL |
+## Done When (Update 2026-02-23 - Scale Execution)
+- [x] Các bead con `cng-oiw.1` -> `cng-oiw.5` đều đóng.
+- [x] Epic `cng-oiw` đóng.
+- [x] Test/build/lint pass theo evidence mới nhất.
+- [x] `task.md`, `findings.md`, `progress.md`, runbook và docs hiệu năng được cập nhật.
 
-## Notes
-<!-- 
-  REMINDERS:
-  - Update phase status as you progress: pending → in_progress → complete
-  - Re-read this plan before major decisions (attention manipulation)
-  - Log ALL errors - they help avoid repetition
-  - Never repeat a failed action - mutate your approach instead
--->
-- Update phase status as you progress: pending → in_progress → complete
-- Re-read this plan before major decisions (attention manipulation)
-- Log ALL errors - they help avoid repetition
+---
 
-Update: queued TDD for ReceiptAutomationService N+1 fix and modal-backdrop refactor; gathered file locations.
+## Goal (Update 2026-02-24 - Opus V3 Validation Retry)
+Hoàn tất vòng xác thực lại `Opus_review_v3.md`, đồng bộ tracker và đóng bead `cng-rlx*` với evidence test mới.
 
-Update: searched for existing ReceiptAutomationService tests; none found in Tests.Integration.
+## Tasks (Update 2026-02-24 - Opus V3 Validation Retry)
+- [x] Xác thực lại claim V3 theo code hiện tại và ghi matrix `OUTDATED/PARTIAL/CONFIRMED GAP`.
+- [x] Chốt phạm vi thực thi: chỉ xử lý tài liệu/tracker cho các hạng mục đã có sẵn trong code.
+- [x] Chạy lại verification backend/frontend trong cùng phiên để làm evidence đóng bead.
+- [x] Cập nhật `task.md`, `task_plan.md`, `findings.md`, `progress.md`, `opus-review-v3-remediation.md`.
+- [x] Đóng bead `cng-rlx.1` -> `cng-rlx.5` và epic `cng-rlx`.
 
-Update: reviewed ReportsValidationModal for backdrop refactor; will add scrim button + tests.
+## Done When (Update 2026-02-24 - Opus V3 Validation Retry)
+- [x] `Opus_review_v3.md` có validation addendum với bằng chứng file-level.
+- [x] Verification suite pass (`dotnet build/test`, `npm lint/test/build`).
+- [x] Tracker và beads đồng bộ trạng thái hoàn tất.
 
-Update: inspected TestDatabaseFixture; no interceptor pattern found yet for query counting.
+---
 
-Update: located Entities folder; customer entity in MasterEntities.cs.
+## Goal (Update 2026-02-26 - cng-d3e.2)
+Hoàn tất bead `cng-d3e.2`: refactor reminder escalation theo response state và chốt bằng test targeted.
 
-Update: reviewed Customer/Receipt entities to seed required fields for new tests.
+## Tasks (Update 2026-02-26 - cng-d3e.2)
+- [x] Xử lý compile blocker `EnsureUser` trong `ReminderService.ResponseState.cs`.
+- [x] Chạy lại backend reminder integration tests.
+- [x] Chạy frontend test cho Risk Alerts tabs sau cập nhật payload settings.
+- [x] Đóng bead `cng-d3e.2` và đồng bộ tracker files.
 
-Update: reviewed Invoice/Advance entities and ReportAgingTests seeding helpers for reuse.
+## Done When (Update 2026-02-26 - cng-d3e.2)
+- [x] `dotnet test ... --filter "FullyQualifiedName~Reminder"` pass.
+- [x] `npm --prefix src/frontend run test -- risk-alerts-page-tabs` pass.
+- [x] `bd show cng-d3e.2` trạng thái `CLOSED`.
 
-Update: located ReceiptService open-item loader for reference; proceeding to batch logic in ReceiptAutomationService.
+---
 
-Update: inspected reports modal test; found receipts-modules.test.tsx for ReceiptCancelModal coverage.
+## Goal (Update 2026-02-26 - cng-d3e.3)
+Hoàn tất residual closure của Opus V3 cho reminder escalation: bổ sung test transition còn thiếu và đồng bộ lại review/tracker để đóng epic `cng-d3e`.
 
-Update: located modal-backdrop CSS; will split into scrim + modal layering.
+## Tasks (Update 2026-02-26 - cng-d3e.3)
+- [x] Bổ sung integration tests cho transition `DISPUTED` và `ESCALATION_LOCKED`.
+- [x] Chạy lại targeted backend tests cho `ReminderEscalationPolicyTests`.
+- [x] Chạy lại frontend targeted test `risk-alerts-page-tabs`.
+- [x] Cập nhật `Opus_review_v3.md` (claim reminder escalation từ `PARTIAL` -> đã có).
+- [x] Đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md`.
+- [x] Đóng beads `cng-d3e.1`, `cng-d3e.3` và epic `cng-d3e`.
 
-Update: reviewed receipt modals markup to insert modal-scrim and remove backdrop click handlers.
+## Done When (Update 2026-02-26 - cng-d3e.3)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReminderEscalationPolicyTests"` pass (`6/6`).
+- [x] `npm --prefix src/frontend run test -- risk-alerts-page-tabs` pass (`1/1`).
+- [x] `Opus_review_v3.md` phản ánh đúng trạng thái reminder escalation.
+- [x] `bd show cng-d3e` hiển thị epic và tasks con ở trạng thái `CLOSED`.
 
-Update: reviewed allocation/advanced receipt modals; preparing scrim insertion.
+---
 
-Update: reviewed ImportPreviewModal and NotificationToastHost for scrim/button refactor.
+## Goal (Update 2026-02-26 - cng-9y1)
+Hoàn tất UX validation cho Import dropzone theo bead `cng-9y1`: báo lỗi sớm cho file sai định dạng/kích thước, bổ sung test và đồng bộ tracker.
 
-Update: reviewed customer modals; will insert scrim buttons for edit/invoice/advance/receipt modals.
+## Tasks (Update 2026-02-26 - cng-9y1)
+- [x] Thêm trạng thái visual lỗi cho dropzone (`upload-dropzone--error`).
+- [x] Bổ sung test cho các case invalid:
+  - [x] reject non-`.xlsx` khi drag-drop.
+  - [x] reject file `.xlsx` vượt `20MB` qua input.
+  - [x] reject file `.xlsx` vượt `20MB` qua drag-drop.
+- [x] Chạy verification phù hợp cho frontend thay đổi.
+- [x] Cập nhật `task.md`, `progress.md`, `findings.md` và đóng bead `cng-9y1`.
 
-Update: verified modal-backdrop/scrim occurrences after refactor.
-
-Update: completed batch open-items loader + scrim refactor; tests passing for targeted suites.
-Update: confirmed e2e script is `npm run test:e2e` (Playwright) from frontend package.json.
-Update: e2e-testing-patterns skill not found under repo .codex; located skills in C:\Users\PC\.codex.
-Update: completed e2e run (Playwright) per user request.
+## Done When (Update 2026-02-26 - cng-9y1)
+- [x] `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` pass (`4/4`).
+- [x] `npm run lint` pass.
+- [x] `bd show cng-9y1` ở trạng thái `CLOSED`.

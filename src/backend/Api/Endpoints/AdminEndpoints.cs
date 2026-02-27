@@ -1,6 +1,10 @@
 using CongNoGolden.Api;
+using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Common;
+using CongNoGolden.Application.Customers;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Application.Maintenance;
+using CongNoGolden.Application.Risk;
 using CongNoGolden.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
@@ -94,7 +98,10 @@ public static class AdminEndpoints
         .WithTags("Admin")
         .RequireAuthorization("AdminManage");
 
-        app.MapGet("/admin/health", async (ConGNoDbContext db, CancellationToken ct) =>
+        app.MapGet("/admin/health", async (
+            ConGNoDbContext db,
+            ICustomerBalanceReconcileService balanceReconcileService,
+            CancellationToken ct) =>
         {
             var serverTimeUtc = DateTimeOffset.UtcNow;
 
@@ -137,9 +144,198 @@ public static class AdminEndpoints
                 new("notifications", notificationCount, notificationLastCreated, null)
             };
 
-            return Results.Ok(new AdminHealthSummary(serverTimeUtc, tables));
+            var drift = await balanceReconcileService.ReconcileAsync(
+                new CustomerBalanceReconcileRequest(
+                    ApplyChanges: false,
+                    MaxItems: 5,
+                    Tolerance: 0.01m),
+                ct);
+
+            return Results.Ok(new AdminHealthSummary(
+                serverTimeUtc,
+                tables,
+                new AdminBalanceDriftSummary(
+                    drift.CheckedCustomers,
+                    drift.DriftedCustomers,
+                    drift.TotalAbsoluteDrift,
+                    drift.MaxAbsoluteDrift,
+                    drift.TopDrifts
+                        .Select(item => new AdminBalanceDriftItem(
+                            item.TaxCode,
+                            item.CurrentBalance,
+                            item.ExpectedBalance,
+                            item.AbsoluteDrift))
+                        .ToList())));
         })
         .WithName("AdminHealth")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapPost("/admin/health/reconcile-balances", async (
+            AdminBalanceReconcileRequest? request,
+            ICustomerBalanceReconcileService balanceReconcileService,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var applyChanges = request?.ApplyChanges ?? false;
+            var maxItems = request?.MaxItems ?? 20;
+            var tolerance = request?.Tolerance ?? 0.01m;
+
+            var result = await balanceReconcileService.ReconcileAsync(
+                new CustomerBalanceReconcileRequest(
+                    ApplyChanges: applyChanges,
+                    MaxItems: maxItems,
+                    Tolerance: tolerance),
+                ct);
+
+            await auditService.LogAsync(
+                "CUSTOMER_BALANCE_RECONCILE",
+                "Customer",
+                "*",
+                new { applyChanges, maxItems, tolerance },
+                new
+                {
+                    result.CheckedCustomers,
+                    result.DriftedCustomers,
+                    result.UpdatedCustomers,
+                    result.TotalAbsoluteDrift,
+                    result.MaxAbsoluteDrift
+                },
+                ct);
+
+            return Results.Ok(new AdminBalanceReconcileResponse(
+                result.ExecutedAtUtc,
+                result.CheckedCustomers,
+                result.DriftedCustomers,
+                result.UpdatedCustomers,
+                result.TotalAbsoluteDrift,
+                result.MaxAbsoluteDrift,
+                result.TopDrifts
+                    .Select(item => new AdminBalanceDriftItem(
+                        item.TaxCode,
+                        item.CurrentBalance,
+                        item.ExpectedBalance,
+                        item.AbsoluteDrift))
+                    .ToList()));
+        })
+        .WithName("AdminBalanceReconcile")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapPost("/admin/health/run-retention", async (
+            IDataRetentionService dataRetentionService,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var result = await dataRetentionService.RunAsync(ct);
+
+            await auditService.LogAsync(
+                "DATA_RETENTION_RUN",
+                "Maintenance",
+                "data-retention",
+                null,
+                new
+                {
+                    result.ExecutedAtUtc,
+                    result.DeletedAuditLogs,
+                    result.DeletedImportStagingRows,
+                    result.DeletedRefreshTokens
+                },
+                ct);
+
+            return Results.Ok(new AdminDataRetentionRunResponse(
+                result.ExecutedAtUtc,
+                result.DeletedAuditLogs,
+                result.DeletedImportStagingRows,
+                result.DeletedRefreshTokens));
+        })
+        .WithName("AdminDataRetentionRun")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapGet("/admin/risk-ml/models", async (
+            string? modelKey,
+            int? take,
+            IRiskAiModelService riskAiModelService,
+            CancellationToken ct) =>
+        {
+            var items = await riskAiModelService.ListModelsAsync(modelKey, take ?? 20, ct);
+            return Results.Ok(items);
+        })
+        .WithName("AdminRiskMlModels")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapGet("/admin/risk-ml/runs", async (
+            string? modelKey,
+            int? take,
+            IRiskAiModelService riskAiModelService,
+            CancellationToken ct) =>
+        {
+            var items = await riskAiModelService.ListTrainingRunsAsync(modelKey, take ?? 20, ct);
+            return Results.Ok(items);
+        })
+        .WithName("AdminRiskMlRuns")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapGet("/admin/risk-ml/active", async (
+            string? modelKey,
+            IRiskAiModelService riskAiModelService,
+            CancellationToken ct) =>
+        {
+            var active = await riskAiModelService.GetActiveModelAsync(modelKey, ct);
+            return Results.Ok(new AdminRiskMlActiveResponse(active));
+        })
+        .WithName("AdminRiskMlActive")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapPost("/admin/risk-ml/train", async (
+            RiskMlTrainRequest? request,
+            IRiskAiModelService riskAiModelService,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var normalizedRequest = request ?? new RiskMlTrainRequest(
+                LookbackMonths: null,
+                HorizonDays: null,
+                AutoActivate: null,
+                MinSamples: null);
+            var result = await riskAiModelService.TrainAsync(normalizedRequest, ct);
+
+            await auditService.LogAsync(
+                "RISK_ML_TRAIN",
+                "RiskModel",
+                result.Model?.Id.ToString() ?? "N/A",
+                normalizedRequest,
+                result,
+                ct);
+
+            return Results.Ok(result);
+        })
+        .WithName("AdminRiskMlTrain")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminHealthView");
+
+        app.MapPost("/admin/risk-ml/models/{id:guid}/activate", async (
+            Guid id,
+            IRiskAiModelService riskAiModelService,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var activated = await riskAiModelService.ActivateModelAsync(id, ct);
+            await auditService.LogAsync(
+                "RISK_ML_ACTIVATE",
+                "RiskModel",
+                id.ToString(),
+                null,
+                activated,
+                ct);
+
+            return Results.Ok(activated);
+        })
+        .WithName("AdminRiskMlActivate")
         .WithTags("Admin")
         .RequireAuthorization("AdminHealthView");
 
@@ -156,9 +352,13 @@ public static class AdminEndpoints
             }
 
             var password = request.Password ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(password) || password.Trim().Length < 6)
+            try
             {
-                return ApiErrors.InvalidRequest("Password must be at least 6 characters.");
+                AuthSecurityPolicy.ValidatePasswordComplexity(password);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiErrors.InvalidRequest(ex.Message);
             }
 
             var exists = await db.Users
@@ -535,10 +735,47 @@ public sealed record AuditLogListItem(
 
 public sealed record AdminHealthSummary(
     DateTimeOffset ServerTimeUtc,
-    IReadOnlyList<AdminHealthTableSummary> Tables);
+    IReadOnlyList<AdminHealthTableSummary> Tables,
+    AdminBalanceDriftSummary BalanceDrift);
 
 public sealed record AdminHealthTableSummary(
     string Name,
     long Count,
     DateTimeOffset? LastCreatedAt,
     DateTimeOffset? LastUpdatedAt);
+
+public sealed record AdminBalanceDriftSummary(
+    int CheckedCustomers,
+    int DriftedCustomers,
+    decimal TotalAbsoluteDrift,
+    decimal MaxAbsoluteDrift,
+    IReadOnlyList<AdminBalanceDriftItem> TopDrifts);
+
+public sealed record AdminBalanceDriftItem(
+    string TaxCode,
+    decimal CurrentBalance,
+    decimal ExpectedBalance,
+    decimal AbsoluteDrift);
+
+public sealed record AdminBalanceReconcileRequest(
+    bool? ApplyChanges,
+    int? MaxItems,
+    decimal? Tolerance);
+
+public sealed record AdminBalanceReconcileResponse(
+    DateTimeOffset ExecutedAtUtc,
+    int CheckedCustomers,
+    int DriftedCustomers,
+    int UpdatedCustomers,
+    decimal TotalAbsoluteDrift,
+    decimal MaxAbsoluteDrift,
+    IReadOnlyList<AdminBalanceDriftItem> TopDrifts);
+
+public sealed record AdminDataRetentionRunResponse(
+    DateTimeOffset ExecutedAtUtc,
+    int DeletedAuditLogs,
+    int DeletedImportStagingRows,
+    int DeletedRefreshTokens);
+
+public sealed record AdminRiskMlActiveResponse(
+    RiskMlModelSummary? ActiveModel);

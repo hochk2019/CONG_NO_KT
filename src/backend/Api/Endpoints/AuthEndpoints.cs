@@ -1,4 +1,5 @@
 using CongNoGolden.Api;
+using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Auth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
@@ -19,10 +20,10 @@ public static class AuthEndpoints
             CancellationToken ct) =>
         {
             var logger = loggerFactory.CreateLogger("AuthEndpoints");
-            logger.LogInformation("Auth login attempt for {Username}", request.Username);
+                logger.LogInformation("Auth login attempt for {Username}", request.Username);
             try
             {
-                var session = await authService.LoginAsync(request, ct);
+                var session = await authService.LoginAsync(request, BuildRequestContext(httpContext), ct);
                 SetRefreshCookie(httpContext, jwtOptions.Value, session.RefreshToken, session.RefreshExpiresAt);
                 logger.LogInformation("Auth login success for {Username}", request.Username);
                 return Results.Ok(session.Access);
@@ -35,6 +36,7 @@ public static class AuthEndpoints
         })
         .WithName("AuthLogin")
         .WithTags("Auth")
+        .RequireRateLimiting(AuthSecurityPolicy.LoginRateLimiterPolicy)
         .AllowAnonymous();
 
         app.MapPost("/auth/refresh", async (
@@ -54,7 +56,7 @@ public static class AuthEndpoints
 
             try
             {
-                var session = await authService.RefreshAsync(refreshToken, ct);
+                var session = await authService.RefreshAsync(refreshToken, BuildRequestContext(httpContext), ct);
                 SetRefreshCookie(httpContext, jwtOptions.Value, session.RefreshToken, session.RefreshExpiresAt);
                 logger.LogInformation("Auth refresh success");
                 return Results.Ok(session.Access);
@@ -67,6 +69,7 @@ public static class AuthEndpoints
         })
         .WithName("AuthRefresh")
         .WithTags("Auth")
+        .RequireRateLimiting(AuthSecurityPolicy.RefreshRateLimiterPolicy)
         .AllowAnonymous();
 
         app.MapPost("/auth/logout", async (
@@ -94,12 +97,22 @@ public static class AuthEndpoints
         return app;
     }
 
+    private static AuthRequestContext BuildRequestContext(HttpContext httpContext)
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString();
+        var userAgent = httpContext.Request.Headers.UserAgent.ToString();
+        return new AuthRequestContext(ip, userAgent);
+    }
+
     private static void SetRefreshCookie(
         HttpContext httpContext,
         JwtOptions options,
         string refreshToken,
         DateTimeOffset expiresAt)
     {
+        var sameSite = AuthSecurityPolicy.ResolveSameSiteMode(options.RefreshCookieSameSite);
+        var cookiePath = AuthSecurityPolicy.ResolveCookiePath(options.RefreshCookiePath);
+
         httpContext.Response.Cookies.Append(
             options.RefreshCookieName,
             refreshToken,
@@ -107,19 +120,22 @@ public static class AuthEndpoints
             {
                 HttpOnly = true,
                 Secure = options.RefreshCookieSecure,
-                SameSite = SameSiteMode.Lax,
-                Path = "/",
+                SameSite = sameSite,
+                Path = cookiePath,
                 Expires = expiresAt.UtcDateTime
             });
     }
 
     private static void ClearRefreshCookie(HttpContext httpContext, JwtOptions options)
     {
+        var sameSite = AuthSecurityPolicy.ResolveSameSiteMode(options.RefreshCookieSameSite);
+        var cookiePath = AuthSecurityPolicy.ResolveCookiePath(options.RefreshCookiePath);
+
         httpContext.Response.Cookies.Delete(options.RefreshCookieName, new CookieOptions
         {
-            Path = "/",
+            Path = cookiePath,
             Secure = options.RefreshCookieSecure,
-            SameSite = SameSiteMode.Lax
+            SameSite = sameSite
         });
     }
 }

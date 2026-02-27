@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # DEPLOYMENT_GUIDE_WEB_WINDOWS — Công nợ Golden (WEB + PostgreSQL) trên Windows Server1
 
 Tài liệu này hướng dẫn triển khai hệ thống **không cần cài client**: người dùng mở trình duyệt trong LAN để dùng.
@@ -259,3 +266,5 @@ Rollback:
 - [ ] Period lock chặn đúng
 - [ ] Export Excel mở được đúng template
 - [ ] Audit log có before/after cho commit/approve/void
+
+

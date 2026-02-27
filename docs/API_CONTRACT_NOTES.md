@@ -44,3 +44,16 @@
 - POST /auth/login
 - POST /auth/refresh
 - POST /auth/logout
+- Access token returned in response body.
+- Refresh token stored in HttpOnly cookie; cookie path controlled by `JWT_REFRESH_COOKIE_PATH` (default `/` in Docker).
+
+## Admin maintenance (async jobs)
+- POST /admin/health/reconcile-balances/queue
+  - Body: `applyChanges?`, `maxItems?`, `tolerance?`
+  - Returns `202 Accepted` + job snapshot (`queued`)
+- POST /admin/health/run-retention/queue
+  - Returns `202 Accepted` + job snapshot (`queued`)
+- GET /admin/maintenance/jobs?take=20
+  - Returns latest jobs (`queued|running|succeeded|failed`)
+- GET /admin/maintenance/jobs/{jobId}
+  - Returns current job state

@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.PeriodLocks;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -25,7 +26,7 @@ public sealed class PeriodLockService : IPeriodLockService
 
     public async Task<PeriodLockDto> LockAsync(PeriodLockCreateRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         var periodType = NormalizeType(request.PeriodType);
         var periodKey = NormalizeKey(periodType, request.PeriodKey);
@@ -65,7 +66,7 @@ public sealed class PeriodLockService : IPeriodLockService
 
     public async Task<PeriodLockDto> UnlockAsync(Guid id, PeriodLockUnlockRequest request, CancellationToken ct)
     {
-        EnsureUser();
+        _currentUser.EnsureUser();
 
         if (string.IsNullOrWhiteSpace(request.Reason))
         {
@@ -103,14 +104,6 @@ public sealed class PeriodLockService : IPeriodLockService
             .ToListAsync(ct);
 
         return locks;
-    }
-
-    private void EnsureUser()
-    {
-        if (_currentUser.UserId is null)
-        {
-            throw new UnauthorizedAccessException("User context missing.");
-        }
     }
 
     private static string NormalizeType(string? periodType)

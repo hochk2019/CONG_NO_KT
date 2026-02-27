@@ -9,6 +9,7 @@ type PrefetchTier = 'primary' | 'deep'
 
 export const loadAdminAuditPage = () => import('./AdminAuditPage')
 export const loadAdminBackupPage = () => import('./AdminBackupPage')
+export const loadAdminErpIntegrationPage = () => import('./AdminErpIntegrationPage')
 export const loadAdminHealthPage = () => import('./AdminHealthPage')
 export const loadAdminPeriodLocksPage = () => import('./AdminPeriodLocksPage')
 export const loadAdminUsersPage = () => import('./AdminUsersPage')
@@ -40,6 +41,7 @@ const routeLoaders: Record<string, PageLoader> = {
   '/admin/period-locks': loadAdminPeriodLocksPage,
   '/admin/users': loadAdminUsersPage,
   '/admin/audit': loadAdminAuditPage,
+  '/admin/erp-integration': loadAdminErpIntegrationPage,
   '/admin/health': loadAdminHealthPage,
   '/admin/backup': loadAdminBackupPage,
   '/403': loadForbiddenPage,
@@ -81,8 +83,8 @@ const rolePreferredRoutes: Record<string, string[]> = {
 }
 
 const roleAdminRoutes: Record<string, string[]> = {
-  Admin: ['/admin/users', '/admin/period-locks', '/admin/audit', '/admin/health', '/admin/backup'],
-  Supervisor: ['/admin/period-locks', '/admin/audit', '/admin/health', '/admin/backup'],
+  Admin: ['/admin/users', '/admin/period-locks', '/admin/audit', '/admin/health', '/admin/erp-integration', '/admin/backup'],
+  Supervisor: ['/admin/period-locks', '/admin/audit', '/admin/health', '/admin/erp-integration', '/admin/backup'],
   Accountant: [],
   Viewer: [],
 }
@@ -107,6 +109,7 @@ const roleFlows: Record<string, string[]> = {
     '/admin/period-locks',
     '/admin/audit',
     '/admin/health',
+    '/admin/erp-integration',
     '/admin/backup',
   ],
   Supervisor: [
@@ -120,6 +123,7 @@ const roleFlows: Record<string, string[]> = {
     '/admin/period-locks',
     '/admin/audit',
     '/admin/health',
+    '/admin/erp-integration',
     '/admin/backup',
   ],
   Accountant: [
@@ -146,6 +150,7 @@ const routeAffinity: Record<string, string[]> = {
   '/admin/period-locks': ['/admin/audit', '/admin/users'],
   '/admin/audit': ['/admin/backup', '/admin/users'],
   '/admin/health': ['/admin/backup', '/admin/users'],
+  '/admin/erp-integration': ['/admin/health', '/admin/backup'],
   '/admin/backup': ['/admin/audit', '/admin/users'],
 }
 

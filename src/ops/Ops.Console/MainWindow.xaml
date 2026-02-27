@@ -279,6 +279,7 @@
                                         <TextBlock Name="TxtBackendStatus" Text="--" FontSize="14" FontWeight="Bold" />
                                     </Border>
                                     <TextBlock Name="TxtBackendVersion" Text="" Foreground="#94A3B8" />
+                                    <TextBlock Name="TxtRuntimeModeOverview" Text="" Foreground="#94A3B8" />
                                 </StackPanel>
                             </Border>
                             <Border Grid.Column="1" Style="{StaticResource Card}" Margin="0,0,8,0">
@@ -392,6 +393,13 @@
             <TabItem Header="Dịch vụ">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel Margin="16">
+                        <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Runtime mode:" FontWeight="SemiBold" Margin="0,0,8,0" />
+                                <TextBlock Name="TxtRuntimeModeServices" Text="--" />
+                            </StackPanel>
+                        </Border>
+
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -562,8 +570,32 @@
                                 </StackPanel>
                             </GroupBox>
 
-                            <GroupBox Grid.Column="1" Header="Log level" Margin="0,0,0,12">
+                            <GroupBox Grid.Column="1" Header="Runtime + Log level" Margin="0,0,0,12">
                                 <StackPanel>
+                                    <TextBlock Text="Runtime mode" />
+                                    <ComboBox Name="CmbRuntimeMode" Width="200" />
+
+                                    <StackPanel Name="PnlDockerRuntime">
+                                        <TextBlock Text="Docker compose file" />
+                                        <TextBox Name="TxtDockerComposeFile" />
+                                        <TextBlock Text="Docker working directory" />
+                                        <TextBox Name="TxtDockerWorkingDirectory" />
+                                        <TextBlock Text="Docker project name" />
+                                        <TextBox Name="TxtDockerProjectName" />
+                                        <TextBlock Text="Backend service name" />
+                                        <TextBox Name="TxtDockerBackendService" />
+                                        <TextBlock Text="Frontend service name" />
+                                        <TextBox Name="TxtDockerFrontendService" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Button Name="BtnSaveRuntimeConfig" Content="Lưu runtime" Style="{StaticResource SecondaryButton}" />
+                                        <TextBlock Name="TxtRuntimeConfigStatus" VerticalAlignment="Center" Margin="8,0,0,0" />
+                                    </StackPanel>
+
+                                    <Separator Margin="0,8,0,8" />
+
+                                    <TextBlock Text="Log level" />
                                     <ComboBox Name="CmbLogLevel" Width="200" />
                                     <StackPanel Orientation="Horizontal">
                                         <Button Name="BtnSaveLogLevel" Content="Cập nhật" />

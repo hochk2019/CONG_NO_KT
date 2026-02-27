@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import {
+  fetchRiskBootstrap,
   fetchRiskCustomers,
   fetchRiskOverview,
   fetchRiskRules,
@@ -32,7 +33,13 @@ import {
 import { fetchOwnerLookup, mapOwnerOptions, type LookupOption } from '../api/lookups'
 import { useAuth } from '../context/AuthStore'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
-import { formatDateTime, formatMoney } from '../utils/format'
+import {
+  channelLabels,
+  riskLabels,
+  toDateInput,
+  toPercentInput,
+} from './risk-alerts/riskAlertsUtils'
+import { buildReminderLogColumns, buildRiskCustomerColumns } from './risk-alerts/riskAlertColumns'
 import {
   RiskAlertsHeader,
   RiskCustomersSection,
@@ -46,6 +53,20 @@ import {
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 const RISK_LOG_STATUS_KEY = 'pref.risk.logs.status'
+const RISK_ACTIVE_TAB_KEY = 'pref.risk.activeTab'
+
+type RiskTabKey = 'overview' | 'config' | 'history'
+
+const riskTabs: { key: RiskTabKey; label: string }[] = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'config', label: 'Config' },
+  { key: 'history', label: 'History' },
+]
+
+const toRiskTabKey = (value: string | null): RiskTabKey => {
+  if (value === 'config' || value === 'history') return value
+  return 'overview'
+}
 
 const getStoredPageSize = () => {
   if (typeof window === 'undefined') return DEFAULT_PAGE_SIZE
@@ -73,62 +94,14 @@ const storeFilter = (key: string, value: string) => {
   }
 }
 
-const riskLabels: Record<string, string> = {
-  VERY_HIGH: 'Rất cao',
-  HIGH: 'Cao',
-  MEDIUM: 'Trung bình',
-  LOW: 'Thấp',
-}
-
-const channelLabels: Record<string, string> = {
-  IN_APP: 'In-app',
-  ZALO: 'Zalo',
-}
-
-const statusLabels: Record<string, string> = {
-  SENT: 'Đã gửi',
-  FAILED: 'Lỗi',
-  SKIPPED: 'Bỏ qua',
-}
-
-const toDateInput = (value: Date) => {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const resolveRiskPillClass = (level: string) => {
-  switch (level) {
-    case 'VERY_HIGH':
-      return 'risk-pill risk-pill--very-high'
-    case 'HIGH':
-      return 'risk-pill risk-pill--high'
-    case 'MEDIUM':
-      return 'risk-pill risk-pill--medium'
-    default:
-      return 'risk-pill risk-pill--low'
-  }
-}
-
-const formatRatio = (value: number) => {
-  if (!Number.isFinite(value)) {
-    return '-'
-  }
-  return `${Math.round(value * 1000) / 10}%`
-}
-
-const toPercentInput = (value: number) => {
-  if (!Number.isFinite(value)) {
-    return 0
-  }
-  return Math.round(value * 1000) / 10
-}
-
 export default function RiskAlertsPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
   const canManage = state.roles.includes('Admin') || state.roles.includes('Supervisor')
+  const [activeTab, setActiveTab] = useState<RiskTabKey>(() => {
+    if (typeof window === 'undefined') return 'overview'
+    return toRiskTabKey(window.localStorage.getItem(RISK_ACTIVE_TAB_KEY))
+  })
 
   const [overview, setOverview] = useState<RiskOverview | null>(null)
   const [overviewError, setOverviewError] = useState<string | null>(null)
@@ -179,6 +152,16 @@ export default function RiskAlertsPage() {
   const [zaloCode, setZaloCode] = useState<ZaloLinkCode | null>(null)
   const [zaloLoading, setZaloLoading] = useState(false)
   const [zaloError, setZaloError] = useState<string | null>(null)
+  const [bootstrapPending, setBootstrapPending] = useState(false)
+  const skipOverviewLoadRef = useRef(false)
+  const skipCustomersLoadRef = useRef(false)
+  const skipRulesLoadRef = useRef(false)
+  const skipSettingsLoadRef = useRef(false)
+  const skipLogsLoadRef = useRef(false)
+  const skipNotificationsLoadRef = useRef(false)
+  const skipZaloLoadRef = useRef(false)
+  const bootstrapInFlightRef = useRef(false)
+  const bootstrapTokenRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -202,7 +185,113 @@ export default function RiskAlertsPage() {
   }, [token])
 
   useEffect(() => {
+    if (!token) {
+      bootstrapInFlightRef.current = false
+      setBootstrapPending(false)
+      bootstrapTokenRef.current = null
+      return
+    }
+    if (bootstrapInFlightRef.current) return
+    if (bootstrapTokenRef.current === token) return
+
+    let isActive = true
+    bootstrapInFlightRef.current = true
+    setBootstrapPending(true)
+    setOverviewLoading(true)
+    setCustomersLoading(true)
+    setLogsLoading(true)
+    setNotificationsLoading(true)
+
+    const loadBootstrap = async () => {
+      try {
+        const result = await fetchRiskBootstrap({
+          token,
+          search: debouncedSearch || undefined,
+          ownerId: ownerId || undefined,
+          level: level || undefined,
+          asOfDate: asOfDate || undefined,
+          page,
+          pageSize,
+          sort: sort?.key,
+          order: sort?.direction,
+          logChannel: logChannel || undefined,
+          logStatus: logStatus || undefined,
+          logPage,
+          logPageSize,
+          notificationPage: 1,
+          notificationPageSize: 5,
+        })
+
+        if (!isActive) return
+
+        setOverview(result.overview)
+        setCustomers(result.customers.items)
+        setCustomersTotal(result.customers.total)
+        setRules(result.rules)
+        setRulesDraft(result.rules)
+        setSettings(result.settings)
+        setSettingsDraft(result.settings)
+        setLogs(result.logs.items)
+        setLogsTotal(result.logs.total)
+        setNotifications(result.notifications.items)
+        setZaloStatus(result.zaloStatus)
+        setOverviewError(null)
+        setCustomersError(null)
+        setRulesError(null)
+        setSettingsError(null)
+        setLogsError(null)
+        setZaloError(null)
+        skipOverviewLoadRef.current = true
+        skipCustomersLoadRef.current = true
+        skipRulesLoadRef.current = true
+        skipSettingsLoadRef.current = true
+        skipLogsLoadRef.current = true
+        skipNotificationsLoadRef.current = true
+        skipZaloLoadRef.current = true
+      } catch {
+        if (!isActive) return
+        // Let individual effects load data as fallback.
+      } finally {
+        if (isActive) {
+          bootstrapTokenRef.current = token
+          setOverviewLoading(false)
+          setCustomersLoading(false)
+          setLogsLoading(false)
+          setNotificationsLoading(false)
+          bootstrapInFlightRef.current = false
+          setBootstrapPending(false)
+        }
+      }
+    }
+
+    void loadBootstrap()
+    return () => {
+      isActive = false
+      bootstrapInFlightRef.current = false
+    }
+  }, [
+    token,
+    debouncedSearch,
+    ownerId,
+    level,
+    asOfDate,
+    page,
+    pageSize,
+    sort,
+    logChannel,
+    logStatus,
+    logPage,
+    logPageSize,
+  ])
+
+  useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipOverviewLoadRef.current) {
+      skipOverviewLoadRef.current = false
+      return
+    }
     let isActive = true
     setOverviewLoading(true)
     setOverviewError(null)
@@ -231,10 +320,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token, asOfDate])
+  }, [token, asOfDate, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipCustomersLoadRef.current) {
+      skipCustomersLoadRef.current = false
+      return
+    }
     let isActive = true
     setCustomersLoading(true)
     setCustomersError(null)
@@ -271,10 +366,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token, debouncedSearch, ownerId, level, asOfDate, page, pageSize, sort])
+  }, [token, debouncedSearch, ownerId, level, asOfDate, page, pageSize, sort, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipRulesLoadRef.current) {
+      skipRulesLoadRef.current = false
+      return
+    }
     let isActive = true
 
     const loadRules = async () => {
@@ -297,10 +398,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token])
+  }, [token, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipSettingsLoadRef.current) {
+      skipSettingsLoadRef.current = false
+      return
+    }
     let isActive = true
 
     const loadSettings = async () => {
@@ -323,10 +430,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token])
+  }, [token, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipLogsLoadRef.current) {
+      skipLogsLoadRef.current = false
+      return
+    }
     let isActive = true
     setLogsLoading(true)
     setLogsError(null)
@@ -359,10 +472,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token, logChannel, logStatus, logPage, logPageSize])
+  }, [token, logChannel, logStatus, logPage, logPageSize, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipNotificationsLoadRef.current) {
+      skipNotificationsLoadRef.current = false
+      return
+    }
     let isActive = true
     setNotificationsLoading(true)
 
@@ -388,10 +507,16 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token])
+  }, [token, bootstrapPending])
 
   useEffect(() => {
     if (!token) return
+    if (bootstrapPending) return
+    if (bootstrapTokenRef.current !== token) return
+    if (skipZaloLoadRef.current) {
+      skipZaloLoadRef.current = false
+      return
+    }
     let isActive = true
     setZaloError(null)
 
@@ -410,7 +535,7 @@ export default function RiskAlertsPage() {
     return () => {
       isActive = false
     }
-  }, [token])
+  }, [token, bootstrapPending])
 
   const summaryCards = useMemo(() => {
     const items = overview?.items ?? []
@@ -429,6 +554,9 @@ export default function RiskAlertsPage() {
         if (idx !== index) return rule
         if (key === 'isActive') {
           return { ...rule, isActive: Boolean(value) }
+        }
+        if (key === 'matchMode') {
+          return { ...rule, matchMode: String(value).toUpperCase() === 'ALL' ? 'ALL' : 'ANY' }
         }
         const numericValue = Number(value)
         if (key === 'minOverdueRatio') {
@@ -479,6 +607,10 @@ export default function RiskAlertsPage() {
         enabled: settingsDraft.enabled,
         frequencyDays: settingsDraft.frequencyDays,
         upcomingDueDays: settingsDraft.upcomingDueDays,
+        escalationMaxAttempts: settingsDraft.escalationMaxAttempts,
+        escalationCooldownHours: settingsDraft.escalationCooldownHours,
+        escalateToSupervisorAfter: settingsDraft.escalateToSupervisorAfter,
+        escalateToAdminAfter: settingsDraft.escalateToAdminAfter,
         channels: settingsDraft.channels,
         targetLevels: settingsDraft.targetLevels,
       })
@@ -559,114 +691,13 @@ export default function RiskAlertsPage() {
     }
   }
 
-  const customerColumns = [
-    {
-      key: 'customer',
-      label: 'Khách hàng',
-      render: (row: RiskCustomerItem) => (
-        <div>
-          <div className="list-title">{row.customerName}</div>
-          <div className="muted">{row.customerTaxCode}</div>
-        </div>
-      ),
-    },
-    {
-      key: 'owner',
-      label: 'Phụ trách',
-      render: (row: RiskCustomerItem) => row.ownerName ?? 'Chưa phân công',
-    },
-    {
-      key: 'riskLevel',
-      label: 'Nhóm rủi ro',
-      sortable: true,
-      render: (row: RiskCustomerItem) => (
-        <span className={resolveRiskPillClass(row.riskLevel)}>
-          {riskLabels[row.riskLevel] ?? row.riskLevel}
-        </span>
-      ),
-    },
-    {
-      key: 'maxDaysPastDue',
-      label: 'Ngày quá hạn',
-      sortable: true,
-      align: 'center' as const,
-      render: (row: RiskCustomerItem) => `${row.maxDaysPastDue} ngày`,
-    },
-    {
-      key: 'overdueRatio',
-      label: 'Tỷ lệ quá hạn',
-      sortable: true,
-      align: 'center' as const,
-      render: (row: RiskCustomerItem) => formatRatio(row.overdueRatio),
-    },
-    {
-      key: 'overdueAmount',
-      label: 'Giá trị quá hạn',
-      sortable: true,
-      align: 'center' as const,
-      render: (row: RiskCustomerItem) => formatMoney(row.overdueAmount),
-    },
-    {
-      key: 'totalOutstanding',
-      label: 'Tổng dư nợ',
-      sortable: true,
-      align: 'center' as const,
-      render: (row: RiskCustomerItem) => formatMoney(row.totalOutstanding),
-    },
-    {
-      key: 'lateCount',
-      label: 'Số lần trễ',
-      sortable: true,
-      align: 'center' as const,
-      render: (row: RiskCustomerItem) => row.lateCount,
-    },
-  ]
+  const customerColumns = buildRiskCustomerColumns()
+  const logColumns = buildReminderLogColumns()
 
-  const logColumns = [
-    {
-      key: 'customer',
-      label: 'Khách hàng',
-      render: (row: ReminderLogItem) => (
-        <div>
-          <div className="list-title">{row.customerName}</div>
-          <div className="muted">{row.customerTaxCode}</div>
-        </div>
-      ),
-    },
-    {
-      key: 'owner',
-      label: 'Phụ trách',
-      render: (row: ReminderLogItem) => row.ownerName ?? 'Chưa phân công',
-    },
-    {
-      key: 'riskLevel',
-      label: 'Nhóm',
-      render: (row: ReminderLogItem) => (
-        <span className={resolveRiskPillClass(row.riskLevel)}>
-          {riskLabels[row.riskLevel] ?? row.riskLevel}
-        </span>
-      ),
-    },
-    {
-      key: 'channel',
-      label: 'Kênh',
-      render: (row: ReminderLogItem) => channelLabels[row.channel] ?? row.channel,
-    },
-    {
-      key: 'status',
-      label: 'Trạng thái',
-      render: (row: ReminderLogItem) => (
-        <span className={`pill ${row.status === 'FAILED' ? 'pill-error' : row.status === 'SENT' ? 'pill-ok' : 'pill-info'}`}>
-          {statusLabels[row.status] ?? row.status}
-        </span>
-      ),
-    },
-    {
-      key: 'sentAt',
-      label: 'Thời gian',
-      render: (row: ReminderLogItem) => formatDateTime(row.sentAt ?? row.createdAt),
-    },
-  ]
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(RISK_ACTIVE_TAB_KEY, activeTab)
+  }, [activeTab])
 
   return (
     <div className="page-stack">
@@ -674,110 +705,145 @@ export default function RiskAlertsPage() {
         onSetToday={() => setAsOfDate(toDateInput(new Date()))}
         onClearDate={() => setAsOfDate('')}
       />
-      <RiskOverviewSection
-        asOfDate={asOfDate}
-        onAsOfDateChange={setAsOfDate}
-        overviewLoading={overviewLoading}
-        overviewError={overviewError}
-        summaryCards={summaryCards}
-        overview={overview}
-      />
-      <RiskCustomersSection
-        search={search}
-        ownerId={ownerId}
-        level={level}
-        ownerOptions={ownerOptions}
-        onSearchChange={(value) => {
-          setSearch(value)
-          setPage(1)
-        }}
-        onOwnerChange={(value) => {
-          setOwnerId(value)
-          setPage(1)
-        }}
-        onLevelChange={(value) => {
-          setLevel(value)
-          setPage(1)
-        }}
-        customersLoading={customersLoading}
-        customersError={customersError}
-        customers={customers}
-        customersTotal={customersTotal}
-        customerColumns={customerColumns}
-        sort={sort}
-        onSort={(next) => {
-          setSort(next)
-          setPage(1)
-        }}
-        page={page}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => {
-          storePageSize(size)
-          setPageSize(size)
-          setPage(1)
-        }}
-      />
-      <RiskRulesSection
-        rulesDraft={rulesDraft}
-        rulesError={rulesError}
-        isRulesDirty={isRulesDirty}
-        rulesSaving={rulesSaving}
-        canManage={canManage}
-        riskLabels={riskLabels}
-        toPercentInput={toPercentInput}
-        onRuleChange={handleRuleChange}
-        onSaveRules={handleSaveRules}
-      />
-      <div className="grid-split">
-        <RiskSettingsSection
-          settingsDraft={settingsDraft}
-          settings={settings}
-          settingsError={settingsError}
-          settingsSaving={settingsSaving}
-          runResult={runResult}
-          canManage={canManage}
-          riskLabels={riskLabels}
-          channelLabels={channelLabels}
-          onToggleSettingList={toggleSettingList}
-          onSettingsDraftChange={(next) => setSettingsDraft(next)}
-          onSaveSettings={handleSaveSettings}
-          onRunReminders={handleRunReminders}
-          zaloStatus={zaloStatus}
-          zaloCode={zaloCode}
-          zaloLoading={zaloLoading}
-          zaloError={zaloError}
-          onRequestZaloLink={handleRequestZaloLink}
-          onReloadZaloStatus={reloadZaloStatus}
-        />
-        <RiskLogsSection
-          logChannel={logChannel}
-          logStatus={logStatus}
-          onLogChannelChange={setLogChannel}
-          onLogStatusChange={(value) => {
-            setLogStatus(value)
-            storeFilter(RISK_LOG_STATUS_KEY, value)
-          }}
-          logsLoading={logsLoading}
-          logsError={logsError}
-          logs={logs}
-          logColumns={logColumns}
-          logPage={logPage}
-          logPageSize={logPageSize}
-          logsTotal={logsTotal}
-          onLogPageChange={setLogPage}
-          onLogPageSizeChange={(size) => {
-            storePageSize(size)
-            setLogPageSize(size)
-            setLogPage(1)
-          }}
-        />
+      <div className="tab-row" role="tablist" aria-label="Risk page tabs">
+        {riskTabs.map((tab) => (
+          <button
+            key={tab.key}
+            id={`risk-tab-${tab.key}`}
+            type="button"
+            role="tab"
+            className={`tab ${activeTab === tab.key ? 'tab--active' : ''}`}
+            aria-selected={activeTab === tab.key}
+            aria-controls={`risk-panel-${tab.key}`}
+            onClick={() => setActiveTab(tab.key)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
-      <RiskNotificationsSection
-        notificationsLoading={notificationsLoading}
-        notifications={notifications}
-        onMarkRead={handleMarkRead}
-      />
+
+      {activeTab === 'overview' && (
+        <section id="risk-panel-overview" role="tabpanel" aria-labelledby="risk-tab-overview">
+          <div className="page-stack">
+            <RiskOverviewSection
+              asOfDate={asOfDate}
+              onAsOfDateChange={setAsOfDate}
+              overviewLoading={overviewLoading}
+              overviewError={overviewError}
+              summaryCards={summaryCards}
+              overview={overview}
+            />
+            <RiskCustomersSection
+              search={search}
+              ownerId={ownerId}
+              level={level}
+              ownerOptions={ownerOptions}
+              onSearchChange={(value) => {
+                setSearch(value)
+                setPage(1)
+              }}
+              onOwnerChange={(value) => {
+                setOwnerId(value)
+                setPage(1)
+              }}
+              onLevelChange={(value) => {
+                setLevel(value)
+                setPage(1)
+              }}
+              customersLoading={customersLoading}
+              customersError={customersError}
+              customers={customers}
+              customersTotal={customersTotal}
+              customerColumns={customerColumns}
+              sort={sort}
+              onSort={(next) => {
+                setSort(next)
+                setPage(1)
+              }}
+              page={page}
+              pageSize={pageSize}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                storePageSize(size)
+                setPageSize(size)
+                setPage(1)
+              }}
+            />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'config' && (
+        <section id="risk-panel-config" role="tabpanel" aria-labelledby="risk-tab-config">
+          <div className="page-stack">
+            <RiskRulesSection
+              rulesDraft={rulesDraft}
+              rulesError={rulesError}
+              isRulesDirty={isRulesDirty}
+              rulesSaving={rulesSaving}
+              canManage={canManage}
+              riskLabels={riskLabels}
+              toPercentInput={toPercentInput}
+              onRuleChange={handleRuleChange}
+              onSaveRules={handleSaveRules}
+            />
+            <RiskSettingsSection
+              settingsDraft={settingsDraft}
+              settings={settings}
+              settingsError={settingsError}
+              settingsSaving={settingsSaving}
+              runResult={runResult}
+              canManage={canManage}
+              riskLabels={riskLabels}
+              channelLabels={channelLabels}
+              onToggleSettingList={toggleSettingList}
+              onSettingsDraftChange={(next) => setSettingsDraft(next)}
+              onSaveSettings={handleSaveSettings}
+              onRunReminders={handleRunReminders}
+              zaloStatus={zaloStatus}
+              zaloCode={zaloCode}
+              zaloLoading={zaloLoading}
+              zaloError={zaloError}
+              onRequestZaloLink={handleRequestZaloLink}
+              onReloadZaloStatus={reloadZaloStatus}
+            />
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'history' && (
+        <section id="risk-panel-history" role="tabpanel" aria-labelledby="risk-tab-history">
+          <div className="page-stack">
+            <RiskLogsSection
+              logChannel={logChannel}
+              logStatus={logStatus}
+              onLogChannelChange={setLogChannel}
+              onLogStatusChange={(value) => {
+                setLogStatus(value)
+                storeFilter(RISK_LOG_STATUS_KEY, value)
+              }}
+              logsLoading={logsLoading}
+              logsError={logsError}
+              logs={logs}
+              logColumns={logColumns}
+              logPage={logPage}
+              logPageSize={logPageSize}
+              logsTotal={logsTotal}
+              onLogPageChange={setLogPage}
+              onLogPageSizeChange={(size) => {
+                storePageSize(size)
+                setLogPageSize(size)
+                setLogPage(1)
+              }}
+            />
+            <RiskNotificationsSection
+              notificationsLoading={notificationsLoading}
+              notifications={notifications}
+              onMarkRead={handleMarkRead}
+            />
+          </div>
+        </section>
+      )}
     </div>
   )
 }

@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # ACCEPTANCE_CRITERIA_BY_PHASE — Công nợ Golden (PostgreSQL + Windows + LAN)
 
 Tài liệu này là **checklist nghiệm thu theo phase** để đảm bảo agent/dev làm đúng nghiệp vụ và đúng kiến trúc.  
@@ -402,3 +409,5 @@ Chỉ “Go-live” khi:
 - [ ] Deploy cập nhật **1 nơi trên Server1**; client không cần cài/update.
 - [ ] Mọi bảng list dùng **server-side pagination/filter/sort**.
 - [ ] Có **PWA minimal** (manifest + icon + install/pin) để dùng như app.
+
+

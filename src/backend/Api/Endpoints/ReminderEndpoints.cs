@@ -38,13 +38,53 @@ public static class ReminderEndpoints
         .RequireAuthorization("RiskManage");
 
         app.MapPost("/reminders/run", async (
+            ReminderRunRequest? request,
             IReminderService service,
             CancellationToken ct) =>
         {
-            var result = await service.RunAsync(true, ct);
+            var result = await service.RunAsync(request ?? new ReminderRunRequest(), ct);
             return Results.Ok(result);
         })
         .WithName("ReminderRun")
+        .WithTags("Reminders")
+        .RequireAuthorization("RiskManage");
+
+        app.MapGet("/reminders/response-state", async (
+            string customerTaxCode,
+            string channel,
+            IReminderService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.GetResponseStateAsync(customerTaxCode, channel, ct);
+                return result is null ? Results.NotFound() : Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReminderResponseStateGet")
+        .WithTags("Reminders")
+        .RequireAuthorization("RiskView");
+
+        app.MapPut("/reminders/response-state", async (
+            ReminderResponseStateUpsertRequest request,
+            IReminderService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UpsertResponseStateAsync(request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReminderResponseStateUpdate")
         .WithTags("Reminders")
         .RequireAuthorization("RiskManage");
 

@@ -10,4 +10,8 @@ public sealed record RiskCustomerItem(
     decimal OverdueRatio,
     int MaxDaysPastDue,
     int LateCount,
-    string RiskLevel);
+    string RiskLevel,
+    decimal PredictedOverdueProbability,
+    string AiSignal,
+    IReadOnlyList<RiskAiFactorItem> AiFactors,
+    string AiRecommendation);

@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # Prompt cho Agent Antigravity — Công nợ Golden (WEB + PostgreSQL + Windows LAN)
 
 Bạn là Senior Solution Architect + Tech Lead + Full-stack Engineer.  
@@ -48,3 +55,5 @@ Dự án chạy LAN nội bộ: **Client = WEB (không cài trên từng máy)**
 - PERFORMANCE_NOTES.md
 - QA_REPORT.md (tick checklist)
 - Deploy theo DEPLOYMENT_GUIDE_WEB_WINDOWS.md
+
+

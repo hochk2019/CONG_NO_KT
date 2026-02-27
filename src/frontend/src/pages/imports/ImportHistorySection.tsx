@@ -3,6 +3,7 @@ import { ApiError } from '../../api/client'
 import { cancelImport, listImportBatches, rollbackImport } from '../../api/imports'
 import DataTable from '../../components/DataTable'
 import { formatDate, formatDateTime } from '../../utils/format'
+import { formatRollbackErrorMessage } from './rollbackErrorMessages'
 
 type ImportHistorySectionProps = {
   token: string
@@ -151,11 +152,7 @@ export default function ImportHistorySection({
         setPage(1)
         setReloadTick((value) => value + 1)
       } catch (err) {
-        if (err instanceof ApiError) {
-          setError(err.message)
-        } else {
-          setError('Hoàn tác thất bại.')
-        }
+        setError(formatRollbackErrorMessage(err))
       } finally {
         setLoading(false)
       }

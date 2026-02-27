@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
@@ -83,7 +84,6 @@ describe('reports modules', () => {
         }}
         kpiOrder={['totalOutstanding', 'onTimeCustomers']}
         dueSoonDays={7}
-        savingPreferences={false}
         onMoveKpi={vi.fn()}
         onResetKpiOrder={vi.fn()}
         onDueSoonDaysChange={vi.fn()}
@@ -257,6 +257,7 @@ describe('reports modules', () => {
     expect(screen.getByText('Sao kê khách hàng')).toBeInTheDocument()
     expect(screen.getByText('Báo cáo tuổi nợ')).toBeInTheDocument()
     expect(screen.getByText('Phát sinh HĐ')).toBeInTheDocument()
+    expect(screen.getByText('KH-1')).toHaveAttribute('data-label', 'Nhóm')
   })
 
   it('shows no debt message when aging table is empty', () => {
@@ -291,5 +292,23 @@ describe('reports modules', () => {
     )
 
     expect(screen.getByText('Tổng quan công nợ & báo cáo chi tiết')).toBeInTheDocument()
+    expect(screen.getByText('CongNo Golden')).toBeInTheDocument()
+  })
+
+  it('triggers browser print from reports header', async () => {
+    const printSpy = vi.spyOn(window, 'print').mockImplementation(() => undefined)
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={baseAuth}>
+          <ReportsPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(screen.getByRole('button', { name: 'In báo cáo' }))
+    expect(printSpy).toHaveBeenCalledTimes(1)
+
+    printSpy.mockRestore()
   })
 })

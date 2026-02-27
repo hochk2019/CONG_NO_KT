@@ -47,6 +47,9 @@ public sealed class AgentClient
     public Task<StatusResponse?> GetStatusAsync(CancellationToken ct)
         => _http.GetFromJsonAsync<StatusResponse>("status", ct);
 
+    public Task<RuntimeInfoDto?> GetRuntimeInfoAsync(CancellationToken ct)
+        => _http.GetFromJsonAsync<RuntimeInfoDto>("runtime/info", ct);
+
     public Task<SystemMetricsDto?> GetSystemMetricsAsync(CancellationToken ct)
         => _http.GetFromJsonAsync<SystemMetricsDto>("metrics/system", ct);
 

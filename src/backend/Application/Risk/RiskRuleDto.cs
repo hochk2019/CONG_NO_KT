@@ -5,4 +5,5 @@ public sealed record RiskRuleDto(
     int MinOverdueDays,
     decimal MinOverdueRatio,
     int MinLateCount,
-    bool IsActive);
+    bool IsActive,
+    string MatchMode);

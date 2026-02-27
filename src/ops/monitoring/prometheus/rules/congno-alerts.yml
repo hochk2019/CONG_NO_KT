@@ -1,0 +1,22 @@
+groups:
+  - name: congno-api-health
+    rules:
+      - alert: CongNoApiDown
+        expr: up{job="congno-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: congno-api
+        annotations:
+          summary: "CongNo API is down"
+          description: "Prometheus cannot scrape congno-api for more than 2 minutes."
+
+      - alert: CongNoReminderFailuresDetected
+        expr: increase(congno_reminder_outcome_total{status="failed"}[15m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          service: congno-api
+        annotations:
+          summary: "Reminder failures detected"
+          description: "At least one reminder delivery failed in the last 15 minutes."

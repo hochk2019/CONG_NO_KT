@@ -1,3 +1,10 @@
+> [!IMPORTANT]
+> **HISTORICAL DOCUMENT**
+> Tài liệu này là snapshot/lịch sử để tham khảo, **không phải nguồn vận hành chuẩn hiện tại**.
+> Nguồn chuẩn hiện tại:
+> - Deploy: DEPLOYMENT_GUIDE_DOCKER.md
+> - Runbook: RUNBOOK.md
+> - Ops runtime: docs/OPS_ADMIN_CONSOLE.md
 # APP THEO DÕI CÔNG NỢ GOLDEN — SPEC TRIỂN KHAI (WEB + LAN + PostgreSQL + Windows)
 
 > **Bản chốt cuối** cho Agent lập trình.  
@@ -160,3 +167,5 @@ Rollback batch (admin)
 - Clean Architecture: Domain / Application / Infrastructure / API / Web
 - Không nhồi code: file ≤ 300 LOC; function ≤ 50 LOC
 - Controller mỏng; business logic nằm trong usecase/service; tách module rõ
+
+

@@ -58,9 +58,9 @@ const RISK_ACTIVE_TAB_KEY = 'pref.risk.activeTab'
 type RiskTabKey = 'overview' | 'config' | 'history'
 
 const riskTabs: { key: RiskTabKey; label: string }[] = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'config', label: 'Config' },
-  { key: 'history', label: 'History' },
+  { key: 'overview', label: 'Tổng quan' },
+  { key: 'config', label: 'Cấu hình' },
+  { key: 'history', label: 'Lịch sử' },
 ]
 
 const toRiskTabKey = (value: string | null): RiskTabKey => {

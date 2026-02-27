@@ -162,7 +162,7 @@ describe('RiskAlertsPage tabs', () => {
     window.localStorage.clear()
   })
 
-  it('switches between Overview / Config / History tabs', async () => {
+  it('switches between Tổng quan / Cấu hình / Lịch sử tabs', async () => {
     const authValue = buildAuthContext()
 
     render(
@@ -173,9 +173,9 @@ describe('RiskAlertsPage tabs', () => {
       </MemoryRouter>,
     )
 
-    const overviewTab = await screen.findByRole('tab', { name: 'Overview' })
-    const configTab = screen.getByRole('tab', { name: 'Config' })
-    const historyTab = screen.getByRole('tab', { name: 'History' })
+    const overviewTab = await screen.findByRole('tab', { name: 'Tổng quan' })
+    const configTab = screen.getByRole('tab', { name: 'Cấu hình' })
+    const historyTab = screen.getByRole('tab', { name: 'Lịch sử' })
 
     expect(overviewTab).toHaveAttribute('aria-selected', 'true')
     expect(screen.getByText('Tổng quan rủi ro')).toBeInTheDocument()

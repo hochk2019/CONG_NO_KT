@@ -568,6 +568,15 @@ export default function DashboardPage() {
     return Math.max(...cashflowPoints.flatMap((point) => [point.expected, point.actual]))
   }, [cashflowPoints])
 
+  const hasMeaningfulCashflow = useMemo(
+    () =>
+      cashflowPoints.some(
+        (point) =>
+          Math.abs(point.expected) > 0 || Math.abs(point.actual) > 0 || Math.abs(point.variance) > 0,
+      ),
+    [cashflowPoints],
+  )
+
   const cashflowLabelStep = useMemo(() => {
     if (cashflowPoints.length > 16) return 3
     if (cashflowPoints.length > 8) return 2
@@ -801,6 +810,8 @@ export default function DashboardPage() {
             <div className="alert alert--error">{cashflowError}</div>
           ) : cashflowPoints.length === 0 ? (
             <div className="empty-state">Không có dữ liệu trong kỳ đã chọn.</div>
+          ) : !hasMeaningfulCashflow ? (
+            <div className="empty-state">Dữ liệu kỳ này quá thưa để tạo biểu đồ so sánh.</div>
           ) : (
             <>
               <div className="cashflow-chart">

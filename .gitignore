@@ -37,6 +37,8 @@ tmp/
 .kiro/
 .shared/
 backups/
+!src/backend/Application/Backups/
+!src/backend/Application/Backups/**
 test-results/
 playwright-report/
 src/frontend/e2e/.auth/

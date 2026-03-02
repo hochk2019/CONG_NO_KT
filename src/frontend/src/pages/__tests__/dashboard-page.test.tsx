@@ -222,7 +222,7 @@ describe('DashboardPage', () => {
 
     expect(screen.getByText(/Giảm\s+300\.000\.000.*so với tháng trước\./)).toBeInTheDocument()
     expect(screen.getByText(/Tăng\s+100\.000\.000.*so với tháng trước\./)).toBeInTheDocument()
-    expect(screen.getByText('Không đổi so với tháng trước.')).toBeInTheDocument()
+    expect(screen.getByText(/Không đổi so với tháng trước\./)).toBeInTheDocument()
   })
 
   it('updates widget visibility preferences and hides section', async () => {

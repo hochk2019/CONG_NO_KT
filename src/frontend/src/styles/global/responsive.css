@@ -1,0 +1,84 @@
+@media (prefers-reduced-motion: reduce) {
+  html:focus-within {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@media (min-width: 960px) {
+  .audit-diff {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .notification-center {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 1200px) {
+  .page-split,
+  .page-split--reverse {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--receipt {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+
+  .form-grid--advance {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-header,
+  .page-header,
+  .card-hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .filters-row,
+  .filters-grid,
+  .filters-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--upload {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--receipt {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid--advance {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .notification-panel {
+    width: min(360px, calc(100vw - 2rem));
+    right: 0;
+  }
+}

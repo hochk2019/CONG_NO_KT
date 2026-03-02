@@ -142,6 +142,19 @@
 - VĐ-Q4: Bỏ qua vì Serilog rolling đã được cấu hình trong `appsettings.json`.
 - VĐ-S3: Bỏ qua vì password complexity validation đã tồn tại và đang được enforce khi tạo user.
 
+## Update 2026-02-28 - VĐ-Q2 incremental execution
+- [x] Triển khai tách incremental cho `src/frontend/src/index.css` theo nhóm concern.
+- [x] Khóa import order ở `index.css`:
+  - `tokens -> base -> primitives -> app-shell -> feedback -> data-display -> forms-filters -> responsive`.
+- [x] Tạo thêm `src/frontend/src/styles/global/app-shell.css` để giảm kích thước module lõi.
+- [x] `primitives.css` giảm từ `966` xuống `745` lines (đạt guideline < 800 lines/module).
+- [x] Tạo tài liệu mapping: `docs/frontend/css-selector-mapping.md`.
+- [x] Verify build + e2e baseline:
+  - `npm --prefix src/frontend run build` => pass.
+  - `npm --prefix src/frontend run test:e2e -- e2e/css-baseline.spec.ts` => pass.
+- [x] Regression matrix full viewport + dark/light:
+  - `npm --prefix src/frontend run test:e2e -- e2e/css-regression-matrix.spec.ts` (with `E2E_API_TARGET=http://127.0.0.1:18080`) => pass (`2/2`).
+
 ## Phase 3 Checklist
 
 ### UI Density

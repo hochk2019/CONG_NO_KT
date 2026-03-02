@@ -8,10 +8,12 @@ namespace CongNoGolden.Infrastructure.Services;
 public sealed class CustomerService : ICustomerService
 {
     private readonly ConGNoDbContext _db;
+    private readonly Func<DateTime> _utcNow;
 
-    public CustomerService(ConGNoDbContext db)
+    public CustomerService(ConGNoDbContext db, Func<DateTime>? utcNow = null)
     {
         _db = db;
+        _utcNow = utcNow ?? (() => DateTime.UtcNow);
     }
 
     private static (string? Term, string? Mode) ParseSearch(string? raw)
@@ -227,7 +229,7 @@ public sealed class CustomerService : ICustomerService
             })
             .ToListAsync(ct);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = DateOnly.FromDateTime(_utcNow());
         var paymentTermsDays = Math.Max(customer.PaymentTermsDays, 0);
 
         var overdueAmount = 0m;

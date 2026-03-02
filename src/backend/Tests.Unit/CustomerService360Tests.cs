@@ -198,7 +198,7 @@ public sealed class CustomerService360Tests
 
         await db.SaveChangesAsync();
 
-        var service = new CustomerService(db);
+        var service = new CustomerService(db, () => now.UtcDateTime);
         var result = await service.Get360Async(" CUST-360 ", CancellationToken.None);
 
         Assert.NotNull(result);

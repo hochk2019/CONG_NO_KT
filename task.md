@@ -1123,3 +1123,22 @@
 - [x] `npm --prefix src/frontend run lint` => pass.
 - [x] `npm --prefix src/frontend run build` => pass.
 
+## Phase 75 - VĐ-Q2 incremental CSS decomposition (2026-02-28)
+- [x] Dot 1 + Dot 2 tách `src/frontend/src/index.css` thành các module theo concern.
+  - [x] Thêm import chain trong `src/frontend/src/index.css`.
+  - [x] Tạo các file: `tokens.css`, `base.css`, `primitives.css`, `app-shell.css`, `feedback.css`, `data-display.css`, `forms-filters.css`, `responsive.css`.
+  - [x] Giảm `primitives.css` còn `745` lines (từ `966`) để bám guideline module nhỏ.
+- [x] Tạo mapping selector -> module: `docs/frontend/css-selector-mapping.md`.
+- [x] Khóa import order + quét duplicate selector nhanh (chỉ còn các duplicate override có chủ đích).
+- [x] Build + e2e baseline verify cho đợt tách CSS.
+- [x] Regression matrix đầy đủ viewport + dark/light.
+
+### Verification evidence (2026-02-28, phase 75)
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `npm --prefix src/frontend run test:e2e -- e2e/css-baseline.spec.ts` (with `E2E_API_TARGET=http://127.0.0.1:8080`) => pass (`1/1`).
+- [x] `npm --prefix src/frontend run test:e2e -- e2e/css-regression-matrix.spec.ts` (with `E2E_API_TARGET=http://127.0.0.1:18080`) => pass (`2/2`).
+- [x] `bd ready --json` => `[]` (không có bead ready để claim trong phiên).
+- [ ] `npm --prefix src/frontend run test -- --run` => fail `2` test assertions (không chỉ ra lỗi compile/build từ CSS split):
+  - `src/layouts/__tests__/app-shell.test.tsx`
+  - `src/pages/__tests__/dashboard-page.test.tsx`
+

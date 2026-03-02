@@ -96,7 +96,7 @@ describe('AppShell', () => {
     expect(screen.getAllByText('Admin (Quản trị)').length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { name: /Trang|Tổng quan/i })).toBeInTheDocument()
     expect(screen.getByText('Điều hướng theo vai trò')).toBeInTheDocument()
-    expect(screen.getByText('Vai trò chính')).toBeInTheDocument()
+    expect(screen.getByText('Theo dõi vận hành, phân quyền và rủi ro hệ thống.')).toBeInTheDocument()
   })
 
   it('toggles mobile navigation state', async () => {

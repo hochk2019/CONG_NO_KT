@@ -29,6 +29,7 @@ node_modules/
 
 # Project Specific
 tmp/
+.tmp/
 .agent/
 .beads/
 .codex/

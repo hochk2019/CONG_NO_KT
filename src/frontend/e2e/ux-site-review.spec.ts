@@ -49,7 +49,7 @@ const navigateWithinApp = async (page: Page, route: string) => {
   await page.waitForURL((url: URL) => url.pathname === route || url.pathname === '/login', {
     timeout: 10_000,
   })
-  await page.waitForLoadState('networkidle')
+  await page.waitForLoadState('domcontentloaded')
 
   if (route === '/imports' && new URL(page.url()).pathname !== '/login') {
     await page

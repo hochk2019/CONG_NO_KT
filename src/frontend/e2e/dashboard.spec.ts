@@ -27,6 +27,6 @@ test.describe('Dashboard page', () => {
     await millionToggle.click()
     await expect(millionToggle).toHaveClass(/unit-toggle__btn--active/)
 
-    await expect(page.getByRole('heading', { name: 'Hành động nhanh' })).toBeVisible()
+    await expect(page.getByText('Theo dõi vận hành, phân quyền và rủi ro hệ thống.')).toBeVisible()
   })
 })

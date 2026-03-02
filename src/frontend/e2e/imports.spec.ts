@@ -37,7 +37,6 @@ test.describe('Imports page', () => {
 
   test('Advances route redirects to manual imports tab', async ({ page }) => {
     await loginAsDefaultUser(page)
-
     await page.goto('/advances')
     await expect(page).toHaveURL(/\/imports\?tab=manual$/)
     await expect(page.getByRole('heading', { name: 'Khoản trả hộ KH', level: 2 })).toBeVisible()

@@ -1,4 +1,6 @@
 import { expect, type Page } from '@playwright/test'
+import fs from 'node:fs'
+import path from 'node:path'
 
 export const e2eUsername = process.env.E2E_USERNAME ?? 'admin'
 export const e2ePassword = process.env.E2E_PASSWORD ?? 'Sam0905@'
@@ -6,6 +8,9 @@ export const e2ePassword = process.env.E2E_PASSWORD ?? 'Sam0905@'
 const refreshCookieName = 'congno_refresh'
 const refreshCookieDomain = '127.0.0.1'
 const onboardingDismissedStorageKey = 'pref.app.onboarding.dismissed.v1'
+const authSessionStorageKey = 'cng.auth.session.v1'
+const refreshCookieCachePath = path.resolve(process.cwd(), '.tmp', 'e2e-refresh-cookie.json')
+const authSessionCachePath = path.resolve(process.cwd(), '.tmp', 'e2e-auth-session.json')
 
 type CachedRefreshCookie = {
   name: string
@@ -19,11 +24,100 @@ type CachedRefreshCookie = {
 }
 
 let cachedRefreshCookie: CachedRefreshCookie | null = null
+let cachedAuthSessionJson: string | null = null
+
+const hasUsableAuthSession = (sessionJson: string): boolean => {
+  try {
+    const parsed = JSON.parse(sessionJson) as { expiresAt?: unknown }
+    if (typeof parsed.expiresAt !== 'string' || !parsed.expiresAt.trim()) {
+      return false
+    }
+    const expiresAtMs = Date.parse(parsed.expiresAt)
+    if (!Number.isFinite(expiresAtMs)) {
+      return false
+    }
+    // Keep a small safety margin; larger margins force unnecessary re-logins.
+    return expiresAtMs - Date.now() > 15 * 1000
+  } catch {
+    return false
+  }
+}
+
+const ensureCacheDir = () => {
+  fs.mkdirSync(path.dirname(refreshCookieCachePath), { recursive: true })
+}
+
+const loadCachedRefreshCookieFromDisk = (): CachedRefreshCookie | null => {
+  if (cachedRefreshCookie) {
+    return cachedRefreshCookie
+  }
+  if (!fs.existsSync(refreshCookieCachePath)) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(fs.readFileSync(refreshCookieCachePath, 'utf8')) as CachedRefreshCookie
+    if (!parsed?.name || !parsed?.value || !parsed?.domain) {
+      return null
+    }
+    if (parsed.expires > 0 && parsed.expires <= Math.floor(Date.now() / 1000)) {
+      return null
+    }
+    cachedRefreshCookie = parsed
+    return cachedRefreshCookie
+  } catch {
+    return null
+  }
+}
+
+const persistRefreshCookieToDisk = (cookie: CachedRefreshCookie) => {
+  ensureCacheDir()
+  fs.writeFileSync(refreshCookieCachePath, JSON.stringify(cookie), 'utf8')
+}
+
+const loadCachedAuthSessionFromDisk = (): string | null => {
+  if (cachedAuthSessionJson) {
+    return cachedAuthSessionJson
+  }
+  if (!fs.existsSync(authSessionCachePath)) {
+    return null
+  }
+  try {
+    const raw = fs.readFileSync(authSessionCachePath, 'utf8').trim()
+    if (!raw || !hasUsableAuthSession(raw)) {
+      fs.rmSync(authSessionCachePath, { force: true })
+      return null
+    }
+    cachedAuthSessionJson = raw
+    return cachedAuthSessionJson
+  } catch {
+    return null
+  }
+}
+
+const persistAuthSessionToDisk = (sessionJson: string) => {
+  if (!hasUsableAuthSession(sessionJson)) {
+    return
+  }
+  ensureCacheDir()
+  cachedAuthSessionJson = sessionJson
+  fs.writeFileSync(authSessionCachePath, sessionJson, 'utf8')
+}
 
 const prepareStableClientState = async (page: Page) => {
-  await page.addInitScript((key: string) => {
-    window.localStorage.setItem(key, '1')
-  }, onboardingDismissedStorageKey)
+  const cachedAuthSession = loadCachedAuthSessionFromDisk()
+  await page.addInitScript(
+    ({ onboardingKey, authKey, authSession }) => {
+      window.localStorage.setItem(onboardingKey, '1')
+      if (authSession) {
+        window.sessionStorage.setItem(authKey, authSession)
+      }
+    },
+    {
+      onboardingKey: onboardingDismissedStorageKey,
+      authKey: authSessionStorageKey,
+      authSession: cachedAuthSession,
+    },
+  )
 }
 
 const hasAuthenticatedShell = async (page: Page) => {
@@ -34,16 +128,7 @@ const hasAuthenticatedShell = async (page: Page) => {
 
   const logoutButton = page.getByRole('button', { name: 'Đăng xuất' }).first()
   const logoutVisible = await logoutButton.isVisible().catch(() => false)
-  if (logoutVisible) {
-    return true
-  }
-
-  const dashboardLinkCount = await page.locator('.app-nav a[href="/dashboard"]').count()
-  if (dashboardLinkCount > 0) {
-    return true
-  }
-
-  return false
+  return logoutVisible
 }
 
 const captureRefreshCookie = async (page: Page) => {
@@ -69,23 +154,35 @@ const captureRefreshCookie = async (page: Page) => {
         ? refreshCookie.expires
         : Math.floor(Date.now() / 1000) + 30 * 60,
   }
+  persistRefreshCookieToDisk(cachedRefreshCookie)
+}
+
+const captureAuthSession = async (page: Page) => {
+  const sessionJson = await page.evaluate((storageKey: string) => {
+    return window.sessionStorage.getItem(storageKey)
+  }, authSessionStorageKey)
+  if (!sessionJson) {
+    return
+  }
+  persistAuthSessionToDisk(sessionJson)
 }
 
 const seedRefreshCookie = async (page: Page) => {
-  if (!cachedRefreshCookie) {
+  const cookieToSeed = loadCachedRefreshCookieFromDisk()
+  if (!cookieToSeed) {
     return
   }
 
   await page.context().addCookies([
     {
-      name: cachedRefreshCookie.name,
-      value: cachedRefreshCookie.value,
-      domain: cachedRefreshCookie.domain,
-      path: cachedRefreshCookie.path,
-      httpOnly: cachedRefreshCookie.httpOnly,
-      secure: cachedRefreshCookie.secure,
-      sameSite: cachedRefreshCookie.sameSite,
-      expires: cachedRefreshCookie.expires,
+      name: cookieToSeed.name,
+      value: cookieToSeed.value,
+      domain: cookieToSeed.domain,
+      path: cookieToSeed.path,
+      httpOnly: cookieToSeed.httpOnly,
+      secure: cookieToSeed.secure,
+      sameSite: cookieToSeed.sameSite,
+      expires: cookieToSeed.expires,
     },
   ])
 }
@@ -98,20 +195,53 @@ const isRateLimitedAlert = async (page: Page) => {
   return { isRateLimited, alertText }
 }
 
+const waitForAuthResolution = async (
+  page: Page,
+  timeoutMs: number,
+): Promise<'authenticated' | 'login' | 'unknown'> => {
+  const logoutButton = page.getByRole('button', { name: 'Đăng xuất' }).first()
+  const resolution = await Promise.race([
+    logoutButton
+      .waitFor({ state: 'visible', timeout: timeoutMs })
+      .then(() => 'authenticated' as const)
+      .catch(() => 'unknown' as const),
+    page
+      .waitForURL(/\/login(?:[/?#]|$)/, { timeout: timeoutMs })
+      .then(() => 'login' as const)
+      .catch(() => 'unknown' as const),
+  ])
+
+  if (resolution !== 'unknown') {
+    return resolution
+  }
+  if (await hasAuthenticatedShell(page)) {
+    return 'authenticated'
+  }
+  if (/\/login(?:[/?#]|$)/.test(page.url())) {
+    return 'login'
+  }
+  return 'unknown'
+}
+
 export const loginAsDefaultUser = async (page: Page) => {
   await prepareStableClientState(page)
   await seedRefreshCookie(page)
   await page.goto('/dashboard')
   await page.waitForLoadState('domcontentloaded')
 
-  if (await hasAuthenticatedShell(page)) {
+  const initialResolution = await waitForAuthResolution(page, 10_000)
+  if (initialResolution === 'authenticated') {
+    await captureAuthSession(page)
     await captureRefreshCookie(page)
     return
   }
 
-  if (!/\/login$/.test(page.url())) {
-    await page.waitForTimeout(800)
-    if (await hasAuthenticatedShell(page)) {
+  if (initialResolution === 'unknown') {
+    // Give client-side bootstrap one extra window before attempting interactive login.
+    await page.waitForTimeout(1_000)
+    const followupResolution = await waitForAuthResolution(page, 6_000)
+    if (followupResolution === 'authenticated') {
+      await captureAuthSession(page)
       await captureRefreshCookie(page)
       return
     }
@@ -120,6 +250,7 @@ export const loginAsDefaultUser = async (page: Page) => {
   try {
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 5_000 })
     if (await hasAuthenticatedShell(page)) {
+      await captureAuthSession(page)
       await captureRefreshCookie(page)
       return
     }
@@ -127,7 +258,7 @@ export const loginAsDefaultUser = async (page: Page) => {
     // Continue to interactive login flow below when refresh cookie is unavailable/expired.
   }
 
-  const maxAttempts = 8
+  const maxAttempts = 6
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     await page.goto('/login')
     await page.getByLabel('Tên đăng nhập').fill(e2eUsername)
@@ -144,7 +275,15 @@ export const loginAsDefaultUser = async (page: Page) => {
     ])
 
     if (loginResult === 'ok') {
-      await expect(page.locator('.app-content').first()).toBeVisible({ timeout: 10_000 })
+      const postLoginResolution = await waitForAuthResolution(page, 10_000)
+      if (postLoginResolution !== 'authenticated') {
+        if (attempt < maxAttempts) {
+          await page.waitForTimeout(1_000)
+          continue
+        }
+        throw new Error(`Login reached /dashboard but auth shell was not ready (resolution=${postLoginResolution})`)
+      }
+      await captureAuthSession(page)
       await captureRefreshCookie(page)
       return
     }

@@ -12,6 +12,7 @@ import DataTable from '../../components/DataTable'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
 import CustomerEditModal from './CustomerEditModal'
+import { getDebtToneClass } from './customerDebtTone'
 type CustomerListSectionProps = {
   token: string
   canManageCustomers: boolean
@@ -27,8 +28,6 @@ const customerStatusLabels: Record<string, string> = {
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 const CUSTOMER_STATUS_KEY = 'pref.customers.status'
-export const CUSTOMER_DEBT_WARNING_THRESHOLD = 100_000_000
-export const CUSTOMER_DEBT_DANGER_THRESHOLD = 500_000_000
 
 const getStoredPageSize = () => {
   if (typeof window === 'undefined') return DEFAULT_PAGE_SIZE
@@ -54,13 +53,6 @@ const storeFilter = (key: string, value: string) => {
   } else {
     window.localStorage.setItem(key, value)
   }
-}
-
-export const getDebtToneClass = (currentBalance: number) => {
-  if (currentBalance <= 0) return 'debt-value--clear'
-  if (currentBalance >= CUSTOMER_DEBT_DANGER_THRESHOLD) return 'debt-value--high'
-  if (currentBalance >= CUSTOMER_DEBT_WARNING_THRESHOLD) return 'debt-value--medium'
-  return 'debt-value--normal'
 }
 
 export default function CustomerListSection({

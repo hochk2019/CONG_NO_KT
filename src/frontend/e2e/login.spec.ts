@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test'
 
+test.use({ storageState: { cookies: [], origins: [] } })
+
 test('Login page renders form', async ({ page }) => {
   await page.goto('/login')
 

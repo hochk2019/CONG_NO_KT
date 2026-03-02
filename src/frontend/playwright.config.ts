@@ -41,6 +41,7 @@ applyEnvDefault('VITE_API_PROXY_TARGET', process.env.E2E_API_TARGET ?? rootEnv.E
 
 export default defineConfig({
   testDir: './e2e',
+  globalSetup: './e2e/global.setup.ts',
   workers: 1,
   timeout: 30_000,
   expect: {
@@ -48,6 +49,7 @@ export default defineConfig({
   },
   use: {
     baseURL: 'http://127.0.0.1:5173',
+    storageState: './e2e/.auth/user.json',
     trace: 'on-first-retry',
   },
   webServer: {

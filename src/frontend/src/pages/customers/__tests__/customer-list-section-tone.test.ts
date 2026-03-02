@@ -3,7 +3,7 @@ import {
   CUSTOMER_DEBT_DANGER_THRESHOLD,
   CUSTOMER_DEBT_WARNING_THRESHOLD,
   getDebtToneClass,
-} from '../CustomerListSection'
+} from '../customerDebtTone'
 
 describe('customer debt tone thresholds', () => {
   it('returns clear when balance is zero or negative', () => {
@@ -26,4 +26,3 @@ describe('customer debt tone thresholds', () => {
     expect(getDebtToneClass(CUSTOMER_DEBT_DANGER_THRESHOLD + 1)).toBe('debt-value--high')
   })
 })
-

@@ -205,6 +205,122 @@ public sealed class AuthServiceTests
         Assert.False(string.IsNullOrWhiteSpace(session.Access.AccessToken));
     }
 
+    [Fact]
+    public async Task ChangePasswordAsync_UpdatesHashAndRevokesActiveRefreshTokens()
+    {
+        await using var db = CreateDbContext(nameof(ChangePasswordAsync_UpdatesHashAndRevokesActiveRefreshTokens));
+        var user = await SeedUserAsync(db);
+
+        db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = HashToken("active-token"),
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            AbsoluteExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            RevokedAt = null
+        });
+
+        db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = HashToken("already-revoked-token"),
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            AbsoluteExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            RevokedAt = DateTimeOffset.UtcNow.AddMinutes(-5)
+        });
+
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+
+        await service.ChangePasswordAsync(
+            user.Id,
+            new ChangePasswordRequest("StrongPass123", "ChangedPass123"),
+            CancellationToken.None);
+
+        var reloadedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        Assert.True(BCrypt.Net.BCrypt.Verify("ChangedPass123", reloadedUser.PasswordHash));
+        Assert.Equal(1, reloadedUser.Version);
+
+        var tokens = await db.RefreshTokens
+            .Where(rt => rt.UserId == user.Id)
+            .OrderBy(rt => rt.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(2, tokens.Count);
+        Assert.NotNull(tokens[0].RevokedAt);
+        Assert.NotNull(tokens[1].RevokedAt);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_RejectsWhenCurrentPasswordInvalid()
+    {
+        await using var db = CreateDbContext(nameof(ChangePasswordAsync_RejectsWhenCurrentPasswordInvalid));
+        var user = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        var ex = await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            service.ChangePasswordAsync(
+                user.Id,
+                new ChangePasswordRequest("WrongPass123", "ChangedPass123"),
+                CancellationToken.None));
+
+        Assert.Contains("Current password is incorrect", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_ResetsLockoutAndRevokesActiveRefreshTokens()
+    {
+        await using var db = CreateDbContext(nameof(ResetPasswordAsync_ResetsLockoutAndRevokesActiveRefreshTokens));
+        var user = await SeedUserAsync(db);
+
+        user.FailedLoginCount = 3;
+        user.LastFailedLoginAt = DateTimeOffset.UtcNow.AddMinutes(-2);
+        user.LockoutEndAt = DateTimeOffset.UtcNow.AddMinutes(20);
+
+        db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = HashToken("active-token"),
+            CreatedAt = DateTimeOffset.UtcNow.AddHours(-1),
+            ExpiresAt = DateTimeOffset.UtcNow.AddDays(1),
+            AbsoluteExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            RevokedAt = null
+        });
+
+        await db.SaveChangesAsync();
+
+        var service = CreateService(db);
+        await service.ResetPasswordAsync(user.Id, "ResetPass123", CancellationToken.None);
+
+        var reloadedUser = await db.Users.AsNoTracking().SingleAsync(u => u.Id == user.Id);
+        Assert.True(BCrypt.Net.BCrypt.Verify("ResetPass123", reloadedUser.PasswordHash));
+        Assert.Equal(0, reloadedUser.FailedLoginCount);
+        Assert.Null(reloadedUser.LastFailedLoginAt);
+        Assert.Null(reloadedUser.LockoutEndAt);
+
+        var activeToken = await db.RefreshTokens.AsNoTracking().SingleAsync(rt => rt.UserId == user.Id);
+        Assert.NotNull(activeToken.RevokedAt);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_RejectsWeakPassword()
+    {
+        await using var db = CreateDbContext(nameof(ResetPasswordAsync_RejectsWeakPassword));
+        var user = await SeedUserAsync(db);
+        var service = CreateService(db);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.ResetPasswordAsync(user.Id, "weak", CancellationToken.None));
+
+        Assert.Contains("at least 8 characters", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static AuthService CreateService(
         ConGNoDbContext db,
         AuthSecurityOptions? authSecurityOptions = null)

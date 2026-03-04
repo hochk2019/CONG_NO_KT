@@ -97,6 +97,7 @@ services:
       - "${WEB_PORT:-8081}:80"
     networks:
       - congno_net
+      - proxy_net
 
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -201,3 +202,5 @@ volumes:
 networks:
   congno_net:
     driver: bridge
+  proxy_net:
+    external: true

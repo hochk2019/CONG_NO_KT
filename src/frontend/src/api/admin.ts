@@ -100,6 +100,18 @@ export const updateUserStatus = async (
   })
 }
 
+export const updateUserPassword = async (
+  token: string,
+  userId: string,
+  newPassword: string,
+) => {
+  return apiFetch<void>(`/admin/users/${userId}/password`, {
+    method: 'PUT',
+    token,
+    body: { newPassword },
+  })
+}
+
 export const updateUserZalo = async (
   token: string,
   userId: string,

@@ -7,8 +7,9 @@ import AppShell from '../AppShell'
 
 const ONBOARDING_DISMISSED_STORAGE_KEY = 'pref.app.onboarding.dismissed.v1'
 
-const { fetchGlobalSearchMock } = vi.hoisted(() => ({
+const mocks = vi.hoisted(() => ({
   fetchGlobalSearchMock: vi.fn(),
+  changePasswordMock: vi.fn(),
 }))
 
 vi.mock('../../components/notifications/NotificationBell', () => ({
@@ -20,7 +21,11 @@ vi.mock('../../components/notifications/NotificationToastHost', () => ({
 }))
 
 vi.mock('../../api/search', () => ({
-  fetchGlobalSearch: fetchGlobalSearchMock,
+  fetchGlobalSearch: mocks.fetchGlobalSearchMock,
+}))
+
+vi.mock('../../api/auth', () => ({
+  changePassword: (...args: unknown[]) => mocks.changePasswordMock(...args),
 }))
 
 const buildAuthContext = (roles: string[] = ['Admin']): AuthContextValue => ({
@@ -72,7 +77,8 @@ describe('AppShell', () => {
     window.localStorage.clear()
     window.localStorage.setItem(ONBOARDING_DISMISSED_STORAGE_KEY, '1')
     document.documentElement.removeAttribute('data-theme')
-    fetchGlobalSearchMock.mockReset()
+    mocks.fetchGlobalSearchMock.mockReset()
+    mocks.changePasswordMock.mockReset()
   })
 
   it('shows sidebar meta info', () => {
@@ -195,7 +201,7 @@ describe('AppShell', () => {
   it('opens quick search with hotkey and navigates on Enter', async () => {
     const authValue = buildAuthContext()
     const user = userEvent.setup()
-    fetchGlobalSearchMock.mockResolvedValue({
+    mocks.fetchGlobalSearchMock.mockResolvedValue({
       query: 'alpha',
       total: 1,
       customers: [],
@@ -247,5 +253,26 @@ describe('AppShell', () => {
     expect(screen.queryByText(/Báo cáo điều hành/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Quản trị người dùng/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/Nhật ký kiểm soát/i)).not.toBeInTheDocument()
+  })
+
+  it('opens and closes change password modal', async () => {
+    const authValue = buildAuthContext()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={authValue}>
+          <AppShell />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }))
+    expect(await screen.findByRole('dialog', { name: 'Đổi mật khẩu' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hủy' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Đổi mật khẩu' })).not.toBeInTheDocument()
+    })
   })
 })

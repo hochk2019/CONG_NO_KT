@@ -6,6 +6,7 @@ import {
   createAdminUser,
   fetchAdminRoles,
   fetchAdminUsers,
+  updateUserPassword,
   updateUserRoles,
   updateUserStatus,
   updateUserZalo,
@@ -13,6 +14,7 @@ import {
 import DataTable from '../components/DataTable'
 import { useAuth } from '../context/AuthStore'
 import { formatDateTime } from '../utils/format'
+import { validatePasswordPolicy } from '../utils/passwordPolicy'
 import { formatRoleDisplay } from '../utils/roles'
 
 const DEFAULT_PAGE_SIZE = 10
@@ -53,6 +55,10 @@ export default function AdminUsersPage() {
   const [linkingUser, setLinkingUser] = useState<AdminUser | null>(null)
   const [linkingValue, setLinkingValue] = useState('')
   const [linkingError, setLinkingError] = useState<string | null>(null)
+  const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null)
+  const [resetPasswordValue, setResetPasswordValue] = useState('')
+  const [resetPasswordConfirm, setResetPasswordConfirm] = useState('')
+  const [resetPasswordError, setResetPasswordError] = useState<string | null>(null)
   const zaloInputRef = useRef<HTMLInputElement | null>(null)
   const rolesFirstInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -72,20 +78,22 @@ export default function AdminUsersPage() {
   }, [editingUser])
 
   useEffect(() => {
-    if (!linkingUser && !editingUser) return
+    if (!linkingUser && !editingUser && !resetPasswordUser) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (linkingUser) {
         closeLinkingModal()
       } else if (editingUser) {
         closeRolesModal()
+      } else if (resetPasswordUser) {
+        closeResetPasswordModal()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [linkingUser, editingUser])
+  }, [linkingUser, editingUser, resetPasswordUser])
 
   const [createUsername, setCreateUsername] = useState('')
   const [createPassword, setCreatePassword] = useState('')
@@ -224,6 +232,20 @@ export default function AdminUsersPage() {
     setSelectedRoles([])
   }
 
+  const openResetPasswordModal = (user: AdminUser) => {
+    setResetPasswordUser(user)
+    setResetPasswordValue('')
+    setResetPasswordConfirm('')
+    setResetPasswordError(null)
+  }
+
+  const closeResetPasswordModal = () => {
+    setResetPasswordUser(null)
+    setResetPasswordValue('')
+    setResetPasswordConfirm('')
+    setResetPasswordError(null)
+  }
+
   const handleSaveZalo = async () => {
     if (!token || !linkingUser) return
     setLinkingError(null)
@@ -290,8 +312,9 @@ export default function AdminUsersPage() {
       setCreateError('Vui lòng nhập tên đăng nhập.')
       return
     }
-    if (password.length < 6) {
-      setCreateError('Mật khẩu tối thiểu 6 ký tự.')
+    const createPasswordError = validatePasswordPolicy(password)
+    if (createPasswordError) {
+      setCreateError(createPasswordError)
       return
     }
     if (createRoles.length === 0) {
@@ -318,6 +341,37 @@ export default function AdminUsersPage() {
         setCreateError(err.message)
       } else {
         setCreateError('Không tạo được người dùng.')
+      }
+    } finally {
+      setLoadingAction('')
+    }
+  }
+
+  const handleSaveResetPassword = async () => {
+    if (!token || !resetPasswordUser) return
+
+    setResetPasswordError(null)
+
+    const passwordError = validatePasswordPolicy(resetPasswordValue)
+    if (passwordError) {
+      setResetPasswordError(passwordError)
+      return
+    }
+
+    if (resetPasswordValue.trim() !== resetPasswordConfirm.trim()) {
+      setResetPasswordError('Mật khẩu xác nhận không khớp.')
+      return
+    }
+
+    setLoadingAction(`reset-password-${resetPasswordUser.id}`)
+    try {
+      await updateUserPassword(token, resetPasswordUser.id, resetPasswordValue.trim())
+      closeResetPasswordModal()
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setResetPasswordError(err.message)
+      } else {
+        setResetPasswordError('Không thể reset mật khẩu.')
       }
     } finally {
       setLoadingAction('')
@@ -381,6 +435,9 @@ export default function AdminUsersPage() {
           <button className="btn btn-ghost" type="button" onClick={() => handleLinkZalo(row)}>
             Liên kết Zalo
           </button>
+          <button className="btn btn-ghost" type="button" onClick={() => openResetPasswordModal(row)}>
+            Reset mật khẩu
+          </button>
           <button
             className="btn btn-ghost"
             type="button"
@@ -406,7 +463,7 @@ export default function AdminUsersPage() {
         <div className="card-row">
           <div>
             <h3>Tạo người dùng mới</h3>
-            <p className="muted">Mật khẩu tối thiểu 6 ký tự.</p>
+            <p className="muted">Mật khẩu tối thiểu 8 ký tự, gồm hoa/thường/số.</p>
           </div>
         </div>
         <div className="form-grid">
@@ -717,6 +774,73 @@ export default function AdminUsersPage() {
                 Lưu vai trò
               </button>
               <button className="btn btn-outline" type="button" onClick={closeRolesModal}>
+                Hủy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {resetPasswordUser && (
+        <div className="modal-backdrop">
+          <button
+            type="button"
+            className="modal-scrim"
+            aria-label="Đóng hộp thoại"
+            onClick={closeResetPasswordModal}
+          />
+          <div
+            className="modal modal--narrow"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-password-title"
+          >
+            <div className="modal-header">
+              <div>
+                <h3 id="reset-password-title">Reset mật khẩu</h3>
+                <p className="muted">
+                  Thiết lập mật khẩu mới cho {resetPasswordUser.fullName ?? resetPasswordUser.username}.
+                </p>
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={closeResetPasswordModal} aria-label="Đóng">
+                ✕
+              </button>
+            </div>
+            <div className="modal-body form-stack">
+              <label className="field">
+                <span>Mật khẩu mới</span>
+                <input
+                  type="password"
+                  value={resetPasswordValue}
+                  onChange={(event) => setResetPasswordValue(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </label>
+              <label className="field">
+                <span>Xác nhận mật khẩu mới</span>
+                <input
+                  type="password"
+                  value={resetPasswordConfirm}
+                  onChange={(event) => setResetPasswordConfirm(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </label>
+              {resetPasswordError && (
+                <div className="alert alert--error" role="alert" aria-live="assertive">
+                  {resetPasswordError}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer modal-footer--end">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSaveResetPassword}
+                disabled={loadingAction === `reset-password-${resetPasswordUser.id}`}
+              >
+                Xác nhận reset
+              </button>
+              <button type="button" className="btn btn-outline" onClick={closeResetPasswordModal}>
                 Hủy
               </button>
             </div>

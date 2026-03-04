@@ -1,6 +1,7 @@
 using CongNoGolden.Api;
 using CongNoGolden.Api.Security;
 using CongNoGolden.Application.Auth;
+using CongNoGolden.Application.Common.Interfaces;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -93,6 +94,44 @@ public static class AuthEndpoints
         .WithName("AuthLogout")
         .WithTags("Auth")
         .AllowAnonymous();
+
+        app.MapPost("/auth/change-password", async (
+            ChangePasswordRequest request,
+            IAuthService authService,
+            ICurrentUser currentUser,
+            IOptions<JwtOptions> jwtOptions,
+            HttpContext httpContext,
+            ILoggerFactory loggerFactory,
+            CancellationToken ct) =>
+        {
+            var logger = loggerFactory.CreateLogger("AuthEndpoints");
+            if (!currentUser.UserId.HasValue)
+            {
+                return ApiErrors.Unauthorized("User is not authenticated.");
+            }
+
+            try
+            {
+                await authService.ChangePasswordAsync(currentUser.UserId.Value, request, ct);
+                ClearRefreshCookie(httpContext, jwtOptions.Value);
+                logger.LogInformation("Auth change password success for {UserId}", currentUser.UserId.Value);
+                return Results.NoContent();
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                logger.LogWarning(ex, "Auth change password unauthorized for {UserId}", currentUser.UserId.Value);
+                return ApiErrors.Unauthorized(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogWarning(ex, "Auth change password rejected for {UserId}", currentUser.UserId.Value);
+                return ApiErrors.InvalidRequest(ex.Message);
+            }
+        })
+        .WithName("AuthChangePassword")
+        .WithTags("Auth")
+        .RequireAuthorization()
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         return app;
     }

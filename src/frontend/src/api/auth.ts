@@ -5,6 +5,11 @@ export type LoginResponse = {
   expiresAt: string
 }
 
+export type ChangePasswordRequest = {
+  currentPassword: string
+  newPassword: string
+}
+
 let refreshInFlight: Promise<LoginResponse> | null = null
 
 export const login = async (username: string, password: string) => {
@@ -31,5 +36,16 @@ export const refreshSession = async () => {
 export const logoutSession = async () => {
   return apiFetch<void>('/auth/logout', {
     method: 'POST',
+  })
+}
+
+export const changePassword = async (
+  token: string,
+  payload: ChangePasswordRequest,
+) => {
+  return apiFetch<void>('/auth/change-password', {
+    method: 'POST',
+    token,
+    body: payload,
   })
 }

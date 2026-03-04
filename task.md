@@ -1142,3 +1142,26 @@
   - `src/layouts/__tests__/app-shell.test.tsx`
   - `src/pages/__tests__/dashboard-page.test.tsx`
 
+## Phase 76 - Password lifecycle hardening (2026-03-04) [bead: cng-wuk]
+- [x] Backend auth:
+  - [x] Thêm self-service đổi mật khẩu `POST /auth/change-password` cho user đã đăng nhập.
+  - [x] Thêm admin reset mật khẩu `PUT /admin/users/{id}/password`.
+  - [x] Đảm bảo reset/đổi mật khẩu revoke toàn bộ refresh token còn hiệu lực.
+- [x] Backend test:
+  - [x] Bổ sung `AuthServiceTests` cho `ChangePasswordAsync` + `ResetPasswordAsync` (success + validation/error paths).
+- [x] Frontend API/UI:
+  - [x] Thêm `changePassword` API client.
+  - [x] Thêm `updateUserPassword` API client.
+  - [x] Thêm modal đổi mật khẩu ở `AppShell`.
+  - [x] Thêm modal reset mật khẩu ở `AdminUsersPage`.
+  - [x] Đồng bộ policy mật khẩu FE theo BE (>=8, hoa/thường/số) qua util dùng chung.
+- [x] Frontend test:
+  - [x] Bổ sung test modal đổi mật khẩu (`app-shell.test.tsx`).
+  - [x] Bổ sung test modal reset mật khẩu (`admin-users-page.test.tsx`).
+  - [x] Bổ sung unit test password policy util.
+
+### Verification evidence (2026-03-04, phase 76)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter AuthServiceTests --nologo --verbosity minimal` => pass (`11/11`).
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/admin/__tests__/admin-users-page.test.tsx src/utils/__tests__/passwordPolicy.test.ts` => pass (`13/13`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+

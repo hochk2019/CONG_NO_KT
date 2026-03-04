@@ -138,6 +138,59 @@ public sealed class AuthService : IAuthService
         await _db.SaveChangesAsync(ct);
     }
 
+    public async Task ChangePasswordAsync(Guid userId, ChangePasswordRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(request.CurrentPassword ?? string.Empty, user.PasswordHash))
+        {
+            throw new UnauthorizedAccessException("Current password is incorrect.");
+        }
+
+        ValidatePasswordComplexity(request.NewPassword);
+
+        if (BCrypt.Net.BCrypt.Verify(request.NewPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("New password must be different from current password.");
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.UpdatedAt = now;
+        user.Version += 1;
+
+        await RevokeActiveRefreshTokensAsync(user.Id, now, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
+    public async Task ResetPasswordAsync(Guid userId, string newPassword, CancellationToken ct)
+    {
+        var user = await _db.Users.FirstOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+        {
+            throw new KeyNotFoundException("User not found.");
+        }
+
+        ValidatePasswordComplexity(newPassword);
+
+        var now = DateTimeOffset.UtcNow;
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
+        user.UpdatedAt = now;
+        user.Version += 1;
+        user.FailedLoginCount = 0;
+        user.LastFailedLoginAt = null;
+        user.LockoutEndAt = null;
+
+        await RevokeActiveRefreshTokensAsync(user.Id, now, ct);
+        await _db.SaveChangesAsync(ct);
+    }
+
     private async Task<IReadOnlyList<string>> LoadRoles(Guid userId, CancellationToken ct)
     {
         return await _db.UserRoles
@@ -197,6 +250,46 @@ public sealed class AuthService : IAuthService
     {
         var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(token));
         return Convert.ToHexString(bytes);
+    }
+
+    private static void ValidatePasswordComplexity(string password)
+    {
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException("Password is required.");
+        }
+
+        if (password.Length < 8)
+        {
+            throw new InvalidOperationException("Password must be at least 8 characters.");
+        }
+
+        if (!password.Any(char.IsUpper))
+        {
+            throw new InvalidOperationException("Password must include at least one uppercase letter.");
+        }
+
+        if (!password.Any(char.IsLower))
+        {
+            throw new InvalidOperationException("Password must include at least one lowercase letter.");
+        }
+
+        if (!password.Any(char.IsDigit))
+        {
+            throw new InvalidOperationException("Password must include at least one number.");
+        }
+    }
+
+    private async Task RevokeActiveRefreshTokensAsync(Guid userId, DateTimeOffset revokedAt, CancellationToken ct)
+    {
+        var activeTokens = await _db.RefreshTokens
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null)
+            .ToListAsync(ct);
+
+        foreach (var activeToken in activeTokens)
+        {
+            activeToken.RevokedAt = revokedAt;
+        }
     }
 
     private bool IsUserLocked(User user, DateTimeOffset now)

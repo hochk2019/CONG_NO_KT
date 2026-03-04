@@ -1,5 +1,6 @@
 using CongNoGolden.Api;
 using CongNoGolden.Api.Security;
+using CongNoGolden.Application.Auth;
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Application.Common.Interfaces;
@@ -541,6 +542,41 @@ public static class AdminEndpoints
         .RequireAuthorization("AdminManage")
         .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
+        app.MapPut("/admin/users/{id:guid}/password", async (
+            Guid id,
+            AdminUserResetPasswordRequest request,
+            IAuthService authService,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                await authService.ResetPasswordAsync(id, request.NewPassword ?? string.Empty, ct);
+            }
+            catch (KeyNotFoundException ex)
+            {
+                return ApiErrors.NotFound(ex.Message);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiErrors.InvalidRequest(ex.Message);
+            }
+
+            await auditService.LogAsync(
+                "USER_PASSWORD_RESET",
+                "User",
+                id.ToString(),
+                null,
+                new { reset = true },
+                ct);
+
+            return Results.NoContent();
+        })
+        .WithName("AdminUserPasswordReset")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
         app.MapPut("/admin/users/{id:guid}/zalo", async (
             Guid id,
             AdminUserZaloRequest request,
@@ -724,6 +760,8 @@ public sealed record AdminUserCreateResponse(Guid Id);
 public sealed record AdminUserRolesRequest(IReadOnlyList<string> Roles);
 
 public sealed record AdminUserStatusRequest(bool IsActive);
+
+public sealed record AdminUserResetPasswordRequest(string? NewPassword);
 
 public sealed record AdminUserZaloRequest(string? ZaloUserId);
 

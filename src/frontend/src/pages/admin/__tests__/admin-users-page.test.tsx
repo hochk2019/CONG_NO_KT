@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   fetchAdminUsers: vi.fn(),
   fetchAdminRoles: vi.fn(),
   createAdminUser: vi.fn(),
+  updateUserPassword: vi.fn(),
   updateUserRoles: vi.fn(),
   updateUserStatus: vi.fn(),
   updateUserZalo: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock('../../../api/admin', () => ({
   fetchAdminUsers: mocks.fetchAdminUsers,
   fetchAdminRoles: mocks.fetchAdminRoles,
   createAdminUser: mocks.createAdminUser,
+  updateUserPassword: mocks.updateUserPassword,
   updateUserRoles: mocks.updateUserRoles,
   updateUserStatus: mocks.updateUserStatus,
   updateUserZalo: mocks.updateUserZalo,
@@ -119,6 +121,33 @@ describe('AdminUsersPage', () => {
     await userEvent.keyboard('{Escape}')
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('opens reset password modal and submits', async () => {
+    const authValue = buildAuthContext()
+    mocks.updateUserPassword.mockResolvedValue(undefined)
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={authValue}>
+          <AdminUsersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    const resetButton = await screen.findByRole('button', { name: 'Reset mật khẩu' })
+    await userEvent.click(resetButton)
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Reset mật khẩu')
+
+    await userEvent.type(screen.getByLabelText('Mật khẩu mới'), 'ResetPass123')
+    await userEvent.type(screen.getByLabelText('Xác nhận mật khẩu mới'), 'ResetPass123')
+    await userEvent.click(screen.getByRole('button', { name: 'Xác nhận reset' }))
+
+    await waitFor(() => {
+      expect(mocks.updateUserPassword).toHaveBeenCalledWith('token', 'user-1', 'ResetPass123')
     })
   })
 })

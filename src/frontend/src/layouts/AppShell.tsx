@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import '../styles/layout-shell.css'
+import { ApiError } from '../api/client'
+import { changePassword } from '../api/auth'
 import { useAuth } from '../context/AuthStore'
 import NotificationBell from '../components/notifications/NotificationBell'
 import NotificationToastHost from '../components/notifications/NotificationToastHost'
 import GlobalSearchPalette from '../components/search/GlobalSearchPalette'
 import { type ThemePreference, useTheme } from '../hooks/useTheme'
 import { formatRoleDisplay } from '../utils/roles'
+import { validatePasswordPolicy } from '../utils/passwordPolicy'
 import {
   computePrefetchPlan,
   prefetchRoute,
@@ -147,6 +150,13 @@ export default function AppShell() {
     return window.localStorage.getItem(ONBOARDING_DISMISSED_STORAGE_KEY) !== '1'
   })
   const [onboardingStepIndex, setOnboardingStepIndex] = useState(0)
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false)
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [changePasswordError, setChangePasswordError] = useState<string | null>(null)
+  const [changePasswordSuccess, setChangePasswordSuccess] = useState<string | null>(null)
+  const [isChangingPassword, setIsChangingPassword] = useState(false)
   const isNavOpen = navOpenPath === location.pathname
   const onboardingStep = onboardingSteps[onboardingStepIndex]
   const isOnboardingLastStep = onboardingStepIndex >= onboardingSteps.length - 1
@@ -176,6 +186,22 @@ export default function AppShell() {
 
   const handleToggleNavCollapsed = useCallback(() => {
     setIsNavCollapsed((previous) => !previous)
+  }, [])
+
+  const closeChangePasswordModal = useCallback(() => {
+    setIsChangePasswordOpen(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmPassword('')
+    setChangePasswordError(null)
+    setChangePasswordSuccess(null)
+    setIsChangingPassword(false)
+  }, [])
+
+  const openChangePasswordModal = useCallback(() => {
+    setIsChangePasswordOpen(true)
+    setChangePasswordError(null)
+    setChangePasswordSuccess(null)
   }, [])
 
   const handleOnboardingSkip = useCallback(() => {
@@ -313,6 +339,50 @@ export default function AppShell() {
     window.localStorage.setItem(NAV_COLLAPSED_STORAGE_KEY, isNavCollapsed ? '1' : '0')
   }, [isNavCollapsed])
 
+  const handleSubmitChangePassword = useCallback(async () => {
+    if (!token) return
+
+    setChangePasswordError(null)
+    setChangePasswordSuccess(null)
+
+    if (!currentPassword.trim()) {
+      setChangePasswordError('Vui lòng nhập mật khẩu hiện tại.')
+      return
+    }
+
+    const policyError = validatePasswordPolicy(newPassword)
+    if (policyError) {
+      setChangePasswordError(policyError)
+      return
+    }
+
+    if (newPassword.trim() !== confirmPassword.trim()) {
+      setChangePasswordError('Mật khẩu xác nhận không khớp.')
+      return
+    }
+
+    setIsChangingPassword(true)
+    try {
+      await changePassword(token, {
+        currentPassword: currentPassword.trim(),
+        newPassword: newPassword.trim(),
+      })
+      setChangePasswordSuccess('Đổi mật khẩu thành công. Vui lòng đăng nhập lại.')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmPassword('')
+      setTimeout(() => logout(), 900)
+    } catch (error) {
+      if (error instanceof ApiError) {
+        setChangePasswordError(error.message)
+      } else {
+        setChangePasswordError('Không thể đổi mật khẩu.')
+      }
+    } finally {
+      setIsChangingPassword(false)
+    }
+  }, [confirmPassword, currentPassword, logout, newPassword, token])
+
   return (
     <div
       className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${
@@ -425,6 +495,13 @@ export default function AppShell() {
                 >
                   Hướng dẫn
                 </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost app-header__guide-btn"
+                  onClick={openChangePasswordModal}
+                >
+                  Đổi mật khẩu
+                </button>
                 <div className="theme-switch">
                   <span className="theme-switch__icon">
                     <ThemePreferenceIcon preference={preference} />
@@ -479,6 +556,84 @@ export default function AppShell() {
               </button>
             </div>
           </section>
+        </div>
+      )}
+      {isChangePasswordOpen && (
+        <div className="modal-backdrop">
+          <button
+            type="button"
+            className="modal-scrim"
+            aria-label="Đóng hộp thoại"
+            onClick={closeChangePasswordModal}
+          />
+          <div
+            className="modal modal--narrow"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="change-password-title"
+          >
+            <div className="modal-header">
+              <div>
+                <h3 id="change-password-title">Đổi mật khẩu</h3>
+                <p className="muted">Mật khẩu mới cần có tối thiểu 8 ký tự gồm hoa/thường/số.</p>
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={closeChangePasswordModal} aria-label="Đóng">
+                ✕
+              </button>
+            </div>
+            <div className="modal-body form-stack">
+              <label className="field">
+                <span>Mật khẩu hiện tại</span>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(event) => setCurrentPassword(event.target.value)}
+                  autoComplete="current-password"
+                />
+              </label>
+              <label className="field">
+                <span>Mật khẩu mới</span>
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </label>
+              <label className="field">
+                <span>Xác nhận mật khẩu mới</span>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  autoComplete="new-password"
+                />
+              </label>
+              {changePasswordError && (
+                <div className="alert alert--error" role="alert" aria-live="assertive">
+                  {changePasswordError}
+                </div>
+              )}
+              {changePasswordSuccess && (
+                <div className="alert alert--success" role="alert" aria-live="assertive">
+                  {changePasswordSuccess}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer modal-footer--end">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleSubmitChangePassword}
+                disabled={isChangingPassword}
+              >
+                Cập nhật mật khẩu
+              </button>
+              <button type="button" className="btn btn-outline" onClick={closeChangePasswordModal}>
+                Hủy
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

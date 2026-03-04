@@ -13,6 +13,7 @@ public sealed class ImportRollbackService : IImportRollbackService
     private readonly ConGNoDbContext _db;
     private readonly ICurrentUser _currentUser;
     private readonly IAuditService _auditService;
+    private const int BlockingPreviewLimit = 10;
 
     public ImportRollbackService(ConGNoDbContext db, ICurrentUser currentUser, IAuditService auditService)
     {
@@ -46,38 +47,89 @@ public sealed class ImportRollbackService : IImportRollbackService
         var advanceIds = advances.Select(a => a.Id).ToList();
         var receiptIds = receipts.Select(r => r.Id).ToList();
 
-        if (receipts.Any(r => r.Status == "APPROVED"))
+        var approvedReceiptIds = receipts
+            .Where(r => r.Status == "APPROVED")
+            .Select(r => r.Id)
+            .Take(BlockingPreviewLimit)
+            .ToList();
+        if (approvedReceiptIds.Count > 0)
         {
-            throw new InvalidOperationException("Rollback blocked: batch receipts are approved. Void receipts first.");
+            var approvedReceiptCount = receipts.Count(r => r.Status == "APPROVED");
+            throw CreateBlockedException(
+                "RECEIPTS_APPROVED",
+                batchId,
+                "Rollback blocked: batch receipts are approved. Void receipts first.",
+                new Dictionary<string, object?>
+                {
+                    ["approvedReceiptCount"] = approvedReceiptCount,
+                    ["approvedReceiptIds"] = approvedReceiptIds
+                });
         }
 
         if (receiptIds.Count > 0)
         {
-            var hasReceiptAllocations = await _db.ReceiptAllocations
-                .AnyAsync(a => receiptIds.Contains(a.ReceiptId), ct);
-            if (hasReceiptAllocations)
+            var receiptAllocationLinks = await _db.ReceiptAllocations
+                .Where(a => receiptIds.Contains(a.ReceiptId))
+                .Select(a => new { a.ReceiptId, a.InvoiceId, a.AdvanceId })
+                .Take(BlockingPreviewLimit)
+                .ToListAsync(ct);
+            if (receiptAllocationLinks.Count > 0)
             {
-                throw new InvalidOperationException("Rollback blocked: batch receipts have allocations. Void receipts first.");
+                throw CreateBlockedException(
+                    "RECEIPTS_ALLOCATED",
+                    batchId,
+                    "Rollback blocked: batch receipts have allocations. Void receipts first.",
+                    new Dictionary<string, object?>
+                    {
+                        ["receiptAllocationCount"] = receiptAllocationLinks.Count,
+                        ["receiptIds"] = receiptAllocationLinks.Select(a => a.ReceiptId).Distinct().ToList(),
+                        ["invoiceIds"] = receiptAllocationLinks.Where(a => a.InvoiceId.HasValue).Select(a => a.InvoiceId!.Value).Distinct().ToList(),
+                        ["advanceIds"] = receiptAllocationLinks.Where(a => a.AdvanceId.HasValue).Select(a => a.AdvanceId!.Value).Distinct().ToList()
+                    });
             }
         }
 
         if (invoiceIds.Count > 0)
         {
-            var hasInvoiceAllocations = await _db.ReceiptAllocations
-                .AnyAsync(a => a.InvoiceId.HasValue && invoiceIds.Contains(a.InvoiceId.Value), ct);
-            if (hasInvoiceAllocations)
+            var invoiceAllocationLinks = await _db.ReceiptAllocations
+                .Where(a => a.InvoiceId.HasValue && invoiceIds.Contains(a.InvoiceId.Value))
+                .Select(a => new { a.InvoiceId, a.ReceiptId })
+                .Take(BlockingPreviewLimit)
+                .ToListAsync(ct);
+            if (invoiceAllocationLinks.Count > 0)
             {
-                throw new InvalidOperationException("Rollback blocked: batch invoices are allocated. Void receipts first.");
+                throw CreateBlockedException(
+                    "INVOICES_ALLOCATED",
+                    batchId,
+                    "Rollback blocked: batch invoices are allocated. Void receipts first.",
+                    new Dictionary<string, object?>
+                    {
+                        ["invoiceAllocationCount"] = invoiceAllocationLinks.Count,
+                        ["invoiceIds"] = invoiceAllocationLinks.Where(a => a.InvoiceId.HasValue).Select(a => a.InvoiceId!.Value).Distinct().ToList(),
+                        ["receiptIds"] = invoiceAllocationLinks.Select(a => a.ReceiptId).Distinct().ToList()
+                    });
             }
         }
 
         if (advanceIds.Count > 0)
         {
-            var hasAdvanceAllocations = await _db.ReceiptAllocations
-                .AnyAsync(a => a.AdvanceId.HasValue && advanceIds.Contains(a.AdvanceId.Value), ct);
-            if (hasAdvanceAllocations)
+            var advanceAllocationLinks = await _db.ReceiptAllocations
+                .Where(a => a.AdvanceId.HasValue && advanceIds.Contains(a.AdvanceId.Value))
+                .Select(a => new { a.AdvanceId, a.ReceiptId })
+                .Take(BlockingPreviewLimit)
+                .ToListAsync(ct);
+            if (advanceAllocationLinks.Count > 0)
             {
-                throw new InvalidOperationException("Rollback blocked: batch advances are allocated. Void receipts first.");
+                throw CreateBlockedException(
+                    "ADVANCES_ALLOCATED",
+                    batchId,
+                    "Rollback blocked: batch advances are allocated. Void receipts first.",
+                    new Dictionary<string, object?>
+                    {
+                        ["advanceAllocationCount"] = advanceAllocationLinks.Count,
+                        ["advanceIds"] = advanceAllocationLinks.Where(a => a.AdvanceId.HasValue).Select(a => a.AdvanceId!.Value).Distinct().ToList(),
+                        ["receiptIds"] = advanceAllocationLinks.Select(a => a.ReceiptId).Distinct().ToList()
+                    });
             }
         }
 
@@ -88,7 +140,14 @@ public sealed class ImportRollbackService : IImportRollbackService
         {
             if (!request.OverridePeriodLock)
             {
-                throw new InvalidOperationException($"Period is locked for rollback: {string.Join(", ", lockedPeriods)}.");
+                throw CreateBlockedException(
+                    "PERIOD_LOCKED",
+                    batchId,
+                    $"Period is locked for rollback: {string.Join(", ", lockedPeriods)}.",
+                    new Dictionary<string, object?>
+                    {
+                        ["lockedPeriods"] = lockedPeriods
+                    });
             }
 
             overrideReason = PeriodLockOverridePolicy.RequireOverride(_currentUser, request.OverrideReason);
@@ -149,5 +208,18 @@ public sealed class ImportRollbackService : IImportRollbackService
             ct);
 
         return new ImportRollbackResult(invoices.Count, advances.Count, receipts.Count);
+    }
+
+    private static ImportRollbackBlockedException CreateBlockedException(
+        string reason,
+        Guid batchId,
+        string detail,
+        Dictionary<string, object?> data)
+    {
+        var payload = new Dictionary<string, object?>(data)
+        {
+            ["action"] = "Xử lý các chứng từ liên quan trước rồi thực hiện hoàn tác lại."
+        };
+        return new ImportRollbackBlockedException(reason, detail, batchId, payload);
     }
 }

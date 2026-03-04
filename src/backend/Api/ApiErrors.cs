@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Common;
+using CongNoGolden.Application.Imports;
 using Microsoft.AspNetCore.Http;
 
 namespace CongNoGolden.Api;
@@ -27,6 +28,7 @@ public static class ApiErrors
     {
         return ex switch
         {
+            ImportRollbackBlockedException rollbackBlocked => ImportRollbackBlocked(rollbackBlocked),
             ConcurrencyException => Concurrency(ex.Message),
             UnauthorizedAccessException => Forbidden(ex.Message),
             InvalidOperationException => InvalidRequest(ex.Message, "INVALID_OPERATION"),
@@ -43,5 +45,20 @@ public static class ApiErrors
             detail: detail,
             statusCode: status,
             extensions: new Dictionary<string, object?> { ["code"] = code });
+    }
+
+    private static IResult ImportRollbackBlocked(ImportRollbackBlockedException ex)
+    {
+        return Results.Problem(
+            title: "Bad Request",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?>
+            {
+                ["code"] = "IMPORT_ROLLBACK_BLOCKED",
+                ["reason"] = ex.Reason,
+                ["batchId"] = ex.BatchId,
+                ["data"] = ex.ContextData
+            });
     }
 }

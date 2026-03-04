@@ -43,6 +43,27 @@ describe('formatRollbackErrorMessage', () => {
     expect(formatRollbackErrorMessage(error)).toBe('Some other rollback error')
   })
 
+  it('maps structured rollback blocked payload with related ids', () => {
+    const error = new ApiError(
+      'Bad request',
+      400,
+      'Rollback blocked',
+      {
+        code: 'IMPORT_ROLLBACK_BLOCKED',
+        reason: 'INVOICES_ALLOCATED',
+        data: {
+          invoiceIds: ['inv-001', 'inv-002'],
+          receiptIds: ['rcp-001'],
+        },
+      },
+    )
+
+    const message = formatRollbackErrorMessage(error)
+    expect(message).toContain('hóa đơn đã được phân bổ')
+    expect(message).toContain('inv-001')
+    expect(message).toContain('rcp-001')
+  })
+
   it('returns fallback for non-api error', () => {
     expect(formatRollbackErrorMessage(new Error('boom'))).toBe('Hoàn tác thất bại.')
   })

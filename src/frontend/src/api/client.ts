@@ -3,11 +3,13 @@ import { formatApiErrorMessage } from './errorMessages'
 export class ApiError extends Error {
   status: number
   detail?: string
+  payload?: unknown
 
-  constructor(message: string, status: number, detail?: string) {
+  constructor(message: string, status: number, detail?: string, payload?: unknown) {
     super(message)
     this.status = status
     this.detail = detail
+    this.payload = payload
   }
 }
 
@@ -21,18 +23,29 @@ type FetchOptions = {
   signal?: AbortSignal
 }
 
-const parseErrorMessage = async (response: Response) => {
+type ParsedError = {
+  message: string
+  detail?: string
+  payload?: unknown
+}
+
+const parseErrorMessage = async (response: Response): Promise<ParsedError> => {
   const fallback = response.statusText || 'Request failed'
   try {
     const contentType = response.headers.get('content-type') ?? ''
     if (contentType.includes('json')) {
       const payload = await response.json()
-      return formatApiErrorMessage(payload, fallback)
+      const message = formatApiErrorMessage(payload, fallback)
+      const detail =
+        payload && typeof payload === 'object' && typeof (payload as { detail?: unknown }).detail === 'string'
+          ? (payload as { detail: string }).detail
+          : undefined
+      return { message, detail, payload }
     }
   } catch {
-    return fallback
+    return { message: fallback }
   }
-  return fallback
+  return { message: fallback }
 }
 
 const buildRequest = (path: string, options: FetchOptions) => {
@@ -72,8 +85,8 @@ export const apiFetch = async <T>(path: string, options: FetchOptions = {}) => {
   })
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response)
-    throw new ApiError(message, response.status)
+    const parsed = await parseErrorMessage(response)
+    throw new ApiError(parsed.message, response.status, parsed.detail, parsed.payload)
   }
 
   if (response.status === 204) {
@@ -102,8 +115,8 @@ export const apiFetchBlob = async (path: string, options: FetchOptions = {}) => 
   })
 
   if (!response.ok) {
-    const message = await parseErrorMessage(response)
-    throw new ApiError(message, response.status)
+    const parsed = await parseErrorMessage(response)
+    throw new ApiError(parsed.message, response.status, parsed.detail, parsed.payload)
   }
 
   const blob = await response.blob()

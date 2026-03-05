@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
@@ -14,8 +14,10 @@ import {
 import { useAuth } from '../context/AuthStore'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useServerSyncedPreferences } from '../hooks/useServerSyncedPreferences'
 import { formatDateTime, formatMoney } from '../utils/format'
-import { toDateInput } from './reports/reportUtils'
+import { buildAllocationSummary } from './shared/allocationSummary'
+import { toDateInput } from './shared/dateInput'
 import AllocationDonutCard from './dashboard/AllocationDonutCard'
 import DashboardCashflowChart, {
   type TrendGranularity,
@@ -223,9 +225,14 @@ const renderMomBadge = (
   )
 }
 
+type DashboardPreferenceState = {
+  widgetOrder: DashboardWidgetId[]
+  hiddenWidgets: DashboardWidgetId[]
+}
+
 const areDashboardPreferencesEqual = (
-  first: DashboardPreferences | null,
-  second: DashboardPreferences | null,
+  first: DashboardPreferenceState | null,
+  second: DashboardPreferenceState | null,
 ) => {
   if (!first || !second) return false
   if (first.widgetOrder.length !== second.widgetOrder.length) return false
@@ -235,6 +242,11 @@ const areDashboardPreferencesEqual = (
   if (!sameOrder) return false
   return first.hiddenWidgets.every((item, index) => item === second.hiddenWidgets[index])
 }
+
+const normalizeDashboardPreferences = (value: DashboardPreferences): DashboardPreferenceState => ({
+  widgetOrder: normalizeDashboardWidgetOrder(value.widgetOrder),
+  hiddenWidgets: normalizeDashboardHiddenWidgets(value.hiddenWidgets),
+})
 
 export default function DashboardPage() {
   const { state } = useAuth()
@@ -263,10 +275,8 @@ export default function DashboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [widgetOrder, setWidgetOrder] = useState<DashboardWidgetId[]>(defaultDashboardWidgetOrder)
   const [hiddenWidgets, setHiddenWidgets] = useState<DashboardWidgetId[]>([])
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
   const [preferencesError, setPreferencesError] = useState<string | null>(null)
-  const [lastSavedPreferences, setLastSavedPreferences] = useState<DashboardPreferences | null>(null)
-  const pendingPreferences = useMemo<DashboardPreferences>(
+  const pendingPreferences = useMemo<DashboardPreferenceState>(
     () => ({
       widgetOrder,
       hiddenWidgets,
@@ -278,72 +288,26 @@ export default function DashboardPage() {
     () => getTrendPeriodsFromRange(range, trendGranularity),
     [range, trendGranularity],
   )
+  const applyDashboardPreferences = useCallback((value: DashboardPreferenceState) => {
+    setWidgetOrder(value.widgetOrder)
+    setHiddenWidgets(value.hiddenWidgets)
+  }, [])
+
+  useServerSyncedPreferences<DashboardPreferences, DashboardPreferenceState>({
+    token,
+    pendingPreferences: debouncedPreferences,
+    fetchPreferences: fetchDashboardPreferences,
+    updatePreferences: updateDashboardPreferences,
+    toLocal: normalizeDashboardPreferences,
+    applyLocal: applyDashboardPreferences,
+    isEqual: areDashboardPreferencesEqual,
+    onPersistStart: () => setPreferencesError(null),
+    onPersistError: () => setPreferencesError('Không lưu được cấu hình widget dashboard.'),
+  })
 
   const handleTrendGranularityChange = (value: TrendGranularity) => {
     setTrendGranularity(value)
   }
-
-  useEffect(() => {
-    if (!token) return
-    let isActive = true
-
-    const loadPreferences = async () => {
-      try {
-        const result = await fetchDashboardPreferences(token)
-        if (!isActive) return
-        const normalizedOrder = normalizeDashboardWidgetOrder(result.widgetOrder)
-        const normalizedHidden = normalizeDashboardHiddenWidgets(result.hiddenWidgets)
-        setWidgetOrder(normalizedOrder)
-        setHiddenWidgets(normalizedHidden)
-        setLastSavedPreferences({
-          widgetOrder: normalizedOrder,
-          hiddenWidgets: normalizedHidden,
-        })
-      } catch {
-        if (!isActive) return
-      } finally {
-        if (isActive) {
-          setPreferencesLoaded(true)
-        }
-      }
-    }
-
-    loadPreferences()
-    return () => {
-      isActive = false
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (!token || !preferencesLoaded) return
-    if (areDashboardPreferencesEqual(lastSavedPreferences, debouncedPreferences)) return
-
-    let isActive = true
-
-    const persistPreferences = async () => {
-      setPreferencesError(null)
-      try {
-        const result = await updateDashboardPreferences(token, debouncedPreferences)
-        if (!isActive) return
-        const normalizedOrder = normalizeDashboardWidgetOrder(result.widgetOrder)
-        const normalizedHidden = normalizeDashboardHiddenWidgets(result.hiddenWidgets)
-        setWidgetOrder(normalizedOrder)
-        setHiddenWidgets(normalizedHidden)
-        setLastSavedPreferences({
-          widgetOrder: normalizedOrder,
-          hiddenWidgets: normalizedHidden,
-        })
-      } catch {
-        if (!isActive) return
-        setPreferencesError('Không lưu được cấu hình widget dashboard.')
-      }
-    }
-
-    persistPreferences()
-    return () => {
-      isActive = false
-    }
-  }, [token, preferencesLoaded, debouncedPreferences, lastSavedPreferences])
 
   const handleToggleWidgetVisibility = (widgetId: DashboardWidgetId, visible: boolean) => {
     setHiddenWidgets((prev) => {
@@ -541,36 +505,10 @@ export default function DashboardPage() {
     return { ...totals, variance, actualRatio }
   }, [overview])
 
-  const allocationSummary = useMemo<AllocationSummary>(() => {
-    const rows = overview?.allocationStatuses ?? []
-    const bucket = {
-      ALLOCATED: 0,
-      PARTIAL: 0,
-      UNALLOCATED: 0,
-    }
-
-    rows.forEach((row) => {
-      const key = row.status.toUpperCase()
-      if (key === 'ALLOCATED') bucket.ALLOCATED += row.amount
-      else if (key === 'PARTIAL') bucket.PARTIAL += row.amount
-      else bucket.UNALLOCATED += row.amount
-    })
-
-    const total = bucket.ALLOCATED + bucket.PARTIAL + bucket.UNALLOCATED
-    const items: AllocationSummary['items'] = [
-      { key: 'ALLOCATED', label: 'Đã phân bổ', amount: bucket.ALLOCATED, percent: 0 },
-      { key: 'PARTIAL', label: 'Phân bổ một phần', amount: bucket.PARTIAL, percent: 0 },
-      { key: 'UNALLOCATED', label: 'Chưa phân bổ', amount: bucket.UNALLOCATED, percent: 0 },
-    ]
-
-    return {
-      total,
-      items: items.map((item) => ({
-        ...item,
-        percent: total > 0 ? Math.round((item.amount / total) * 1000) / 10 : 0,
-      })),
-    }
-  }, [overview])
+  const allocationSummary = useMemo<AllocationSummary>(
+    () => buildAllocationSummary(overview?.allocationStatuses ?? []),
+    [overview],
+  )
 
   const executiveSummary = overview?.executiveSummary
   const roleView = resolveRoleView(state.roles)

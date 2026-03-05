@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { ReportCharts } from '../../api/reports'
 import { formatMoney } from '../../utils/format'
+import { buildAllocationSummary } from '../shared/allocationSummary'
 
 type ReportsChartsSectionProps = {
   charts: ReportCharts | null
@@ -63,35 +64,10 @@ export function ReportsChartsSection({ charts, loading }: ReportsChartsSectionPr
     }
   }, [charts])
 
-  const allocationSummary = useMemo(() => {
-    const rows = charts?.allocationStatuses ?? []
-    const bucket = {
-      ALLOCATED: 0,
-      PARTIAL: 0,
-      UNALLOCATED: 0,
-    }
-
-    rows.forEach((row) => {
-      const key = row.status.toUpperCase()
-      if (key === 'ALLOCATED') bucket.ALLOCATED += row.amount
-      else if (key === 'PARTIAL') bucket.PARTIAL += row.amount
-      else bucket.UNALLOCATED += row.amount
-    })
-
-    const total = bucket.ALLOCATED + bucket.PARTIAL + bucket.UNALLOCATED
-
-    return {
-      total,
-      items: [
-        { key: 'ALLOCATED', label: 'Đã phân bổ', amount: bucket.ALLOCATED },
-        { key: 'PARTIAL', label: 'Phân bổ một phần', amount: bucket.PARTIAL },
-        { key: 'UNALLOCATED', label: 'Chưa phân bổ', amount: bucket.UNALLOCATED },
-      ].map((item) => ({
-        ...item,
-        percent: total > 0 ? Math.round((item.amount / total) * 1000) / 10 : 0,
-      })),
-    }
-  }, [charts])
+  const allocationSummary = useMemo(
+    () => buildAllocationSummary(charts?.allocationStatuses ?? []),
+    [charts],
+  )
 
   return (
     <section className="reports-charts">

@@ -21,13 +21,13 @@
       "description": "Xem trạng thái công nợ tổng quan"
     },
     {
-      "name": "Nhập liệu",
+      "name": "Nhập liệu HĐ",
       "short_name": "Imports",
       "url": "/imports",
       "description": "Tải và kiểm tra dữ liệu nhập liệu"
     },
     {
-      "name": "Báo cáo",
+      "name": "Báo cáo chi tiết",
       "short_name": "Reports",
       "url": "/reports",
       "description": "Mở nhanh khu vực báo cáo"

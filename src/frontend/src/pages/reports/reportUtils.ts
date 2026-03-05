@@ -1,4 +1,5 @@
 import type { LookupOption } from '../../api/lookups'
+import { toDateInput } from '../shared/dateInput'
 
 export type ReportPresetConfig = {
   id: string
@@ -25,13 +26,7 @@ export const defaultKpiOrder = [
 ]
 
 export const quickActionsStorageKey = 'reports.quickActions.open'
-
-export const toDateInput = (value: Date) => {
-  const year = value.getFullYear()
-  const month = String(value.getMonth() + 1).padStart(2, '0')
-  const day = String(value.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
+export { toDateInput }
 
 export const buildPresetList = (): ReportPresetConfig[] => {
   const today = new Date()

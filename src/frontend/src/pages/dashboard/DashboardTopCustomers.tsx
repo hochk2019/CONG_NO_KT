@@ -2,6 +2,7 @@ import type { DashboardOverdueGroupItem, DashboardTopItem } from '../../api/dash
 import EmptyState from '../../components/EmptyState'
 import DashboardOverdueChart from './DashboardOverdueChart'
 import { formatMoney } from '../../utils/format'
+import { renderTopList } from '../shared/topListRenderer'
 
 type DashboardTopCustomersProps = {
   topCount: number
@@ -12,42 +13,6 @@ type DashboardTopCustomersProps = {
   overdueGroups: DashboardOverdueGroupItem[]
   overdueGroupsLoading: boolean
   overdueGroupsError: string | null
-}
-
-const renderTopList = (
-  rows: DashboardTopItem[],
-  emptyMessage: string,
-  showDays: boolean,
-) => {
-  if (rows.length === 0) {
-    return (
-      <EmptyState
-        title="Chưa có dữ liệu"
-        description={emptyMessage}
-        icon="📭"
-        compact
-      />
-    )
-  }
-
-  return (
-    <div>
-      {rows.map((row) => (
-        <div className="list-row" key={row.customerTaxCode}>
-          <div>
-            <div className="list-title">{row.customerName}</div>
-            <div className="muted">{row.customerTaxCode}</div>
-          </div>
-          <div className="list-meta">
-            <div>{formatMoney(row.amount)}</div>
-            {showDays && row.daysPastDue !== null && row.daysPastDue !== undefined ? (
-              <span className="muted">{row.daysPastDue} ngày</span>
-            ) : null}
-          </div>
-        </div>
-      ))}
-    </div>
-  )
 }
 
 export default function DashboardTopCustomers({
@@ -78,11 +43,30 @@ export default function DashboardTopCustomers({
         </div>
         <div className="stack-section">
           <h4 className="subsection-title">Top công nợ lớn nhất</h4>
-          {renderTopList(topOutstanding, 'Danh sách này sẽ xuất hiện sau khi có công nợ.', false)}
+          {renderTopList({
+            rows: topOutstanding,
+            emptyMessage: 'Danh sách này sẽ xuất hiện sau khi có công nợ.',
+            formatAmount: formatMoney,
+            buildMeta: () => null,
+            emptyRenderer: (message) => (
+              <EmptyState title="Chưa có dữ liệu" description={message} icon="📭" compact />
+            ),
+          })}
         </div>
         <div className="stack-section">
           <h4 className="subsection-title">Top quá hạn lâu nhất</h4>
-          {renderTopList(topOverdueDays, 'Hiện chưa có khoản quá hạn.', true)}
+          {renderTopList({
+            rows: topOverdueDays,
+            emptyMessage: 'Hiện chưa có khoản quá hạn.',
+            formatAmount: formatMoney,
+            buildMeta: (row) =>
+              row.daysPastDue !== null && row.daysPastDue !== undefined
+                ? `${row.daysPastDue} ngày`
+                : null,
+            emptyRenderer: (message) => (
+              <EmptyState title="Chưa có dữ liệu" description={message} icon="📭" compact />
+            ),
+          })}
         </div>
       </section>
 
@@ -90,7 +74,15 @@ export default function DashboardTopCustomers({
         <section className="card">
           <h3>Top trả đúng hạn nhất</h3>
           <p className="muted">Khách hàng có tỷ lệ quá hạn thấp nhất trong kỳ.</p>
-          {renderTopList(topOnTime, 'Danh sách sẽ hiển thị khi có lịch sử thu đúng hạn.', false)}
+          {renderTopList({
+            rows: topOnTime,
+            emptyMessage: 'Danh sách sẽ hiển thị khi có lịch sử thu đúng hạn.',
+            formatAmount: formatMoney,
+            buildMeta: () => null,
+            emptyRenderer: (message) => (
+              <EmptyState title="Chưa có dữ liệu" description={message} icon="📭" compact />
+            ),
+          })}
         </section>
 
         <section className="card">

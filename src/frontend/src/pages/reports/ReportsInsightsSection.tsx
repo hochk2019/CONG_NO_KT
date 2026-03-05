@@ -1,5 +1,6 @@
-import type { ReportInsights, ReportOverdueGroup, ReportTopCustomer } from '../../api/reports'
+import type { ReportInsights, ReportOverdueGroup } from '../../api/reports'
 import { formatMoney } from '../../utils/format'
+import { renderTopList } from '../shared/topListRenderer'
 
 type ReportsInsightsSectionProps = {
   insights: ReportInsights | null
@@ -13,41 +14,6 @@ const formatRatio = (ratio?: number | null) => {
   if (ratio === null || ratio === undefined) return null
   const percent = Math.round(ratio * 1000) / 10
   return `${percent}% đã trả`
-}
-
-const renderTopList = (
-  rows: ReportTopCustomer[],
-  emptyMessage: string,
-  buildMeta: (row: ReportTopCustomer) => string | null,
-  loading: boolean,
-) => {
-  if (loading) {
-    return <div className="empty-state">Đang tải dữ liệu...</div>
-  }
-
-  if (rows.length === 0) {
-    return <div className="empty-state">{emptyMessage}</div>
-  }
-
-  return (
-    <div>
-      {rows.map((row) => {
-        const meta = buildMeta(row)
-        return (
-          <div className="list-row" key={row.customerTaxCode}>
-            <div>
-              <div className="list-title">{row.customerName}</div>
-              <div className="muted">{row.customerTaxCode}</div>
-            </div>
-            <div className="list-meta">
-              <div>{formatMoney(row.amount)}</div>
-              {meta && <span className="muted">{meta}</span>}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
 }
 
 const renderOverdueByOwner = (
@@ -122,24 +88,27 @@ export function ReportsInsightsSection({
             </label>
           </div>
           <p className="muted">Khách hàng có dư nợ cao nhất trong kỳ.</p>
-          {renderTopList(
-            topOutstanding,
+          {renderTopList({
+            rows: topOutstanding,
             emptyMessage,
-            (row) => (row.daysPastDue !== null && row.daysPastDue !== undefined ? `${row.daysPastDue} ngày` : null),
+            formatAmount: formatMoney,
+            buildMeta: (row) =>
+              row.daysPastDue !== null && row.daysPastDue !== undefined ? `${row.daysPastDue} ngày` : null,
             loading,
-          )}
+          })}
         </section>
       </div>
       <div className="reports-insights__column">
         <section className="card">
           <h3>Top trả đúng hạn nhất</h3>
           <p className="muted">Chỉ tính khách hàng phát sinh trong kỳ.</p>
-          {renderTopList(
-            topOnTime,
+          {renderTopList({
+            rows: topOnTime,
             emptyMessage,
-            (row) => formatRatio(row.ratio),
+            formatAmount: formatMoney,
+            buildMeta: (row) => formatRatio(row.ratio),
             loading,
-          )}
+          })}
         </section>
         <section className="card">
           <h3>Quá hạn theo phụ trách</h3>

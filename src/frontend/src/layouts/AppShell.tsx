@@ -29,13 +29,13 @@ const isRiskCollectionItem = (item: NavItem) => item.to === '/risk' || item.to =
 
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
-  { label: 'Nhập liệu', to: '/imports', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Khoản trả hộ', to: '/advances', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Khách hàng', to: '/customers', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  { label: 'Nhập liệu HĐ', to: '/imports', roles: ['Admin', 'Supervisor', 'Accountant'] },
+  { label: 'Nhập liệu Trả hộ', to: '/advances', roles: ['Admin', 'Supervisor', 'Accountant'] },
+  { label: 'Thu tiền', to: '/receipts', roles: ['Admin', 'Supervisor', 'Accountant'] },
   { label: 'Cảnh báo rủi ro', to: '/risk', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   { label: 'Thu hồi nợ', to: '/collections', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Thu tiền', to: '/receipts', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Báo cáo', to: '/reports', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  { label: 'Khách hàng', to: '/customers', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  { label: 'Báo cáo chi tiết', to: '/reports', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   { label: 'Người dùng', to: '/admin/users', roles: ['Admin'], kicker: 'Admin' },
   { label: 'Khóa kỳ', to: '/admin/period-locks', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
   { label: 'Nhật ký', to: '/admin/audit', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },

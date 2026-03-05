@@ -31,6 +31,7 @@ import { useAuth } from '../context/AuthStore'
 import { useDebouncedValue } from '../hooks/useDebouncedValue'
 import { usePagination } from '../hooks/usePagination'
 import { usePersistedState } from '../hooks/usePersistedState'
+import { useServerSyncedPreferences } from '../hooks/useServerSyncedPreferences'
 import { formatDate } from '../utils/format'
 import { ReportsChartsSection } from './reports/ReportsChartsSection'
 import { ReportsFilters, type ReportPreset } from './reports/ReportsFilters'
@@ -81,6 +82,11 @@ const arePreferencesEqual = (
   if (first.kpiOrder.length !== second.kpiOrder.length) return false
   return first.kpiOrder.every((item, index) => item === second.kpiOrder[index])
 }
+
+const normalizeReportPreferences = (value: ReportPreferences): ReportPreferences => ({
+  kpiOrder: value.kpiOrder.length ? value.kpiOrder : defaultKpiOrder,
+  dueSoonDays: value.dueSoonDays || 7,
+})
 
 export function ReportsPage() {
   const { state } = useAuth()
@@ -155,8 +161,6 @@ export function ReportsPage() {
     onConfirm?: () => void
   } | null>(null)
 
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false)
-  const [lastSavedPreferences, setLastSavedPreferences] = useState<ReportPreferences | null>(null)
   const [kpiOrder, setKpiOrder] = useState<string[]>(defaultKpiOrder)
   const [dueSoonDays, setDueSoonDays] = useState(7)
   const [overviewLoaded, setOverviewLoaded] = useState(false)
@@ -184,6 +188,21 @@ export function ReportsPage() {
     [kpiOrder, dueSoonDays],
   )
   const debouncedPreferences = useDebouncedValue(pendingPreferences, 600)
+  const applyReportPreferences = useCallback((value: ReportPreferences) => {
+    setKpiOrder(value.kpiOrder)
+    setDueSoonDays(value.dueSoonDays)
+  }, [])
+
+  const { preferencesLoaded } = useServerSyncedPreferences<ReportPreferences, ReportPreferences>({
+    token,
+    pendingPreferences: debouncedPreferences,
+    fetchPreferences: fetchReportPreferences,
+    updatePreferences: updateReportPreferences,
+    toLocal: normalizeReportPreferences,
+    applyLocal: applyReportPreferences,
+    isEqual: arePreferencesEqual,
+    onPersistError: () => setError('Không lưu được cấu hình báo cáo.'),
+  })
 
   useEffect(() => {
     if (!location.hash) return
@@ -263,53 +282,6 @@ export function ReportsPage() {
       isActive = false
     }
   }, [token])
-
-  useEffect(() => {
-    if (!token) return
-    let isActive = true
-    const loadPreferences = async () => {
-      try {
-        const result = await fetchReportPreferences(token)
-        if (!isActive) return
-        setKpiOrder(result.kpiOrder.length ? result.kpiOrder : defaultKpiOrder)
-        setDueSoonDays(result.dueSoonDays || 7)
-        setLastSavedPreferences(result)
-        setPreferencesLoaded(true)
-      } catch {
-        if (!isActive) return
-        setPreferencesLoaded(true)
-      }
-    }
-
-    loadPreferences()
-    return () => {
-      isActive = false
-    }
-  }, [token])
-
-  useEffect(() => {
-    if (!token || !preferencesLoaded) return
-    if (arePreferencesEqual(lastSavedPreferences, debouncedPreferences)) return
-    let isActive = true
-
-    const persistPreferences = async () => {
-      try {
-        const result = await updateReportPreferences(token, debouncedPreferences)
-        if (!isActive) return
-        setLastSavedPreferences(result)
-        setKpiOrder(result.kpiOrder.length ? result.kpiOrder : defaultKpiOrder)
-        setDueSoonDays(result.dueSoonDays || 7)
-      } catch {
-        if (!isActive) return
-        setError('Không lưu được cấu hình báo cáo.')
-      }
-    }
-
-    persistPreferences()
-    return () => {
-      isActive = false
-    }
-  }, [token, preferencesLoaded, debouncedPreferences, lastSavedPreferences])
 
   const baseParams = useMemo(
     () => ({

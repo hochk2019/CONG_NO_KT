@@ -1351,3 +1351,53 @@
 - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -c Release` => pass (`154/154`).
 - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj -c Debug` => pass.
 - [x] Restart `CongNoGolden.Api.exe` + `curl http://localhost:8080/health` => `{"status":"ok"}` (`HTTP 200`).
+
+## Phase 88 - Dashboard/Reports dedupe + shared UX helpers (2026-03-05) [bead: cng-6jw]
+- [x] Tách helper dùng chung cho Dashboard/Reports:
+  - [x] `src/frontend/src/pages/shared/dateInput.ts` (`toDateInput`).
+  - [x] `src/frontend/src/pages/shared/allocationSummary.ts` (`buildAllocationSummary`).
+  - [x] `src/frontend/src/pages/shared/topListRenderer.tsx` (`renderTopList` với loading/empty/custom renderer).
+- [x] Tạo hook đồng bộ preferences server dùng chung:
+  - [x] `src/frontend/src/hooks/useServerSyncedPreferences.ts`.
+  - [x] Áp dụng vào `DashboardPage` và `ReportsPage`, loại bỏ effect đồng bộ lặp lại.
+- [x] Refactor các section liên quan để dùng module shared:
+  - [x] `DashboardTopCustomers`, `ReportsInsightsSection`, `ReportsChartsSection`, `reportUtils`.
+- [x] Bổ sung/cập nhật test cho module mới và luồng liên quan:
+  - [x] `src/frontend/src/pages/shared/__tests__/*`.
+  - [x] `src/frontend/src/hooks/__tests__/useServerSyncedPreferences.test.tsx`.
+- [x] Đồng bộ bead tracker `cng-6jw`.
+
+### Verification evidence (2026-03-05, phase 88 / cng-6jw)
+- [x] `npm --prefix src/frontend run test -- --run src/hooks/__tests__/useServerSyncedPreferences.test.tsx src/pages/shared/__tests__/dateInput.test.ts src/pages/shared/__tests__/allocationSummary.test.ts src/pages/shared/__tests__/topListRenderer.test.tsx src/pages/__tests__/dashboard-page.test.tsx` => pass (`13/13`).
+- [x] `npm --prefix src/frontend run test -- --run src/pages/reports/__tests__/report-utils.test.ts src/pages/reports/__tests__/reports-modules.test.tsx src/pages/reports/__tests__/reports-quick-actions.test.tsx src/pages/reports/__tests__/reports-validation-modal.test.tsx` => pass (`13/13`).
+- [x] `npm --prefix src/frontend run test -- --run` => pass (`49/49` files, `153/153` tests).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+
+## Phase 89 - Navigation label clarity for Imports/Advances/Reports (2026-03-05) [bead: cng-9u9]
+- [x] Đổi nhãn UX menu điều hướng:
+  - [x] `/imports`: `Nhập liệu` -> `Nhập liệu HĐ`.
+  - [x] `/advances`: `Khoản trả hộ` -> `Nhập liệu Trả hộ`.
+  - [x] `/reports`: `Báo cáo` -> `Báo cáo chi tiết`.
+- [x] Đồng bộ label liên quan:
+  - [x] `NotificationsPage` source label `IMPORT`.
+  - [x] PWA shortcut names trong `public/manifest.json` cho Imports/Reports.
+- [x] Cập nhật test text selector liên quan:
+  - [x] `app-shell.test.tsx`.
+  - [x] `e2e/imports.spec.ts`.
+
+### Verification evidence (2026-03-05, phase 89 / cng-9u9)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx` => pass (`8/8`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+
+## Phase 90 - Sidebar order refinement for Receipts/Customers (2026-03-05) [bead: cng-5ys]
+- [x] Điều chỉnh thứ tự menu sidebar trong `AppShell`:
+  - [x] Đưa `Thu tiền` (`/receipts`) lên ngay sau `Nhập liệu Trả hộ` (`/advances`).
+  - [x] Dời `Khách hàng` (`/customers`) xuống gần `Báo cáo chi tiết` (`/reports`).
+- [x] Bổ sung assertion test để khóa thứ tự hiển thị mới trong `app-shell.test.tsx`.
+- [x] Đồng bộ bead tracker `cng-5ys`.
+
+### Verification evidence (2026-03-05, phase 90 / cng-5ys)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx` => pass (`8/8`).
+- [x] `npm --prefix src/frontend run lint` => pass.

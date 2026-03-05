@@ -20,7 +20,7 @@ type SourceOption = {
 const SOURCE_OPTIONS: SourceOption[] = [
   { value: 'RISK', label: 'Rủi ro công nợ', link: '/risk' },
   { value: 'RECEIPT', label: 'Phiếu thu', link: '/receipts' },
-  { value: 'IMPORT', label: 'Nhập liệu', link: '/imports' },
+  { value: 'IMPORT', label: 'Nhập liệu HĐ', link: '/imports' },
   { value: 'SYSTEM', label: 'Hệ thống', link: '/dashboard' },
 ]
 

@@ -5,7 +5,7 @@ import { loginAsDefaultUser } from './support/auth'
 test.describe('Imports page', () => {
   test('Upload template and see batch id', async ({ page }) => {
     await loginAsDefaultUser(page)
-    await page.getByRole('link', { name: 'Nhập liệu' }).first().click()
+    await page.getByRole('link', { name: 'Nhập liệu HĐ' }).first().click()
 
     await expect(
       page.getByRole('heading', { name: 'Nhập file, kiểm tra trước khi ghi dữ liệu' }),
@@ -20,7 +20,7 @@ test.describe('Imports page', () => {
 
   test('Manual advances shows advanced filters', async ({ page }) => {
     await loginAsDefaultUser(page)
-    await page.getByRole('link', { name: 'Nhập liệu' }).first().click()
+    await page.getByRole('link', { name: 'Nhập liệu HĐ' }).first().click()
 
     await page.getByRole('tab', { name: 'Nhập thủ công (Khoản trả hộ KH)' }).click()
     await expect(page.getByRole('heading', { name: 'Khoản trả hộ KH', level: 2 })).toBeVisible()

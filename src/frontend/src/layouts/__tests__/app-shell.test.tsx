@@ -111,7 +111,16 @@ describe('AppShell', () => {
     expect(riskCollectionLinks[0]).toHaveAccessibleName('Cảnh báo rủi ro')
     expect(riskCollectionLinks[1]).toHaveAccessibleName('Thu hồi nợ')
     expect(screen.queryByRole('link', { name: 'Thông báo' })).not.toBeInTheDocument()
-    expect(screen.getByText('Khoản trả hộ')).toBeInTheDocument()
+    expect(screen.getByText('Nhập liệu Trả hộ')).toBeInTheDocument()
+
+    const advancesLink = screen.getByRole('link', { name: 'Nhập liệu Trả hộ' })
+    const receiptsLink = screen.getByRole('link', { name: 'Thu tiền' })
+    const customersLink = screen.getByRole('link', { name: 'Khách hàng' })
+    const reportsLink = screen.getByRole('link', { name: 'Báo cáo chi tiết' })
+
+    expect(advancesLink.compareDocumentPosition(receiptsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(receiptsLink.compareDocumentPosition(customersLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(customersLink.compareDocumentPosition(reportsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
 
   it('toggles mobile navigation state', async () => {

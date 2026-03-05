@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
   fetchRiskBootstrap,
@@ -21,6 +22,7 @@ import {
 } from '../api/reminders'
 import {
   fetchNotifications,
+  markAllNotificationsRead,
   markNotificationRead,
   type NotificationItem,
 } from '../api/notifications'
@@ -96,6 +98,7 @@ const storeFilter = (key: string, value: string) => {
 
 export default function RiskAlertsPage() {
   const { state } = useAuth()
+  const navigate = useNavigate()
   const token = state.accessToken ?? ''
   const canManage = state.roles.includes('Admin') || state.roles.includes('Supervisor')
   const [activeTab, setActiveTab] = useState<RiskTabKey>(() => {
@@ -147,6 +150,9 @@ export default function RiskAlertsPage() {
 
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [selectedNotificationIds, setSelectedNotificationIds] = useState<string[]>([])
+  const [notificationActionLoading, setNotificationActionLoading] = useState(false)
+  const [notificationActionError, setNotificationActionError] = useState<string | null>(null)
 
   const [zaloStatus, setZaloStatus] = useState<ZaloLinkStatus | null>(null)
   const [zaloCode, setZaloCode] = useState<ZaloLinkCode | null>(null)
@@ -647,11 +653,78 @@ export default function RiskAlertsPage() {
 
   const handleMarkRead = async (id: string) => {
     if (!token) return
+    setNotificationActionError(null)
     try {
       await markNotificationRead(token, id)
       setNotifications((prev) => prev.filter((item) => item.id !== id))
-    } catch {
-      // ignore
+      setSelectedNotificationIds((prev) => prev.filter((value) => value !== id))
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setNotificationActionError(err.message)
+      } else {
+        setNotificationActionError('Không thể đánh dấu đã đọc thông báo.')
+      }
+    }
+  }
+
+  const handleMarkSelectedRead = async () => {
+    if (!token) return
+    const selectableIds = new Set(notifications.map((item) => item.id))
+    const targetIds = selectedNotificationIds.filter((id) => selectableIds.has(id))
+    if (targetIds.length === 0) return
+
+    setNotificationActionLoading(true)
+    setNotificationActionError(null)
+
+    try {
+      if (targetIds.length === notifications.length) {
+        await markAllNotificationsRead(token)
+        setNotifications([])
+        setSelectedNotificationIds([])
+        return
+      }
+
+      const failedIds: string[] = []
+      for (const id of targetIds) {
+        try {
+          await markNotificationRead(token, id)
+        } catch {
+          failedIds.push(id)
+        }
+      }
+
+      const failedSet = new Set(failedIds)
+      setNotifications((prev) => prev.filter((item) => failedSet.has(item.id) || !targetIds.includes(item.id)))
+
+      if (failedIds.length > 0) {
+        setSelectedNotificationIds(failedIds)
+        setNotificationActionError(`Không thể đánh dấu đã đọc ${failedIds.length} thông báo.`)
+      } else {
+        setSelectedNotificationIds([])
+      }
+    } finally {
+      setNotificationActionLoading(false)
+    }
+  }
+
+  const handleMarkAllRead = async () => {
+    if (!token || notifications.length === 0) return
+
+    setNotificationActionLoading(true)
+    setNotificationActionError(null)
+
+    try {
+      await markAllNotificationsRead(token)
+      setNotifications([])
+      setSelectedNotificationIds([])
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setNotificationActionError(err.message)
+      } else {
+        setNotificationActionError('Không thể đánh dấu đã đọc tất cả thông báo.')
+      }
+    } finally {
+      setNotificationActionLoading(false)
     }
   }
 
@@ -694,6 +767,25 @@ export default function RiskAlertsPage() {
   const customerColumns = buildRiskCustomerColumns()
   const logColumns = buildReminderLogColumns()
 
+  const handleCreateCollectionQueue = () => {
+    const params = new URLSearchParams()
+    params.set('fromRisk', '1')
+
+    if (asOfDate) params.set('asOfDate', asOfDate)
+    if (ownerId) params.set('ownerId', ownerId)
+    if (level) params.set('level', level)
+
+    navigate(`/collections?${params.toString()}`)
+  }
+
+  useEffect(() => {
+    setSelectedNotificationIds((prev) => {
+      if (prev.length === 0) return prev
+      const ids = new Set(notifications.map((item) => item.id))
+      return prev.filter((id) => ids.has(id))
+    })
+  }, [notifications])
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(RISK_ACTIVE_TAB_KEY, activeTab)
@@ -702,8 +794,10 @@ export default function RiskAlertsPage() {
   return (
     <div className="page-stack">
       <RiskAlertsHeader
+        onCreateCollectionQueue={handleCreateCollectionQueue}
         onSetToday={() => setAsOfDate(toDateInput(new Date()))}
         onClearDate={() => setAsOfDate('')}
+        canCreateCollectionQueue={canManage}
       />
       <div className="tab-row" role="tablist" aria-label="Risk page tabs">
         {riskTabs.map((tab) => (
@@ -839,6 +933,12 @@ export default function RiskAlertsPage() {
             <RiskNotificationsSection
               notificationsLoading={notificationsLoading}
               notifications={notifications}
+              selectedIds={selectedNotificationIds}
+              bulkLoading={notificationActionLoading}
+              bulkError={notificationActionError}
+              onSelectedIdsChange={setSelectedNotificationIds}
+              onMarkSelectedRead={handleMarkSelectedRead}
+              onMarkAllRead={handleMarkAllRead}
               onMarkRead={handleMarkRead}
             />
           </div>

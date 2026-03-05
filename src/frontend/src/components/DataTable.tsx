@@ -27,6 +27,7 @@ type DataTableProps<T> = {
   getRowClassName?: (row: T, index: number) => string | undefined
   emptyMessage?: string
   minWidth?: string
+  showScrollHint?: boolean
   sort?: SortState
   onSort?: (next: SortState) => void
   pagination?: Pagination
@@ -43,6 +44,7 @@ export default function DataTable<T>({
   getRowClassName,
   emptyMessage = 'Không có dữ liệu.',
   minWidth,
+  showScrollHint = true,
   sort,
   onSort,
   pagination,
@@ -68,10 +70,11 @@ export default function DataTable<T>({
   const totalPages = pagination
     ? Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
     : 1
+  const tableScrollClassName = showScrollHint ? 'table-scroll' : 'table-scroll table-scroll--no-hint'
 
   return (
     <div>
-      <div className="table-scroll">
+      <div className={tableScrollClassName}>
         <table className="table" style={tableStyle}>
           <thead className="table-head">
             <tr className="table-row">

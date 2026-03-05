@@ -84,7 +84,6 @@ describe('admin backup page', () => {
       total: 1,
     })
     vi.mocked(restoreBackup).mockReturnValueOnce(pending)
-    vi.spyOn(window, 'prompt').mockReturnValue('RESTORE')
 
     render(
       <MemoryRouter>
@@ -99,6 +98,9 @@ describe('admin backup page', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Phục hồi' }))
+    await screen.findByRole('dialog')
+    await user.type(screen.getByLabelText('Mã xác nhận'), 'RESTORE')
+    await user.click(screen.getByRole('button', { name: 'Phục hồi dữ liệu' }))
 
     expect(screen.getByText('Đang phục hồi dữ liệu. Vui lòng chờ.')).toBeInTheDocument()
   })
@@ -124,7 +126,6 @@ describe('admin backup page', () => {
       total: 1,
     })
     vi.mocked(restoreBackup).mockRejectedValueOnce(new ApiError('Restore failed', 400))
-    vi.spyOn(window, 'prompt').mockReturnValue('RESTORE')
 
     render(
       <MemoryRouter>
@@ -139,6 +140,9 @@ describe('admin backup page', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'Phục hồi' }))
+    await screen.findByRole('dialog')
+    await user.type(screen.getByLabelText('Mã xác nhận'), 'RESTORE')
+    await user.click(screen.getByRole('button', { name: 'Phục hồi dữ liệu' }))
 
     await waitFor(() => {
       expect(screen.queryByText('Đang phục hồi dữ liệu. Vui lòng chờ.')).not.toBeInTheDocument()

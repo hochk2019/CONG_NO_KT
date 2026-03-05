@@ -140,4 +140,35 @@ describe('ImportBatchSection drag and drop', () => {
     await user.click(screen.getByRole('button', { name: 'Tải file' }))
     expect(uploadImportMock).not.toHaveBeenCalled()
   })
+
+  it('locks import type when fixedType is provided', async () => {
+    const user = userEvent.setup()
+    const file = new File(['demo'], 'advance-import.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    uploadImportMock.mockResolvedValue({
+      batch: { batchId: 'batch-advance-01', status: 'STAGING' },
+      staging: { totalRows: 1, okCount: 1, warnCount: 0, errorCount: 0 },
+    })
+
+    render(<ImportBatchSection token="token-1" canStage canCommit fixedType="ADVANCE" />)
+
+    expect(screen.queryByRole('combobox', { name: 'Loại dữ liệu' })).not.toBeInTheDocument()
+    expect(screen.getAllByText('Khoản trả hộ KH').length).toBeGreaterThan(0)
+
+    const dropzone = screen.getByTestId('import-dropzone')
+    fireEvent.drop(dropzone, createDropPayload(file))
+    await user.click(screen.getByRole('button', { name: 'Tải file' }))
+
+    await waitFor(() => {
+      expect(uploadImportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          token: 'token-1',
+          type: 'ADVANCE',
+          file,
+        }),
+      )
+    })
+  })
 })

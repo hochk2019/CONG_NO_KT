@@ -2,7 +2,7 @@ import { useEffect, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthStore'
 import ImportBatchSection from './ImportBatchSection'
-import ManualAdvancesSection from './ManualAdvancesSection'
+import ManualInvoicesSection from './ManualInvoicesSection'
 
 const TAB_STORAGE_KEY = 'pref.imports.tab'
 
@@ -26,7 +26,6 @@ export default function ImportsPage() {
   const token = state.accessToken ?? ''
   const canStage = state.roles.some((role) => ['Admin', 'Supervisor', 'Accountant'].includes(role))
   const canCommit = state.roles.includes('Admin') || state.roles.includes('Supervisor')
-  const canApproveManual = state.roles.includes('Admin') || state.roles.includes('Supervisor')
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -54,7 +53,7 @@ export default function ImportsPage() {
       <div className="page-header">
         <div>
           <h2>Nhập liệu công nợ</h2>
-          <p className="muted">Chọn hình thức nhập phù hợp (file hoặc thủ công).</p>
+          <p className="muted">Chọn hình thức nhập phù hợp cho hóa đơn (file hoặc thủ công).</p>
         </div>
       </div>
 
@@ -75,14 +74,12 @@ export default function ImportsPage() {
           aria-selected={activeTab === 'manual'}
           onClick={() => handleTabChange('manual')}
         >
-          Nhập thủ công (Khoản trả hộ KH)
+          Nhập thủ công hóa đơn
         </button>
       </div>
 
       {activeTab === 'batch' && <ImportBatchSection token={token} canStage={canStage} canCommit={canCommit} />}
-      {activeTab === 'manual' && (
-        <ManualAdvancesSection token={token} canApprove={canApproveManual} />
-      )}
+      {activeTab === 'manual' && <ManualInvoicesSection token={token} canCommit={canCommit} />}
     </div>
   )
 }

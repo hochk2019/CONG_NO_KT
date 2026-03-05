@@ -24,8 +24,11 @@ describe('apiFetch error parsing', () => {
 
     await expect(
       apiFetch('/admin/backup/restore', { method: 'POST', body: {} }),
-    ).rejects.toMatchObject(
-      new ApiError('Thao tác không hợp lệ. Restore file not found.', 400),
-    )
+    ).rejects.toMatchObject({
+      message: 'Thao tác không hợp lệ. Restore file not found.',
+      status: 400,
+      detail: 'Restore file not found.',
+      payload,
+    } satisfies Partial<ApiError>)
   })
 })

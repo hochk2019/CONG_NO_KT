@@ -42,7 +42,7 @@ describe('page loaders', () => {
       max: 2,
     })
 
-    expect(targets).toEqual(['/receipts', '/reports'])
+    expect(targets).toEqual(['/receipts', '/dashboard'])
   })
 
   it('falls back to role priority when no affinity match', () => {

@@ -14,6 +14,7 @@ export const loadAdminHealthPage = () => import('./AdminHealthPage')
 export const loadAdminPeriodLocksPage = () => import('./AdminPeriodLocksPage')
 export const loadAdminUsersPage = () => import('./AdminUsersPage')
 export const loadAdvancesPage = () => import('./AdvancesPage')
+export const loadCollectionsPage = () => import('./CollectionsPage')
 export const loadCustomersPage = () => import('./CustomersPage')
 export const loadDashboardPage = () => import('./DashboardPage')
 export const loadDashboardPreviewPage = () => import('./DashboardPreviewPage')
@@ -35,6 +36,7 @@ const routeLoaders: Record<string, PageLoader> = {
   '/imports': loadImportsPage,
   '/customers': loadCustomersPage,
   '/advances': loadAdvancesPage,
+  '/collections': loadCollectionsPage,
   '/receipts': loadReceiptsPage,
   '/reports': loadReportsPage,
   '/risk': loadRiskAlertsPage,
@@ -66,6 +68,7 @@ const rolePreferredRoutes: Record<string, string[]> = {
     '/dashboard',
     '/imports',
     '/customers',
+    '/collections',
     '/receipts',
     '/reports',
     '/risk',
@@ -75,10 +78,11 @@ const rolePreferredRoutes: Record<string, string[]> = {
     '/receipts',
     '/imports',
     '/customers',
+    '/collections',
     '/reports',
     '/risk',
   ],
-  Accountant: ['/dashboard', '/imports', '/receipts', '/customers', '/reports', '/risk'],
+  Accountant: ['/dashboard', '/imports', '/receipts', '/customers', '/collections', '/reports', '/risk'],
   Viewer: ['/dashboard', '/customers', '/reports', '/risk', '/notifications'],
 }
 
@@ -101,6 +105,7 @@ const roleFlows: Record<string, string[]> = {
     '/dashboard',
     '/imports',
     '/customers',
+    '/collections',
     '/receipts',
     '/reports',
     '/risk',
@@ -116,6 +121,7 @@ const roleFlows: Record<string, string[]> = {
     '/dashboard',
     '/imports',
     '/customers',
+    '/collections',
     '/receipts',
     '/reports',
     '/risk',
@@ -130,6 +136,7 @@ const roleFlows: Record<string, string[]> = {
     '/dashboard',
     '/imports',
     '/customers',
+    '/collections',
     '/receipts',
     '/reports',
     '/risk',
@@ -141,8 +148,9 @@ const roleFlows: Record<string, string[]> = {
 const routeAffinity: Record<string, string[]> = {
   '/dashboard': ['/imports', '/receipts'],
   '/imports': ['/customers', '/receipts'],
-  '/customers': ['/receipts', '/reports'],
-  '/receipts': ['/customers', '/reports'],
+  '/customers': ['/collections', '/receipts'],
+  '/collections': ['/customers', '/receipts'],
+  '/receipts': ['/collections', '/reports'],
   '/reports': ['/customers', '/dashboard'],
   '/risk': ['/customers', '/reports'],
   '/notifications': ['/dashboard', '/reports'],

@@ -25,13 +25,17 @@ type NavItem = {
   kicker?: string
 }
 
+const isRiskCollectionItem = (item: NavItem) => item.to === '/risk' || item.to === '/collections'
+
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   { label: 'Nhập liệu', to: '/imports', roles: ['Admin', 'Supervisor', 'Accountant'] },
+  { label: 'Khoản trả hộ', to: '/advances', roles: ['Admin', 'Supervisor', 'Accountant'] },
   { label: 'Khách hàng', to: '/customers', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  { label: 'Cảnh báo rủi ro', to: '/risk', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  { label: 'Thu hồi nợ', to: '/collections', roles: ['Admin', 'Supervisor', 'Accountant'] },
   { label: 'Thu tiền', to: '/receipts', roles: ['Admin', 'Supervisor', 'Accountant'] },
   { label: 'Báo cáo', to: '/reports', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
-  { label: 'Cảnh báo rủi ro', to: '/risk', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   { label: 'Người dùng', to: '/admin/users', roles: ['Admin'], kicker: 'Admin' },
   { label: 'Khóa kỳ', to: '/admin/period-locks', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
   { label: 'Nhật ký', to: '/admin/audit', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
@@ -127,6 +131,8 @@ export default function AppShell() {
   const navigate = useNavigate()
   const token = state.accessToken ?? ''
   const allowed = useMemo(() => navItems.filter((item) => isAllowed(item, state.roles)), [state.roles])
+  const defaultNavItems = useMemo(() => allowed.filter((item) => !isRiskCollectionItem(item)), [allowed])
+  const riskCollectionItems = useMemo(() => allowed.filter(isRiskCollectionItem), [allowed])
   const allowedPaths = useMemo(
     () => [...new Set([...allowed.map((item) => item.to), '/notifications'])],
     [allowed],
@@ -383,6 +389,26 @@ export default function AppShell() {
     }
   }, [confirmPassword, currentPassword, logout, newPassword, token])
 
+  const renderNavItem = useCallback(
+    (item: NavItem) => (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}
+        onMouseEnter={() => prefetchRoute(item.to)}
+        onFocus={() => prefetchRoute(item.to)}
+        onClick={() => setNavOpenPath(null)}
+      >
+        <span className="nav-item__icon" aria-hidden="true">
+          {item.label.slice(0, 1)}
+        </span>
+        <span className="nav-item__label">{item.label}</span>
+        {item.kicker && <span className="nav-pill">{item.kicker}</span>}
+      </NavLink>
+    ),
+    [],
+  )
+
   return (
     <div
       className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${
@@ -418,22 +444,13 @@ export default function AppShell() {
           </div>
         </div>
         <nav className="nav-list">
-          {allowed.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) => `nav-item${isActive ? ' nav-item--active' : ''}`}
-              onMouseEnter={() => prefetchRoute(item.to)}
-              onFocus={() => prefetchRoute(item.to)}
-              onClick={() => setNavOpenPath(null)}
-            >
-              <span className="nav-item__icon" aria-hidden="true">
-                {item.label.slice(0, 1)}
-              </span>
-              <span className="nav-item__label">{item.label}</span>
-              {item.kicker && <span className="nav-pill">{item.kicker}</span>}
-            </NavLink>
-          ))}
+          {defaultNavItems.map(renderNavItem)}
+          {riskCollectionItems.length > 0 && (
+            <div className="nav-group" aria-label="Risk and Collections">
+              <p className="nav-group__title">Risk &amp; Collections</p>
+              <div className="nav-group__items">{riskCollectionItems.map(renderNavItem)}</div>
+            </div>
+          )}
         </nav>
         <div className="nav-footer">
           <div className="user-chip">

@@ -39,6 +39,8 @@ type CustomerTransactionModalsProps = {
   onInvoiceVoidReasonChange: (value: string) => void
   invoiceReplacementId: string
   onInvoiceReplacementChange: (value: string) => void
+  invoiceReplacementConfirmed: boolean
+  onInvoiceReplacementConfirmedChange: (value: boolean) => void
   invoiceVoidLoading: boolean
   invoiceVoidError: string | null
   invoiceVoidSuccess: string | null
@@ -74,6 +76,8 @@ export default function CustomerTransactionModals({
   onInvoiceVoidReasonChange,
   invoiceReplacementId,
   onInvoiceReplacementChange,
+  invoiceReplacementConfirmed,
+  onInvoiceReplacementConfirmedChange,
   invoiceVoidLoading,
   invoiceVoidError,
   invoiceVoidSuccess,
@@ -234,6 +238,13 @@ export default function CustomerTransactionModals({
     ],
   )
 
+  const invoiceRequiresReplacement = Boolean(
+    invoiceModal &&
+      invoiceModal.mode === 'void' &&
+      (invoiceModal.row.status.toUpperCase() === 'PAID' ||
+        invoiceModal.row.status.toUpperCase() === 'PARTIAL'),
+  )
+
   return (
     <>
       {invoiceModal && (
@@ -327,8 +338,8 @@ export default function CustomerTransactionModals({
                         placeholder="Nhập lý do hủy hóa đơn"
                       />
                     </label>
-                    {(invoiceModal.row.status.toUpperCase() === 'PAID' ||
-                      invoiceModal.row.status.toUpperCase() === 'PARTIAL') && (
+                    {invoiceRequiresReplacement && (
+                      <>
                       <label className="field field--full">
                         <span>Hóa đơn thay thế (bắt buộc nếu đã thu tiền)</span>
                         <input
@@ -337,6 +348,17 @@ export default function CustomerTransactionModals({
                           placeholder="Nhập ID hóa đơn thay thế"
                         />
                       </label>
+                      <label className="field field--checkbox">
+                        <input
+                          type="checkbox"
+                          checked={invoiceReplacementConfirmed}
+                          onChange={(event) =>
+                            onInvoiceReplacementConfirmedChange(event.target.checked)
+                          }
+                        />
+                        <span>Tôi xác nhận đã import hóa đơn thay thế trước khi hủy.</span>
+                      </label>
+                      </>
                     )}
                   </div>
                   {invoiceVoidError && (
@@ -354,7 +376,7 @@ export default function CustomerTransactionModals({
                       className="btn btn-outline-danger"
                       type="button"
                       onClick={onVoidInvoice}
-                      disabled={invoiceVoidLoading}
+                      disabled={invoiceVoidLoading || (invoiceRequiresReplacement && !invoiceReplacementConfirmed)}
                     >
                       {invoiceVoidLoading ? 'Đang hủy...' : 'Xác nhận hủy'}
                     </button>

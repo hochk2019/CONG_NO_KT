@@ -9,6 +9,7 @@ import {
   type LookupOption,
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
+import ActionConfirmModal from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
 import CustomerEditModal from './CustomerEditModal'
@@ -83,6 +84,8 @@ export default function CustomerListSection({
   const [listReload, setListReload] = useState(0)
   const [statusActionLoading, setStatusActionLoading] = useState<string | null>(null)
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
+  const [statusConfirmRow, setStatusConfirmRow] = useState<CustomerListItem | null>(null)
+  const [statusConfirmNextStatus, setStatusConfirmNextStatus] = useState<'ACTIVE' | 'INACTIVE' | null>(null)
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -301,7 +304,7 @@ export default function CustomerListSection({
   }, [])
 
   const handleToggleCustomerStatus = useCallback(
-    async (row: CustomerListItem) => {
+    (row: CustomerListItem) => {
       if (!token) return
       if (!canManageCustomers) {
         setStatusActionError('Bạn không có quyền thay đổi trạng thái khách hàng.')
@@ -313,46 +316,52 @@ export default function CustomerListSection({
         setStatusActionError('Không thể ẩn khách hàng đang còn dư nợ.')
         return
       }
-      const confirmMessage =
-        nextStatus === 'INACTIVE'
-          ? `Xác nhận ẩn khách hàng "${row.name}"?`
-          : `Khôi phục khách hàng "${row.name}"?`
-      if (!window.confirm(confirmMessage)) return
-
-      setStatusActionLoading(row.taxCode)
       setStatusActionError(null)
-      try {
-        const sourceDetail =
-          detail && detail.taxCode === row.taxCode ? detail : await fetchCustomerDetail(token, row.taxCode)
-
-        await updateCustomer(token, row.taxCode, {
-          name: sourceDetail.name,
-          address: sourceDetail.address ?? null,
-          email: sourceDetail.email ?? null,
-          phone: sourceDetail.phone ?? null,
-          status: nextStatus,
-          paymentTermsDays: sourceDetail.paymentTermsDays,
-          creditLimit: sourceDetail.creditLimit ?? null,
-          ownerId: sourceDetail.ownerId ?? null,
-          managerId: sourceDetail.managerId ?? null,
-        })
-
-        if (detail && detail.taxCode === row.taxCode) {
-          setDetail({ ...sourceDetail, status: nextStatus })
-        }
-        setListReload((value) => value + 1)
-      } catch (err) {
-        if (err instanceof ApiError) {
-          setStatusActionError(err.message)
-        } else {
-          setStatusActionError('Không cập nhật được trạng thái khách hàng.')
-        }
-      } finally {
-        setStatusActionLoading(null)
-      }
+      setStatusConfirmRow(row)
+      setStatusConfirmNextStatus(nextStatus)
     },
-    [token, canManageCustomers, detail],
+    [token, canManageCustomers],
   )
+
+  const handleConfirmCustomerStatus = useCallback(async () => {
+    if (!token || !statusConfirmRow || !statusConfirmNextStatus) return
+
+    setStatusActionLoading(statusConfirmRow.taxCode)
+    setStatusActionError(null)
+    try {
+      const sourceDetail =
+        detail && detail.taxCode === statusConfirmRow.taxCode
+          ? detail
+          : await fetchCustomerDetail(token, statusConfirmRow.taxCode)
+
+      await updateCustomer(token, statusConfirmRow.taxCode, {
+        name: sourceDetail.name,
+        address: sourceDetail.address ?? null,
+        email: sourceDetail.email ?? null,
+        phone: sourceDetail.phone ?? null,
+        status: statusConfirmNextStatus,
+        paymentTermsDays: sourceDetail.paymentTermsDays,
+        creditLimit: sourceDetail.creditLimit ?? null,
+        ownerId: sourceDetail.ownerId ?? null,
+        managerId: sourceDetail.managerId ?? null,
+      })
+
+      if (detail && detail.taxCode === statusConfirmRow.taxCode) {
+        setDetail({ ...sourceDetail, status: statusConfirmNextStatus })
+      }
+      setStatusConfirmRow(null)
+      setStatusConfirmNextStatus(null)
+      setListReload((value) => value + 1)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setStatusActionError(err.message)
+      } else {
+        setStatusActionError('Không cập nhật được trạng thái khách hàng.')
+      }
+    } finally {
+      setStatusActionLoading(null)
+    }
+  }, [token, statusConfirmRow, statusConfirmNextStatus, detail])
 
   const handleSaveCustomer = useCallback(async () => {
     if (!token || !selectedTaxCode) return
@@ -696,7 +705,7 @@ export default function CustomerListSection({
             )}
           </div>
         )}
-        {statusActionError && (
+        {statusActionError && !statusConfirmRow && (
           <div className="alert alert--error" role="alert">
             {statusActionError}
           </div>
@@ -773,6 +782,30 @@ export default function CustomerListSection({
           setEditManagerId(detail.managerId ?? '')
           setEditSuccess(null)
           setEditError(null)
+        }}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(statusConfirmRow && statusConfirmNextStatus)}
+        title={statusConfirmNextStatus === 'INACTIVE' ? 'Ẩn khách hàng' : 'Khôi phục khách hàng'}
+        description={
+          statusConfirmRow
+            ? statusConfirmNextStatus === 'INACTIVE'
+              ? `Xác nhận ẩn khách hàng "${statusConfirmRow.name}"?`
+              : `Xác nhận khôi phục khách hàng "${statusConfirmRow.name}"?`
+            : undefined
+        }
+        confirmLabel={statusConfirmNextStatus === 'INACTIVE' ? 'Xác nhận ẩn' : 'Xác nhận khôi phục'}
+        loading={Boolean(statusConfirmRow && statusActionLoading === statusConfirmRow.taxCode)}
+        error={statusActionError}
+        tone={statusConfirmNextStatus === 'INACTIVE' ? 'danger' : 'primary'}
+        onClose={() => {
+          setStatusConfirmRow(null)
+          setStatusConfirmNextStatus(null)
+          setStatusActionError(null)
+        }}
+        onConfirm={() => {
+          void handleConfirmCustomerStatus()
         }}
       />
     </>

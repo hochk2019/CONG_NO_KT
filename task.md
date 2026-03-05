@@ -1164,4 +1164,190 @@
 - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter AuthServiceTests --nologo --verbosity minimal` => pass (`11/11`).
 - [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/admin/__tests__/admin-users-page.test.tsx src/utils/__tests__/passwordPolicy.test.ts` => pass (`13/13`).
 - [x] `npm --prefix src/frontend run lint` => pass.
+- [x] Full backend verify: `dotnet test src/backend/CongNoGolden.sln` => pass (`205/205`, gồm `148` unit + `57` integration).
+- [x] Full frontend verify: `npm --prefix src/frontend run test -- --run` => pass (`119/119`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] Bead tracker sync check: `bd show cng-wuk` => `CLOSED`.
+- [x] Manual smoke trên Docker (`http://localhost:18080`):
+  - [x] Admin reset password user test qua `PUT /admin/users/{id}/password` => `204`.
+  - [x] User test đăng nhập bằng mật khẩu reset => `200`.
+  - [x] User test đổi mật khẩu qua `POST /auth/change-password` => `204`.
+  - [x] User test đăng nhập lại bằng mật khẩu mới => `200`.
+- [x] Dọn dữ liệu test: set `isActive=false` cho user smoke.
 
+## Phase 77 - Gap closure backlog kickoff (2026-03-04) [epic: cng-84b]
+- [x] Tạo epic backlog đóng khoảng trống chức năng UI/ops: `cng-84b`.
+- [x] Tạo bead con theo ưu tiên:
+  - [x] `cng-84b.3` (P0): Trang Khoản trả hộ độc lập + import từ template.
+  - [x] `cng-84b.6` (P0): Hoàn thiện luồng quản lý hóa đơn trên UI.
+  - [x] `cng-84b.2` (P1): Chuẩn hóa UX thao tác quan trọng (thay `prompt/confirm` browser bằng modal chuẩn).
+  - [x] `cng-84b.4` (P1): Bulk actions cho danh sách vận hành.
+  - [x] `cng-84b.5` (P1): Workboard thu hồi công nợ tập trung.
+  - [x] `cng-84b.1` (P2): Rà soát nhất quán điều hướng/menu.
+- [x] Claim bead triển khai trước: `cng-84b.3` -> `in_progress`.
+- [x] Chốt định hướng UI bằng skill `ui-ux-pro-max` cho module khoản trả hộ:
+  - [x] Pattern: Enterprise Gateway.
+  - [x] Style: Trust & Authority.
+  - [x] Token màu trọng tâm: primary `#2563EB`, CTA `#F97316`, text `#1E293B`, bg `#F8FAFC`.
+  - [x] Typography: Inter (heading + body).
+- [x] Triển khai kỹ thuật `cng-84b.3`:
+  - [x] Tách route `/advances` thành module độc lập (không redirect sang `/imports`).
+  - [x] Bổ sung import template ADVANCE ngay trong module mới.
+  - [x] Cập nhật điều hướng menu để truy cập trực tiếp module.
+  - [x] Bổ sung/cập nhật test frontend cho route mới + flow import/manual.
+
+### Verification evidence (2026-03-04, phase 77 / cng-84b.3)
+- [x] `pnpm --dir src/frontend test --run src/pages/__tests__/advances-page.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx src/layouts/__tests__/app-shell.test.tsx` => pass (`15/15`).
+- [x] `pnpm --dir src/frontend lint` => pass.
+- [x] `bd show cng-84b.3` => `CLOSED`.
+
+## Phase 78 - UX modal normalization for critical actions (2026-03-04) [bead: cng-84b.2]
+- [x] Thay toàn bộ `window.prompt/window.confirm` còn lại trong admin flows bằng modal chuẩn:
+  - [x] `AdminBackupPage`: restore từ job/upload dùng `ActionConfirmModal` + xác nhận "Mã xác nhận".
+  - [x] `AdminPeriodLocksPage`: unlock lock kỳ dùng `ActionConfirmModal` + bắt buộc nhập lý do.
+- [x] Refactor `ActionConfirmModal` để tránh lint warning `react-hooks/set-state-in-effect` (reset state theo mount/unmount content).
+- [x] Cập nhật test tương ứng:
+  - [x] Update `admin-backup-page.test.tsx` theo flow modal xác nhận.
+  - [x] Add `admin-period-locks-page.test.tsx` cho unlock modal.
+- [x] Đồng bộ bead + task tracker.
+
+### Verification evidence (2026-03-04, phase 78 / cng-84b.2)
+- [x] `npm --prefix src/frontend run test -- --run src/pages/admin/__tests__/admin-backup-page.test.tsx src/pages/admin/__tests__/admin-period-locks-page.test.tsx` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `rg -n "window\.(confirm|prompt)" src/frontend/src` => không còn kết quả.
+- [x] `bd show cng-84b.2` => `CLOSED`.
+
+## Phase 79 - Bulk actions cho danh sách vận hành (2026-03-04) [bead: cng-84b.4]
+- [x] Bổ sung chọn nhiều + thao tác hàng loạt cho danh sách phiếu thu/khoản trả hộ trong module vận hành.
+- [x] Bổ sung chọn nhiều batch + rollback/cancel hàng loạt trong Import History bằng modal xác nhận chuẩn.
+- [x] Bổ sung chọn nhiều thông báo rủi ro + thao tác "Đã đọc" hàng loạt/toàn bộ.
+- [x] Cập nhật test frontend cho các luồng bulk mới.
+- [x] Đồng bộ bead tracker (`cng-84b.4`) sang trạng thái `CLOSED`.
+
+### Verification evidence (2026-03-04, phase 79 / cng-84b.4)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/importHistorySection.bulk.test.tsx src/pages/risk-alerts/__tests__/risk-alerts-sections.test.tsx src/pages/__tests__/risk-alerts-page-tabs.test.tsx` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run lint -- src/pages/imports/ImportHistorySection.tsx src/pages/imports/__tests__/importHistorySection.bulk.test.tsx src/pages/risk-alerts/RiskAlertsSections.tsx src/pages/RiskAlertsPage.tsx src/pages/risk-alerts/__tests__/risk-alerts-sections.test.tsx src/pages/__tests__/risk-alerts-page-tabs.test.tsx` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `bd show cng-84b.4` => `CLOSED`.
+
+## Phase 80 - Collections workboard UI wiring (2026-03-05) [bead: cng-84b.5]
+- [x] Hoàn thiện route và lazy loader cho trang Workboard thu hồi công nợ:
+  - [x] thêm wrapper route page `CollectionsPage.tsx`.
+  - [x] map route `/collections` trong `App.tsx`.
+  - [x] bổ sung `loadCollectionsPage` + prefetch map trong `pageLoaders.ts`.
+- [x] Bổ sung điều hướng sidebar:
+  - [x] thêm menu `Thu hồi nợ` cho vai trò `Admin/Supervisor/Accountant`.
+- [x] Bổ sung test frontend cho module mới:
+  - [x] `collections-page.test.tsx` (render queue, generate action theo role, read-only visibility).
+  - [x] cập nhật expectation liên quan prefetch affinity trong `page-loaders.test.ts`.
+- [x] Đồng bộ bead tracker `cng-84b.5`.
+
+### Verification evidence (2026-03-05, phase 80 / cng-84b.5)
+- [x] `npm --prefix src/frontend run test -- --run src/api/__tests__/collections-endpoints.test.ts src/pages/__tests__/collections-page.test.tsx src/pages/__tests__/page-loaders.test.ts src/layouts/__tests__/app-shell.test.tsx` => pass (`22/22`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+
+## Phase 81 - Navigation consistency audit + deep-link clarity (2026-03-05) [bead: cng-84b.1]
+- [x] Rà soát toàn bộ route chính trong `App.tsx` so với entry điều hướng trong `AppShell`.
+- [x] Chuẩn hóa entry cho route thông báo:
+  - [x] thêm menu `Thông báo` (`/notifications`) cho tất cả vai trò để tăng discoverability.
+  - [x] giữ deep-link hiện có từ notification bell/toast.
+- [x] Cập nhật tài liệu điều hướng:
+  - [x] refresh `docs/UX_NAVIGATION_MAP.md` với route inventory đầy đủ + nguồn vào (menu/deep-link).
+  - [x] ghi rõ `/dashboard-preview` là route preview dạng deep-link (không phải primary workspace).
+- [x] Bổ sung test tránh hồi quy:
+  - [x] thêm assertion menu `Thông báo` trong `app-shell.test.tsx`.
+- [x] Đồng bộ bead tracker `cng-84b.1`.
+- [x] Đóng epic `cng-84b` sau khi toàn bộ bead con hoàn tất.
+
+### Verification evidence (2026-03-05, phase 81 / cng-84b.1)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/page-loaders.test.ts` => pass (`15/15`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `bd close cng-84b.1` + `bd close cng-84b` => pass.
+- [x] `bd ready --json` => `[]`.
+- [x] Re-verify full frontend suite sau fix `src/api/__tests__/client-error.test.ts`: `npm --prefix src/frontend run test -- --run` => pass (`45/45` files, `140/140` tests).
+
+
+## Phase 82 - Navigation dedupe: remove standalone Invoice page (2026-03-05)
+- [x] Bỏ route `/invoices` khỏi `App.tsx`.
+- [x] Bỏ menu `Hóa đơn` khỏi sidebar `AppShell`.
+- [x] Cập nhật `pageLoaders` để loại `/invoices` khỏi prefetch/role flow/affinity.
+- [x] Giữ `Khoản trả hộ` (`/advances`) độc lập trên sidebar.
+- [x] Chuyển luồng nhập tay hóa đơn về `Imports` (`ManualInvoicesSection`) và giữ tab `Nhập thủ công hóa đơn`.
+- [x] Bổ sung test mới cho module `ManualInvoicesSection`.
+- [x] Dọn artifact Invoice page độc lập còn dư (`src/pages/InvoicesPage.tsx`, `src/pages/invoices/*`, test `invoices-page.test.tsx`).
+- [x] Đồng bộ tài liệu điều hướng `docs/UX_NAVIGATION_MAP.md` theo route mới.
+
+### Verification evidence (2026-03-05, phase 82)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/page-loaders.test.ts src/pages/imports/__tests__/manualInvoicesSection.test.tsx` => pass (`18/18`).
+- [x] `rg -n "InvoicesPage|pages/invoices" src/frontend/src` => không còn kết quả.
+
+## Phase 83 - Navigation dedupe: remove Notifications from sidebar (2026-03-05) [bead: cng-p7w]
+- [x] Bỏ menu `Thông báo` khỏi sidebar trái trong `AppShell`.
+- [x] Giữ route `/notifications` và deep-link từ notification bell/toast.
+- [x] Cập nhật test `app-shell` để chặn hồi quy hiển thị menu `Thông báo`.
+- [x] Cập nhật tài liệu điều hướng `docs/UX_NAVIGATION_MAP.md` (entry point `/notifications` chỉ còn từ header deep-link).
+- [x] Đồng bộ bead tracker `cng-p7w`.
+
+### Verification evidence (2026-03-05, phase 83)
+- [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/page-loaders.test.ts` => pass.
+- [x] `npm --prefix src/frontend run lint` => pass.
+
+## Phase 84 - Collections UX onboarding + tooltip clarity (2026-03-05) [bead: cng-cqw]
+- [x] Bổ sung khối hướng dẫn vận hành ngay đầu trang Collections để người dùng mới hiểu luồng thao tác.
+- [x] Bổ sung tooltip cho các field chính:
+  - [x] bộ lọc số lượng task tải về.
+  - [x] cấu hình generate queue (số task, ngưỡng ưu tiên).
+  - [x] hành động giao người xử lý/cập nhật trạng thái ở từng dòng task.
+- [x] Bổ sung banner ngữ cảnh từ Risk Alerts với thao tác nhanh:
+  - [x] `Áp dụng và tạo queue ngay`.
+  - [x] `Bỏ ngữ cảnh`.
+- [x] Điều chỉnh nội dung hướng dẫn theo quyền để không gây hiểu nhầm cho vai trò chỉ xem.
+- [x] Đồng bộ bead tracker `cng-cqw`.
+
+### Verification evidence (2026-03-05, phase 84 / cng-cqw)
+- [x] `npm --prefix src/frontend run test -- --run src/pages/__tests__/collections-page.test.tsx src/pages/risk-alerts/__tests__/risk-alerts-sections.test.tsx src/pages/__tests__/page-loaders.test.ts` => pass (`13/13`).
+
+## Phase 85 - Risk & Collections nav order adjustment (2026-03-05) [bead: cng-bo1]
+- [x] Đổi thứ tự hiển thị menu trong nhóm `Risk & Collections`:
+  - [x] `Cảnh báo rủi ro` đứng trước `Thu hồi nợ`.
+- [x] Bổ sung assertion test để khóa thứ tự hiển thị trong `AppShell`.
+- [x] Đồng bộ bead tracker `cng-bo1`.
+
+### Verification evidence (2026-03-05, phase 85 / cng-bo1)
+- [x] `npm --prefix src/frontend test -- src/layouts/__tests__/app-shell.test.tsx --run` => pass (`8/8`).
+
+## Phase 86 - Collections search normalization for MST/company name (2026-03-05) [bead: cng-4us]
+- [x] Cập nhật backend search trong `CollectionTaskQueue` để khớp ổn định hơn cho:
+  - [x] MST có ký tự phân tách (`-`, `.`, khoảng trắng).
+  - [x] Tên công ty có/không dấu tiếng Việt.
+- [x] Giữ tương thích hành vi search cũ (so khớp trực tiếp), bổ sung fallback normalize token.
+- [x] Bổ sung test hồi quy cho 2 case:
+  - [x] search MST với dấu phân tách.
+  - [x] search tên công ty không dấu.
+- [x] Đồng bộ bead tracker `cng-4us`.
+
+### Verification evidence (2026-03-05, phase 86 / cng-4us)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CollectionTaskQueueTests --nologo` => pass (`6/6`).
+
+## Phase 87 - Collections scoring calibration + config externalization (2026-03-05) [bead: cng-u9m]
+- [x] Chuẩn hóa lại logic ưu tiên thu hồi nợ theo mốc ngày:
+  - [x] 30-60 ngày: nhóm bắt đầu ưu tiên.
+  - [x] 180+ ngày: nhóm ưu tiên rất cao.
+- [x] Externalize toàn bộ scoring constants sang options cấu hình:
+  - [x] thêm `CollectionTaskScoringOptions`.
+  - [x] bind section `CollectionTaskScoring` trong API startup.
+  - [x] cập nhật `CollectionTaskQueue` dùng `IOptions<CollectionTaskScoringOptions>`.
+  - [x] cập nhật endpoint generate queue dùng `DefaultMinPriorityScore` từ config.
+  - [x] thêm defaults vào `appsettings.json` + `appsettings.Development.json`.
+- [x] Bổ sung test hồi quy cho scoring mới và khả năng override bằng config.
+- [x] Restart API để nạp cấu hình mới và xác nhận health endpoint.
+- [x] Đồng bộ bead tracker `cng-u9m`.
+
+### Verification evidence (2026-03-05, phase 87 / cng-u9m)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -c Release --filter "FullyQualifiedName~CollectionTaskQueueTests"` => pass (`10/10`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -c Release` => pass (`154/154`).
+- [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj -c Debug` => pass.
+- [x] Restart `CongNoGolden.Api.exe` + `curl http://localhost:8080/health` => `{"status":"ok"}` (`HTTP 200`).

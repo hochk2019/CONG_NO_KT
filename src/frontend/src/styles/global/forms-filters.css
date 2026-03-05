@@ -139,6 +139,27 @@
   gap: 0.35rem;
 }
 
+.field-help {
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--color-border) 78%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-bg));
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.field-help:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 35%, transparent);
+  outline-offset: 2px;
+}
+
 .field-inline {
   display: flex;
   align-items: center;
@@ -474,4 +495,44 @@
   display: grid;
   gap: var(--space-2);
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.guide-card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.guide-steps {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.guide-steps li {
+  color: var(--color-muted);
+}
+
+.guide-steps strong {
+  color: var(--color-ink);
+}
+
+.context-banner {
+  margin-top: var(--space-2);
+  padding: 0.85rem 0.95rem;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 38%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.context-banner__title {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-accent-deep);
 }

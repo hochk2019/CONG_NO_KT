@@ -11,6 +11,7 @@ import {
   loadAdminPeriodLocksPage,
   loadAdminUsersPage,
   loadAdvancesPage,
+  loadCollectionsPage,
   loadCustomersPage,
   loadDashboardPage,
   loadDashboardPreviewPage,
@@ -31,6 +32,7 @@ const AdminHealthPage = lazy(loadAdminHealthPage)
 const AdminPeriodLocksPage = lazy(loadAdminPeriodLocksPage)
 const AdminUsersPage = lazy(loadAdminUsersPage)
 const AdvancesPage = lazy(loadAdvancesPage)
+const CollectionsPage = lazy(loadCollectionsPage)
 const CustomersPage = lazy(loadCustomersPage)
 const DashboardPage = lazy(loadDashboardPage)
 const DashboardPreviewPage = lazy(loadDashboardPreviewPage)
@@ -57,6 +59,7 @@ export default function App() {
             <Route path="/imports" element={<ImportsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/advances" element={<AdvancesPage />} />
+            <Route path="/collections" element={<CollectionsPage />} />
             <Route path="/receipts" element={<ReceiptsPage />} />
             <Route path="/reports" element={<ReportsPage />} />
             <Route path="/risk" element={<RiskAlertsPage />} />

@@ -91,11 +91,18 @@ export type RiskSummaryCard = {
 }
 
 export type RiskAlertsHeaderProps = {
+  onCreateCollectionQueue: () => void
   onSetToday: () => void
   onClearDate: () => void
+  canCreateCollectionQueue?: boolean
 }
 
-export function RiskAlertsHeader({ onSetToday, onClearDate }: RiskAlertsHeaderProps) {
+export function RiskAlertsHeader({
+  onCreateCollectionQueue,
+  onSetToday,
+  onClearDate,
+  canCreateCollectionQueue = true,
+}: RiskAlertsHeaderProps) {
   return (
     <div className="page-header">
       <div>
@@ -105,6 +112,11 @@ export function RiskAlertsHeader({ onSetToday, onClearDate }: RiskAlertsHeaderPr
         </p>
       </div>
       <div className="header-actions">
+        {canCreateCollectionQueue && (
+          <button className="btn btn-primary" type="button" onClick={onCreateCollectionQueue}>
+            Tạo queue thu hồi
+          </button>
+        )}
         <button className="btn btn-outline" type="button" onClick={onSetToday}>
           Hôm nay
         </button>
@@ -727,14 +739,29 @@ export function RiskLogsSection({
 export type RiskNotificationsSectionProps = {
   notificationsLoading: boolean
   notifications: NotificationItem[]
+  selectedIds: string[]
+  bulkLoading?: boolean
+  bulkError?: string | null
+  onSelectedIdsChange: (ids: string[]) => void
+  onMarkSelectedRead: () => void
+  onMarkAllRead: () => void
   onMarkRead: (id: string) => void
 }
 
 export function RiskNotificationsSection({
   notificationsLoading,
   notifications,
+  selectedIds,
+  bulkLoading = false,
+  bulkError,
+  onSelectedIdsChange,
+  onMarkSelectedRead,
+  onMarkAllRead,
   onMarkRead,
 }: RiskNotificationsSectionProps) {
+  const selectableIds = notifications.map((item) => item.id)
+  const selectedCount = selectedIds.filter((id) => selectableIds.includes(id)).length
+
   return (
     <CollapsibleSection
       storageKey={RISK_SECTION_KEYS.notifications}
@@ -746,26 +773,81 @@ export function RiskNotificationsSection({
       ) : notifications.length === 0 ? (
         <div className="empty-state">Không có thông báo mới.</div>
       ) : (
-        <div className="notification-list">
-          {notifications.map((item) => (
-            <div className="notification-item" key={item.id}>
-              <div>
-                <div className="list-title">{item.title}</div>
-                <div className="muted">{item.body}</div>
+        <>
+          <div className="filters-actions">
+            <span className="muted">
+              Đã chọn {selectedCount}/{notifications.length} thông báo.
+            </span>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => onSelectedIdsChange(selectableIds)}
+              disabled={notifications.length === 0 || bulkLoading}
+            >
+              Chọn tất cả
+            </button>
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => onSelectedIdsChange([])}
+              disabled={selectedCount === 0 || bulkLoading}
+            >
+              Bỏ chọn
+            </button>
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={onMarkSelectedRead}
+              disabled={selectedCount === 0 || bulkLoading}
+            >
+              Đã đọc đã chọn ({selectedCount})
+            </button>
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={onMarkAllRead}
+              disabled={notifications.length === 0 || bulkLoading}
+            >
+              Đã đọc tất cả ({notifications.length})
+            </button>
+          </div>
+          {bulkError && <div className="alert alert--error">{bulkError}</div>}
+          <div className="notification-list">
+            {notifications.map((item) => (
+              <div className="notification-item" key={item.id}>
+                <div className="field-inline">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(item.id)}
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        onSelectedIdsChange([...selectedIds, item.id])
+                      } else {
+                        onSelectedIdsChange(selectedIds.filter((id) => id !== item.id))
+                      }
+                    }}
+                    aria-label={`Chọn thông báo ${item.title}`}
+                  />
+                  <div>
+                    <div className="list-title">{item.title}</div>
+                    <div className="muted">{item.body}</div>
+                  </div>
+                </div>
+                <div className="notification-meta">
+                  <span className="muted">{formatDateTime(item.createdAt)}</span>
+                  <button
+                    className="btn btn-ghost btn-table"
+                    type="button"
+                    onClick={() => onMarkRead(item.id)}
+                    disabled={bulkLoading}
+                  >
+                    Đã đọc
+                  </button>
+                </div>
               </div>
-              <div className="notification-meta">
-                <span className="muted">{formatDateTime(item.createdAt)}</span>
-                <button
-                  className="btn btn-ghost btn-table"
-                  type="button"
-                  onClick={() => onMarkRead(item.id)}
-                >
-                  Đã đọc
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
     </CollapsibleSection>
   )

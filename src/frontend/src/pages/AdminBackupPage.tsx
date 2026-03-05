@@ -21,6 +21,7 @@ import {
   uploadBackupFile,
 } from '../api/backup'
 import DataTable from '../components/DataTable'
+import ActionConfirmModal, { type ActionConfirmPayload } from '../components/modals/ActionConfirmModal'
 import { useAuth } from '../context/AuthStore'
 import { formatDateTime } from '../utils/format'
 
@@ -55,6 +56,10 @@ const formatFileSize = (value?: number | null) => {
   return `${Math.round(value / (1024 * 1024 * 1024))} GB`
 }
 
+type RestoreTarget =
+  | { kind: 'job'; jobId: string; label: string }
+  | { kind: 'upload'; uploadId: string; label: string }
+
 export default function AdminBackupPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
@@ -79,6 +84,9 @@ export default function AdminBackupPage() {
   const [uploadFile, setUploadFile] = useState<File | null>(null)
   const [uploadId, setUploadId] = useState<string | null>(null)
   const [uploadMessage, setUploadMessage] = useState<string | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [restoreError, setRestoreError] = useState<string | null>(null)
 
   const loadSettings = useCallback(async () => {
     const result = await fetchBackupSettings(token)
@@ -199,23 +207,15 @@ export default function AdminBackupPage() {
     }
   }
 
-  const handleRestoreJob = async (job: BackupJobListItem) => {
+  const handleRestoreJob = (job: BackupJobListItem) => {
     if (!token || !canRestore) return
-    const confirm = window.prompt('Nhập RESTORE để xác nhận phục hồi dữ liệu.')
-    if (!confirm) return
     setError(null)
-    setNotice('Đang phục hồi dữ liệu. Vui lòng chờ.')
-    try {
-      await restoreBackup(token, { jobId: job.id, confirmPhrase: confirm })
-      await loadStatus()
-    } catch (err) {
-      setNotice(null)
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError('Không phục hồi được dữ liệu.')
-      }
-    }
+    setRestoreError(null)
+    setRestoreTarget({
+      kind: 'job',
+      jobId: job.id,
+      label: job.fileName?.trim() || job.id,
+    })
   }
 
   const handleUploadChange = (event: ChangeEvent<HTMLInputElement>) => {
@@ -242,23 +242,67 @@ export default function AdminBackupPage() {
     }
   }
 
-  const handleRestoreUpload = async () => {
+  const handleRestoreUpload = () => {
     if (!token || !uploadId || !canRestore) return
-    const confirm = window.prompt('Nhập RESTORE để xác nhận phục hồi dữ liệu.')
-    if (!confirm) return
     setError(null)
-    setNotice('Đang phục hồi dữ liệu. Vui lòng chờ.')
-    try {
-      await restoreBackup(token, { uploadId, confirmPhrase: confirm })
-      await loadStatus()
-    } catch (err) {
-      setNotice(null)
-      if (err instanceof ApiError) {
-        setError(err.message)
-      } else {
-        setError('Không phục hồi được dữ liệu.')
+    const uploadLabel = uploadFile?.name?.trim() || uploadId
+    setRestoreError(null)
+    setRestoreTarget({ kind: 'upload', uploadId, label: uploadLabel })
+  }
+
+  const handleConfirmRestore = useCallback(
+    async (payload: ActionConfirmPayload) => {
+      if (!token || !restoreTarget) return
+      setRestoreLoading(true)
+      setRestoreError(null)
+      setError(null)
+      setNotice('Đang phục hồi dữ liệu. Vui lòng chờ.')
+      try {
+        if (restoreTarget.kind === 'job') {
+          await restoreBackup(token, {
+            jobId: restoreTarget.jobId,
+            confirmPhrase: payload.reason,
+          })
+        } else {
+          await restoreBackup(token, {
+            uploadId: restoreTarget.uploadId,
+            confirmPhrase: payload.reason,
+          })
+        }
+        await loadStatus()
+        setRestoreTarget(null)
+      } catch (err) {
+        setNotice(null)
+        if (err instanceof ApiError) {
+          setRestoreError(err.message)
+        } else {
+          setRestoreError('Không phục hồi được dữ liệu.')
+        }
+      } finally {
+        setRestoreLoading(false)
       }
-    }
+    },
+    [token, restoreTarget, loadStatus],
+  )
+
+  const handleCloseRestoreModal = () => {
+    if (restoreLoading) return
+    setRestoreTarget(null)
+    setRestoreError(null)
+  }
+
+  const restoreDescription =
+    restoreTarget?.kind === 'job'
+      ? `Nhập RESTORE để phục hồi dữ liệu từ bản sao lưu "${restoreTarget.label}".`
+      : restoreTarget
+        ? `Nhập RESTORE để phục hồi dữ liệu từ file "${restoreTarget.label}".`
+        : undefined
+
+  const restoreTitle =
+    restoreTarget?.kind === 'job' ? 'Phục hồi từ bản sao lưu' : 'Phục hồi từ file tải lên'
+
+  const handleRestoreModalConfirm = (payload: ActionConfirmPayload) => {
+    void handleConfirmRestore(payload)
   }
 
   const handleViewLog = async (jobId: string) => {
@@ -518,6 +562,21 @@ export default function AdminBackupPage() {
           onPageChange={(next) => loadAudit(next)}
         />
       </section>
+
+      <ActionConfirmModal
+        isOpen={Boolean(restoreTarget)}
+        title={restoreTitle}
+        description={restoreDescription}
+        confirmLabel="Phục hồi dữ liệu"
+        reasonRequired
+        reasonLabel="Mã xác nhận"
+        reasonPlaceholder="Nhập RESTORE"
+        loading={restoreLoading}
+        error={restoreError}
+        tone="danger"
+        onClose={handleCloseRestoreModal}
+        onConfirm={handleRestoreModalConfirm}
+      />
     </div>
   )
 }

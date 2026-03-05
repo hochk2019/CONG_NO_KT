@@ -17,6 +17,7 @@ import {
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
+import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import {
   advanceStatusLabels,
@@ -61,6 +62,13 @@ type ManualAdvancesSectionProps = {
   canApprove: boolean
 }
 
+type ManualAdvanceConfirmAction = 'approve' | 'void' | 'unvoid'
+
+type ManualAdvanceConfirmState = {
+  action: ManualAdvanceConfirmAction
+  row: AdvanceListItem
+}
+
 export default function ManualAdvancesSection({ token, canApprove }: ManualAdvancesSectionProps) {
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
@@ -99,6 +107,11 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingDescription, setEditingDescription] = useState('')
+  const [confirmState, setConfirmState] = useState<ManualAdvanceConfirmState | null>(null)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<string[]>([])
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<ManualAdvanceConfirmAction | null>(null)
+  const [bulkConfirmError, setBulkConfirmError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -229,6 +242,14 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     listReload,
   ])
 
+  useEffect(() => {
+    setSelectedAdvanceIds((prev) => {
+      if (prev.length === 0) return prev
+      const rowIds = new Set(listRows.map((row) => row.id))
+      return prev.filter((id) => rowIds.has(id))
+    })
+  }, [listRows])
+
   const resetMessages = () => {
     setCreateError(null)
     setCreateMessage(null)
@@ -251,21 +272,6 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
       ...prev,
       [field]: message ?? '',
     }))
-  }
-
-  const collectOverrideOptions = (actionLabel: string) => {
-    const overrideInput = window.prompt(
-      `${actionLabel}: nếu cần vượt khóa kỳ, nhập lý do (bỏ trống nếu không).`,
-      '',
-    )
-    if (overrideInput === null) {
-      return null
-    }
-    const reason = overrideInput.trim()
-    if (!reason) {
-      return { overridePeriodLock: false, overrideReason: undefined }
-    }
-    return { overridePeriodLock: true, overrideReason: reason }
   }
 
   const validateCreate = () => {
@@ -351,34 +357,14 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     }
   }
 
-  const handleApprove = async (row: AdvanceListItem) => {
+  const handleApprove = (row: AdvanceListItem) => {
     if (!token || !row.canManage) return
     resetMessages()
-    const overrideOptions = collectOverrideOptions(`Phê duyệt ${shortAdvanceId(row.id)}`)
-    if (!overrideOptions) {
-      return
-    }
-    setLoadingAction(`approve:${row.id}`)
-    try {
-      await approveAdvance(token, row.id, {
-        version: row.version,
-        overridePeriodLock: overrideOptions.overridePeriodLock,
-        overrideReason: overrideOptions.overrideReason,
-      })
-      setActionMessage(`Đã phê duyệt khoản trả hộ ${shortAdvanceId(row.id)}.`)
-      setListReload((value) => value + 1)
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setActionError(err.message)
-      } else {
-        setActionError('Không phê duyệt được khoản trả hộ.')
-      }
-    } finally {
-      setLoadingAction('')
-    }
+    setConfirmError(null)
+    setConfirmState({ action: 'approve', row })
   }
 
-  const handleVoid = async (row: AdvanceListItem) => {
+  const handleVoid = (row: AdvanceListItem) => {
     if (!token || !row.canManage) return
     resetMessages()
     const status = row.status.toUpperCase()
@@ -389,81 +375,59 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
       return
     }
 
-    const confirmed = window.confirm(
-      `Bạn chắc chắn muốn hủy khoản trả hộ ${shortAdvanceId(row.id)}?`,
-    )
-    if (!confirmed) {
-      return
-    }
-
-    const reasonInput = window.prompt(
-      `Nhập lý do hủy khoản trả hộ ${shortAdvanceId(row.id)}:`,
-      '',
-    )
-    if (reasonInput === null) {
-      return
-    }
-    const reason = reasonInput.trim()
-    if (!reason) {
-      setActionError('Vui lòng nhập lý do hủy.')
-      return
-    }
-
-    const overrideOptions = collectOverrideOptions(`Hủy ${shortAdvanceId(row.id)}`)
-    if (!overrideOptions) {
-      return
-    }
-
-    setLoadingAction(`void:${row.id}`)
-    try {
-      await voidAdvance(token, row.id, {
-        reason,
-        version: row.version,
-        overridePeriodLock: overrideOptions.overridePeriodLock,
-        overrideReason: overrideOptions.overrideReason,
-      })
-      setActionMessage(`Đã hủy khoản trả hộ ${shortAdvanceId(row.id)}.`)
-      setListReload((value) => value + 1)
-    } catch (err) {
-      if (err instanceof ApiError) {
-        setActionError(err.message)
-      } else {
-        setActionError('Không hủy được khoản trả hộ.')
-      }
-    } finally {
-      setLoadingAction('')
-    }
+    setConfirmError(null)
+    setConfirmState({ action: 'void', row })
   }
 
-  const handleUnvoid = async (row: AdvanceListItem) => {
+  const handleUnvoid = (row: AdvanceListItem) => {
     if (!token || !row.canManage) return
     resetMessages()
-    const confirmed = window.confirm(
-      `Bạn chắc chắn muốn bỏ hủy khoản trả hộ ${shortAdvanceId(row.id)}?`,
-    )
-    if (!confirmed) {
-      return
-    }
+    setConfirmError(null)
+    setConfirmState({ action: 'unvoid', row })
+  }
 
-    const overrideOptions = collectOverrideOptions(`Bỏ hủy ${shortAdvanceId(row.id)}`)
-    if (!overrideOptions) {
-      return
-    }
-
-    setLoadingAction(`unvoid:${row.id}`)
+  const handleConfirmAction = async (payload: ActionConfirmPayload) => {
+    if (!token || !confirmState) return
+    const { action, row } = confirmState
+    const actionKey = `${action}:${row.id}`
+    setConfirmError(null)
+    setLoadingAction(actionKey)
     try {
-      await unvoidAdvance(token, row.id, {
-        version: row.version,
-        overridePeriodLock: overrideOptions.overridePeriodLock,
-        overrideReason: overrideOptions.overrideReason,
-      })
-      setActionMessage(`Đã bỏ hủy khoản trả hộ ${shortAdvanceId(row.id)}.`)
+      if (action === 'approve') {
+        await approveAdvance(token, row.id, {
+          version: row.version,
+          overridePeriodLock: payload.overridePeriodLock,
+          overrideReason: payload.overrideReason,
+        })
+        setActionMessage(`Đã phê duyệt khoản trả hộ ${shortAdvanceId(row.id)}.`)
+      } else if (action === 'void') {
+        await voidAdvance(token, row.id, {
+          reason: payload.reason,
+          version: row.version,
+          overridePeriodLock: payload.overridePeriodLock,
+          overrideReason: payload.overrideReason,
+        })
+        setActionMessage(`Đã hủy khoản trả hộ ${shortAdvanceId(row.id)}.`)
+      } else {
+        await unvoidAdvance(token, row.id, {
+          version: row.version,
+          overridePeriodLock: payload.overridePeriodLock,
+          overrideReason: payload.overrideReason,
+        })
+        setActionMessage(`Đã bỏ hủy khoản trả hộ ${shortAdvanceId(row.id)}.`)
+      }
+      setSelectedAdvanceIds((prev) => prev.filter((id) => id !== row.id))
+      setConfirmState(null)
       setListReload((value) => value + 1)
     } catch (err) {
       if (err instanceof ApiError) {
-        setActionError(err.message)
+        setConfirmError(err.message)
+      } else if (action === 'approve') {
+        setConfirmError('Không phê duyệt được khoản trả hộ.')
+      } else if (action === 'void') {
+        setConfirmError('Không hủy được khoản trả hộ.')
       } else {
-        setActionError('Không bỏ hủy được khoản trả hộ.')
+        setConfirmError('Không bỏ hủy được khoản trả hộ.')
       }
     } finally {
       setLoadingAction('')
@@ -511,6 +475,109 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     }
   }
 
+  const isActionableForSelection = (row: AdvanceListItem) => {
+    if (!row.canManage) return false
+    const status = row.status.toUpperCase()
+    if (status === 'DRAFT') return true
+    if (status === 'VOID') return true
+    if (status === 'APPROVED' || status === 'PAID') return true
+    return false
+  }
+
+  const isBulkEligible = (row: AdvanceListItem, action: ManualAdvanceConfirmAction) => {
+    if (!row.canManage) return false
+    const status = row.status.toUpperCase()
+    if (action === 'approve') return status === 'DRAFT'
+    if (action === 'void') return status !== 'VOID' && status !== 'PAID'
+    return status === 'VOID'
+  }
+
+  const selectedRows = listRows.filter((row) => selectedAdvanceIds.includes(row.id))
+  const selectedApproveCount = selectedRows.filter((row) => isBulkEligible(row, 'approve')).length
+  const selectedVoidCount = selectedRows.filter((row) => isBulkEligible(row, 'void')).length
+  const selectedUnvoidCount = selectedRows.filter((row) => isBulkEligible(row, 'unvoid')).length
+  const selectableRowIds = listRows.filter(isActionableForSelection).map((row) => row.id)
+
+  const handleBulkAction = (action: ManualAdvanceConfirmAction) => {
+    if (action === 'approve' && selectedApproveCount === 0) return
+    if (action === 'void' && selectedVoidCount === 0) return
+    if (action === 'unvoid' && selectedUnvoidCount === 0) return
+    resetMessages()
+    setBulkConfirmError(null)
+    setBulkConfirmAction(action)
+  }
+
+  const handleBulkConfirmAction = async (payload: ActionConfirmPayload) => {
+    if (!token || !bulkConfirmAction) return
+
+    const targetRows = selectedRows.filter((row) => isBulkEligible(row, bulkConfirmAction))
+    if (targetRows.length === 0) return
+
+    const actionKey = `bulk:${bulkConfirmAction}`
+    setLoadingAction(actionKey)
+    setBulkConfirmError(null)
+
+    const failedIds: string[] = []
+    const failedMessages: string[] = []
+    let successCount = 0
+
+    for (const row of targetRows) {
+      try {
+        if (bulkConfirmAction === 'approve') {
+          await approveAdvance(token, row.id, {
+            version: row.version,
+            overridePeriodLock: payload.overridePeriodLock,
+            overrideReason: payload.overrideReason,
+          })
+        } else if (bulkConfirmAction === 'void') {
+          await voidAdvance(token, row.id, {
+            reason: payload.reason,
+            version: row.version,
+            overridePeriodLock: payload.overridePeriodLock,
+            overrideReason: payload.overrideReason,
+          })
+        } else {
+          await unvoidAdvance(token, row.id, {
+            version: row.version,
+            overridePeriodLock: payload.overridePeriodLock,
+            overrideReason: payload.overrideReason,
+          })
+        }
+        successCount += 1
+      } catch (err) {
+        failedIds.push(row.id)
+        if (err instanceof ApiError) {
+          failedMessages.push(`${shortAdvanceId(row.id)}: ${err.message}`)
+        } else {
+          failedMessages.push(`${shortAdvanceId(row.id)}: Lỗi không xác định`)
+        }
+      }
+    }
+
+    if (successCount > 0) {
+      const actionLabel =
+        bulkConfirmAction === 'approve'
+          ? 'phê duyệt'
+          : bulkConfirmAction === 'void'
+            ? 'hủy'
+            : 'bỏ hủy'
+      setActionMessage(`Đã ${actionLabel} ${successCount}/${targetRows.length} khoản trả hộ đã chọn.`)
+      setListReload((value) => value + 1)
+    }
+
+    if (failedIds.length > 0) {
+      setBulkConfirmError(
+        `Thất bại ${failedIds.length} khoản trả hộ: ${failedMessages.slice(0, 2).join('; ')}`,
+      )
+      setSelectedAdvanceIds(failedIds)
+    } else {
+      setSelectedAdvanceIds([])
+      setBulkConfirmAction(null)
+    }
+
+    setLoadingAction('')
+  }
+
   const listColumns = buildManualAdvanceColumns({
     editingId,
     editingDescription,
@@ -523,6 +590,62 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     onUnvoid: handleUnvoid,
     loadingAction,
   })
+
+  const tableColumns = [
+    {
+      key: 'select',
+      label: 'Chọn',
+      align: 'center' as const,
+      width: '72px',
+      render: (row: AdvanceListItem) => {
+        if (!isActionableForSelection(row)) return <span className="muted">-</span>
+        return (
+          <input
+            type="checkbox"
+            checked={selectedAdvanceIds.includes(row.id)}
+            onChange={(event) => {
+              setSelectedAdvanceIds((prev) => {
+                if (event.target.checked) {
+                  if (prev.includes(row.id)) return prev
+                  return [...prev, row.id]
+                }
+                return prev.filter((id) => id !== row.id)
+              })
+            }}
+            aria-label={`Chọn khoản trả hộ ${shortAdvanceId(row.id)}`}
+          />
+        )
+      },
+    },
+    ...listColumns,
+  ]
+
+  const confirmActionKey = confirmState ? `${confirmState.action}:${confirmState.row.id}` : ''
+  const confirmLoading = Boolean(confirmState) && loadingAction === confirmActionKey
+  const confirmTargetLabel = confirmState ? shortAdvanceId(confirmState.row.id) : ''
+  const confirmTitle = confirmState
+    ? confirmState.action === 'approve'
+      ? `Phê duyệt ${confirmTargetLabel}`
+      : confirmState.action === 'void'
+        ? `Hủy ${confirmTargetLabel}`
+        : `Bỏ hủy ${confirmTargetLabel}`
+    : ''
+
+  const bulkConfirmLabel =
+    bulkConfirmAction === 'approve'
+      ? 'Xác nhận phê duyệt'
+      : bulkConfirmAction === 'void'
+        ? 'Xác nhận hủy'
+        : 'Xác nhận bỏ hủy'
+
+  const bulkConfirmDescription =
+    bulkConfirmAction === 'approve'
+      ? `Xác nhận phê duyệt ${selectedApproveCount} khoản trả hộ đã chọn.`
+      : bulkConfirmAction === 'void'
+        ? `Xác nhận hủy ${selectedVoidCount} khoản trả hộ đã chọn.`
+        : `Xác nhận bỏ hủy ${selectedUnvoidCount} khoản trả hộ đã chọn.`
+
+  const bulkConfirmLoading = Boolean(bulkConfirmAction) && loadingAction === `bulk:${bulkConfirmAction}`
 
   return (
     <div className="page-stack">
@@ -824,9 +947,54 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
         {listError && <div className="alert alert--error" role="alert" aria-live="assertive">{listError}</div>}
         {actionError && <div className="alert alert--error" role="alert" aria-live="assertive">{actionError}</div>}
         {actionMessage && <div className="alert alert--success" role="alert" aria-live="assertive">{actionMessage}</div>}
+        <div className="filters-actions">
+          <span className="muted">
+            Đã chọn {selectedAdvanceIds.length}/{selectableRowIds.length} khoản trả hộ.
+          </span>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => setSelectedAdvanceIds(selectableRowIds)}
+            disabled={selectableRowIds.length === 0 || bulkConfirmLoading}
+          >
+            Chọn tất cả
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={() => setSelectedAdvanceIds([])}
+            disabled={selectedAdvanceIds.length === 0 || bulkConfirmLoading}
+          >
+            Bỏ chọn
+          </button>
+          <button
+            className="btn btn-outline"
+            type="button"
+            onClick={() => handleBulkAction('approve')}
+            disabled={selectedApproveCount === 0 || bulkConfirmLoading}
+          >
+            Phê duyệt đã chọn ({selectedApproveCount})
+          </button>
+          <button
+            className="btn btn-outline-danger"
+            type="button"
+            onClick={() => handleBulkAction('void')}
+            disabled={selectedVoidCount === 0 || bulkConfirmLoading}
+          >
+            Hủy đã chọn ({selectedVoidCount})
+          </button>
+          <button
+            className="btn btn-outline"
+            type="button"
+            onClick={() => handleBulkAction('unvoid')}
+            disabled={selectedUnvoidCount === 0 || bulkConfirmLoading}
+          >
+            Bỏ hủy đã chọn ({selectedUnvoidCount})
+          </button>
+        </div>
 
         <DataTable
-          columns={listColumns}
+          columns={tableColumns}
           rows={listRows}
           getRowKey={(row) => row.id}
           minWidth="1200px"
@@ -844,6 +1012,66 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
           }}
         />
       </section>
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmState)}
+        title={confirmTitle}
+        description={
+          confirmState?.action === 'void'
+            ? `Xác nhận hủy khoản trả hộ ${confirmTargetLabel}.`
+            : confirmState?.action === 'approve'
+              ? `Xác nhận phê duyệt khoản trả hộ ${confirmTargetLabel}.`
+              : `Xác nhận bỏ hủy khoản trả hộ ${confirmTargetLabel}.`
+        }
+        confirmLabel={
+          confirmState?.action === 'approve'
+            ? 'Xác nhận phê duyệt'
+            : confirmState?.action === 'void'
+              ? 'Xác nhận hủy'
+              : 'Xác nhận bỏ hủy'
+        }
+        reasonRequired={confirmState?.action === 'void'}
+        reasonLabel="Lý do hủy"
+        reasonPlaceholder="Nhập lý do hủy khoản trả hộ"
+        showOverrideOption
+        overrideReasonPlaceholder="Nhập lý do vượt khóa kỳ"
+        loading={confirmLoading}
+        error={confirmError}
+        tone={confirmState?.action === 'void' ? 'danger' : 'primary'}
+        onClose={() => {
+          if (confirmLoading) return
+          setConfirmState(null)
+          setConfirmError(null)
+        }}
+        onConfirm={handleConfirmAction}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(bulkConfirmAction)}
+        title={
+          bulkConfirmAction === 'approve'
+            ? 'Phê duyệt khoản trả hộ đã chọn'
+            : bulkConfirmAction === 'void'
+              ? 'Hủy khoản trả hộ đã chọn'
+              : 'Bỏ hủy khoản trả hộ đã chọn'
+        }
+        description={bulkConfirmDescription}
+        confirmLabel={bulkConfirmLabel}
+        reasonRequired={bulkConfirmAction === 'void'}
+        reasonLabel="Lý do hủy"
+        reasonPlaceholder="Nhập lý do hủy khoản trả hộ"
+        showOverrideOption
+        overrideReasonPlaceholder="Nhập lý do vượt khóa kỳ"
+        loading={bulkConfirmLoading}
+        error={bulkConfirmError}
+        tone={bulkConfirmAction === 'void' ? 'danger' : 'primary'}
+        onClose={() => {
+          if (bulkConfirmLoading) return
+          setBulkConfirmAction(null)
+          setBulkConfirmError(null)
+        }}
+        onConfirm={handleBulkConfirmAction}
+      />
     </div>
   )
 }

@@ -79,6 +79,7 @@ export default function CustomerTransactionsSection({
   const [invoiceVoidStatus, setInvoiceVoidStatus] = useState('')
   const [invoiceVoidReason, setInvoiceVoidReason] = useState('')
   const [invoiceReplacementId, setInvoiceReplacementId] = useState('')
+  const [invoiceReplacementConfirmed, setInvoiceReplacementConfirmed] = useState(false)
   const [invoiceVoidLoading, setInvoiceVoidLoading] = useState(false)
   const [invoiceVoidError, setInvoiceVoidError] = useState<string | null>(null)
   const [invoiceVoidSuccess, setInvoiceVoidSuccess] = useState<string | null>(null)
@@ -357,6 +358,7 @@ export default function CustomerTransactionsSection({
       setInvoiceVoidStatus(row.status)
       setInvoiceVoidReason('')
       setInvoiceReplacementId('')
+      setInvoiceReplacementConfirmed(false)
       setInvoiceVoidError(null)
       setInvoiceVoidSuccess(null)
     }
@@ -400,11 +402,9 @@ export default function CustomerTransactionsSection({
       return
     }
 
-    if (requiresReplacement) {
-      const confirm = window.confirm(
-        'Hóa đơn đã thu tiền. Hãy chắc chắn đã import hóa đơn thay thế trước khi hủy.',
-      )
-      if (!confirm) return
+    if (requiresReplacement && !invoiceReplacementConfirmed) {
+      setInvoiceVoidError('Vui lòng xác nhận đã import hóa đơn thay thế trước khi hủy.')
+      return
     }
 
     setInvoiceVoidLoading(true)
@@ -420,6 +420,7 @@ export default function CustomerTransactionsSection({
       setInvoiceVoidSuccess('Đã hủy hóa đơn.')
       setInvoiceVoidReason('')
       setInvoiceReplacementId('')
+      setInvoiceReplacementConfirmed(false)
       setInvoiceReload((value) => value + 1)
       setInvoiceModal(null)
     } catch (err) {
@@ -439,7 +440,13 @@ export default function CustomerTransactionsSection({
     invoiceVoidVersion,
     invoiceVoidStatus,
     invoiceReplacementId,
+    invoiceReplacementConfirmed,
   ])
+
+  const handleCloseInvoiceModal = useCallback(() => {
+    setInvoiceModal(null)
+    setInvoiceReplacementConfirmed(false)
+  }, [])
 
   const handleVoidAdvance = useCallback(async () => {
     if (!token || !advanceModal?.row) {
@@ -765,7 +772,7 @@ export default function CustomerTransactionsSection({
         invoiceStatusLabels={invoiceStatusLabels}
         advanceStatusLabels={advanceStatusLabels}
         allocationTypeLabels={allocationTypeLabels}
-        onCloseInvoice={() => setInvoiceModal(null)}
+        onCloseInvoice={handleCloseInvoiceModal}
         onCloseAdvance={() => setAdvanceModal(null)}
         onCloseReceipt={handleCloseReceiptModal}
         onVoidInvoice={handleVoidInvoice}
@@ -775,6 +782,8 @@ export default function CustomerTransactionsSection({
         onInvoiceVoidReasonChange={setInvoiceVoidReason}
         invoiceReplacementId={invoiceReplacementId}
         onInvoiceReplacementChange={setInvoiceReplacementId}
+        invoiceReplacementConfirmed={invoiceReplacementConfirmed}
+        onInvoiceReplacementConfirmedChange={setInvoiceReplacementConfirmed}
         invoiceVoidLoading={invoiceVoidLoading}
         invoiceVoidError={invoiceVoidError}
         invoiceVoidSuccess={invoiceVoidSuccess}

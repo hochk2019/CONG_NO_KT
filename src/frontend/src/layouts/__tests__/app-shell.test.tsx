@@ -103,6 +103,15 @@ describe('AppShell', () => {
     expect(screen.getByRole('heading', { name: /Trang|Tổng quan/i })).toBeInTheDocument()
     expect(screen.getByText('Điều hướng theo vai trò')).toBeInTheDocument()
     expect(screen.getByText('Theo dõi vận hành, phân quyền và rủi ro hệ thống.')).toBeInTheDocument()
+    expect(screen.getByText('Risk & Collections')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Cảnh báo rủi ro' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Thu hồi nợ' })).toBeInTheDocument()
+    const riskCollectionGroup = screen.getByLabelText('Risk and Collections')
+    const riskCollectionLinks = within(riskCollectionGroup).getAllByRole('link')
+    expect(riskCollectionLinks[0]).toHaveAccessibleName('Cảnh báo rủi ro')
+    expect(riskCollectionLinks[1]).toHaveAccessibleName('Thu hồi nợ')
+    expect(screen.queryByRole('link', { name: 'Thông báo' })).not.toBeInTheDocument()
+    expect(screen.getByText('Khoản trả hộ')).toBeInTheDocument()
   })
 
   it('toggles mobile navigation state', async () => {

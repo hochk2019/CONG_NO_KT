@@ -78,6 +78,33 @@
   padding-right: 0.35rem;
 }
 
+.nav-group {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  border: 1px dashed color-mix(in srgb, var(--color-accent) 28%, transparent);
+  background: color-mix(in srgb, var(--color-accent) 6%, transparent);
+}
+
+.nav-group__title {
+  margin: 0;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--color-muted);
+  font-weight: 700;
+}
+
+.nav-group__items {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.nav-group__items .nav-item {
+  padding-left: 0.7rem;
+}
+
 .nav-item {
   padding: 0.65rem 0.9rem;
   border-radius: 14px;
@@ -570,7 +597,8 @@
   .app-shell--nav-collapsed .brand-meta,
   .app-shell--nav-collapsed .user-chip__role,
   .app-shell--nav-collapsed .nav-item__label,
-  .app-shell--nav-collapsed .nav-pill {
+  .app-shell--nav-collapsed .nav-pill,
+  .app-shell--nav-collapsed .nav-group__title {
     display: none;
   }
 
@@ -580,6 +608,12 @@
 
   .app-shell--nav-collapsed .nav-list {
     padding-right: 0;
+  }
+
+  .app-shell--nav-collapsed .nav-group {
+    padding: 0.35rem;
+    justify-items: center;
+    border-style: solid;
   }
 
   .app-shell--nav-collapsed .nav-item {

@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import type { NotificationItem } from '../../api/notifications'
 import { AuthContext, type AuthContextValue } from '../../context/AuthStore'
 import RiskAlertsPage from '../RiskAlertsPage'
 
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   updateReminderSettings: vi.fn(),
   fetchNotifications: vi.fn(),
   markNotificationRead: vi.fn(),
+  markAllNotificationsRead: vi.fn(),
   fetchZaloLinkStatus: vi.fn(),
   requestZaloLinkCode: vi.fn(),
   fetchOwnerLookup: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('../../api/reminders', () => ({
 vi.mock('../../api/notifications', () => ({
   fetchNotifications: mocks.fetchNotifications,
   markNotificationRead: mocks.markNotificationRead,
+  markAllNotificationsRead: mocks.markAllNotificationsRead,
 }))
 
 vi.mock('../../api/zalo', () => ({
@@ -117,7 +120,7 @@ const buildRiskBootstrap = () => ({
     total: 0,
   },
   notifications: {
-    items: [],
+    items: [] as NotificationItem[],
     page: 1,
     pageSize: 5,
     total: 0,
@@ -152,6 +155,7 @@ describe('RiskAlertsPage tabs', () => {
     mocks.fetchReminderLogs.mockResolvedValue(bootstrap.logs)
     mocks.fetchNotifications.mockResolvedValue(bootstrap.notifications)
     mocks.markNotificationRead.mockResolvedValue(undefined)
+    mocks.markAllNotificationsRead.mockResolvedValue(undefined)
     mocks.fetchZaloLinkStatus.mockResolvedValue(bootstrap.zaloStatus)
     mocks.requestZaloLinkCode.mockResolvedValue({
       code: 'ABC123',
@@ -193,5 +197,40 @@ describe('RiskAlertsPage tabs', () => {
     expect(screen.getByText('Thông báo nội bộ')).toBeInTheDocument()
     expect(screen.queryByText('Tiêu chí phân nhóm')).not.toBeInTheDocument()
     expect(window.localStorage.getItem('pref.risk.activeTab')).toBe('history')
+  })
+
+  it('marks all notifications as read from history tab', async () => {
+    const bootstrap = buildRiskBootstrap()
+    bootstrap.notifications.items = [
+      {
+        id: 'n-1',
+        title: 'Nhắc rủi ro',
+        body: 'Theo dõi công nợ quá hạn',
+        severity: 'WARN',
+        source: 'RISK',
+        createdAt: new Date().toISOString(),
+        readAt: null,
+      },
+    ]
+    bootstrap.notifications.total = 1
+    mocks.fetchRiskBootstrap.mockResolvedValue(bootstrap)
+    mocks.fetchNotifications.mockResolvedValue(bootstrap.notifications)
+
+    const authValue = buildAuthContext()
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={authValue}>
+          <RiskAlertsPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Lịch sử' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Đã đọc tất cả (1)' }))
+
+    await waitFor(() => {
+      expect(mocks.markAllNotificationsRead).toHaveBeenCalledWith('token')
+    })
   })
 })

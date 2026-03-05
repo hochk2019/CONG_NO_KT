@@ -1,6 +1,7 @@
 using CongNoGolden.Application.Collections;
 using CongNoGolden.Application.Risk;
 using CongNoGolden.Infrastructure.Services;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Tests.Unit;
@@ -149,6 +150,173 @@ public sealed class CollectionTaskQueueTests
         Assert.Equal(2, list.Count);
         Assert.Equal("0202", list[0].CustomerTaxCode);
         Assert.True(list[0].PriorityScore > list[1].PriorityScore);
+    }
+
+    [Fact]
+    public void List_SearchByTaxCode_IgnoresCommonSeparators()
+    {
+        var queue = new CollectionTaskQueue();
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        queue.Enqueue(
+            new EnqueueCollectionTaskRequest(
+                CustomerTaxCode: "0311234567",
+                CustomerName: "Cong ty Tax Search",
+                OwnerId: null,
+                OwnerName: null,
+                TotalOutstanding: 120_000_000m,
+                OverdueAmount: 45_000_000m,
+                MaxDaysPastDue: 25,
+                PredictedOverdueProbability: 0.42m,
+                RiskLevel: "MEDIUM",
+                AiSignal: "MEDIUM",
+                PriorityScore: 0.48m),
+            now);
+
+        var list = queue.List(new CollectionTaskListRequest(Search: "031-123-4567", Take: 50));
+
+        Assert.Single(list);
+        Assert.Equal("0311234567", list[0].CustomerTaxCode);
+    }
+
+    [Fact]
+    public void List_SearchByCustomerName_MatchesWithoutVietnameseDiacritics()
+    {
+        var queue = new CollectionTaskQueue();
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        queue.Enqueue(
+            new EnqueueCollectionTaskRequest(
+                CustomerTaxCode: "0319998888",
+                CustomerName: "Công ty Điện máy Sao Đỏ",
+                OwnerId: null,
+                OwnerName: null,
+                TotalOutstanding: 320_000_000m,
+                OverdueAmount: 210_000_000m,
+                MaxDaysPastDue: 90,
+                PredictedOverdueProbability: 0.83m,
+                RiskLevel: "HIGH",
+                AiSignal: "HIGH",
+                PriorityScore: 0.87m),
+            now);
+
+        var list = queue.List(new CollectionTaskListRequest(Search: "cong ty dien may sao do", Take: 50));
+
+        Assert.Single(list);
+        Assert.Equal("0319998888", list[0].CustomerTaxCode);
+    }
+
+    [Fact]
+    public void EnqueueFromRisk_ThirtyDaysPastDue_DoesNotReachDefaultThreshold()
+    {
+        var queue = new CollectionTaskQueue();
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        var created = queue.EnqueueFromRisk(
+            new[]
+            {
+                BuildRiskCustomer(
+                    customerTaxCode: "0401",
+                    customerName: "30-day overdue",
+                    overdueRatio: 0.35m,
+                    maxDaysPastDue: 30,
+                    predictedOverdueProbability: 0.45m,
+                    riskLevel: "MEDIUM")
+            },
+            maxItems: 10,
+            minPriorityScore: 0.35m,
+            now);
+
+        Assert.Equal(0, created);
+    }
+
+    [Fact]
+    public void EnqueueFromRisk_SixtyDaysPastDue_ReachesDefaultThreshold()
+    {
+        var queue = new CollectionTaskQueue();
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        var created = queue.EnqueueFromRisk(
+            new[]
+            {
+                BuildRiskCustomer(
+                    customerTaxCode: "0402",
+                    customerName: "60-day overdue",
+                    overdueRatio: 0.35m,
+                    maxDaysPastDue: 60,
+                    predictedOverdueProbability: 0.45m,
+                    riskLevel: "MEDIUM")
+            },
+            maxItems: 10,
+            minPriorityScore: 0.35m,
+            now);
+
+        Assert.Equal(1, created);
+    }
+
+    [Fact]
+    public void EnqueueFromRisk_OneHundredEightyDaysPastDue_MustBePrioritized()
+    {
+        var queue = new CollectionTaskQueue();
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        var created = queue.EnqueueFromRisk(
+            new[]
+            {
+                BuildRiskCustomer(
+                    customerTaxCode: "0403",
+                    customerName: "180-day overdue",
+                    overdueRatio: 0.10m,
+                    maxDaysPastDue: 180,
+                    predictedOverdueProbability: 0.20m,
+                    riskLevel: "LOW",
+                    totalOutstanding: 100_000_000m,
+                    overdueAmount: 50_000_000m)
+            },
+            maxItems: 10,
+            minPriorityScore: 0.35m,
+            now);
+
+        Assert.Equal(1, created);
+    }
+
+    [Fact]
+    public void EnqueueFromRisk_UsesConfiguredScoringWeightsAndDayBands()
+    {
+        var queue = new CollectionTaskQueue(Options.Create(new CollectionTaskScoringOptions
+        {
+            ExpectedValueWeight = 0m,
+            ProbabilityWeight = 0m,
+            OverdueRatioWeight = 0m,
+            DaysPastDueWeight = 1m,
+            RiskLevelWeight = 0m,
+            DaysBand1End = 30,
+            DaysBand2End = 60,
+            DaysBand3End = 90,
+            DaysBand4End = 180,
+            DaysBand1Score = 0.50m,
+            DaysBand2Score = 0.70m,
+            DaysBand3Score = 0.85m,
+            DaysBand4Score = 1m
+        }));
+        var now = new DateTimeOffset(2026, 2, 26, 8, 0, 0, TimeSpan.Zero);
+
+        var created = queue.EnqueueFromRisk(
+            new[]
+            {
+                BuildRiskCustomer(
+                    customerTaxCode: "0404",
+                    customerName: "30-day overdue with configured band",
+                    overdueRatio: 0.10m,
+                    maxDaysPastDue: 30,
+                    predictedOverdueProbability: 0.10m,
+                    riskLevel: "LOW")
+            },
+            maxItems: 10,
+            minPriorityScore: 0.35m,
+            now);
+
+        Assert.Equal(1, created);
     }
 
     private static RiskCustomerItem BuildRiskCustomer(

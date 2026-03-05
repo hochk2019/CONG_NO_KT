@@ -6,6 +6,7 @@ import {
   listPeriodLocks,
   unlockPeriodLock,
 } from '../api/periodLocks'
+import ActionConfirmModal, { type ActionConfirmPayload } from '../components/modals/ActionConfirmModal'
 import { useAuth } from '../context/AuthStore'
 import { formatDateTime } from '../utils/format'
 
@@ -15,28 +16,29 @@ const periodTypeLabels: Record<string, string> = {
   YEAR: 'Năm',
 }
 
+type PeriodLockRow = {
+  id: string
+  periodType: string
+  periodKey: string
+  lockedAt: string
+  lockedBy?: string | null
+  note?: string | null
+}
+
 export default function AdminPeriodLocksPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
 
-  const [locks, setLocks] = useState<
-    {
-      id: string
-      periodType: string
-      periodKey: string
-      lockedAt: string
-      lockedBy?: string | null
-      note?: string | null
-    }[]
-  >([])
+  const [locks, setLocks] = useState<PeriodLockRow[]>([])
   const [periodType, setPeriodType] = useState('MONTH')
   const [periodMonth, setPeriodMonth] = useState('')
   const [periodQuarter, setPeriodQuarter] = useState('')
   const [periodQuarterYear, setPeriodQuarterYear] = useState('')
   const [periodYear, setPeriodYear] = useState('')
   const [note, setNote] = useState('')
-  const [unlockId, setUnlockId] = useState('')
-  const [unlockReason, setUnlockReason] = useState('')
+  const [unlockTarget, setUnlockTarget] = useState<PeriodLockRow | null>(null)
+  const [unlockLoading, setUnlockLoading] = useState(false)
+  const [unlockError, setUnlockError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const yearOptions = useMemo(() => {
@@ -153,23 +155,28 @@ export default function AdminPeriodLocksPage() {
     }
   }
 
-  const handleUnlock = async (id: string) => {
-    if (!token) return
-    if (!window.confirm('Bạn chắc chắn muốn mở khóa kỳ này?')) {
-      return
-    }
+  const handleRequestUnlock = (lock: PeriodLockRow) => {
     setError(null)
+    setUnlockError(null)
+    setUnlockTarget(lock)
+  }
+
+  const handleUnlock = async (payload: ActionConfirmPayload) => {
+    if (!token || !unlockTarget) return
+    setUnlockLoading(true)
+    setUnlockError(null)
     try {
-      await unlockPeriodLock(token, id, unlockReason || 'Mở khóa')
-      setUnlockId('')
-      setUnlockReason('')
+      await unlockPeriodLock(token, unlockTarget.id, payload.reason)
+      setUnlockTarget(null)
       await refreshLocks()
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.message)
+        setUnlockError(err.message)
       } else {
-        setError('Không mở khóa được.')
+        setUnlockError('Không mở khóa được.')
       }
+    } finally {
+      setUnlockLoading(false)
     }
   }
 
@@ -285,7 +292,7 @@ export default function AdminPeriodLocksPage() {
                     <td>{lock.lockedBy ?? '-'}</td>
                     <td>{formatDateTime(lock.lockedAt)}</td>
                     <td>
-                      <button className="btn btn-outline-danger" onClick={() => setUnlockId(lock.id)}>
+                      <button className="btn btn-outline-danger" onClick={() => handleRequestUnlock(lock)}>
                         Mở khóa
                       </button>
                     </td>
@@ -297,29 +304,30 @@ export default function AdminPeriodLocksPage() {
         </div>
       </section>
 
-      {unlockId && (
-        <section className="card">
-          <h3>Mở khóa kỳ</h3>
-          <div className="form-grid">
-            <label className="field">
-              <span>Lý do</span>
-              <input
-                value={unlockReason}
-                onChange={(event) => setUnlockReason(event.target.value)}
-                placeholder="Bắt buộc"
-              />
-            </label>
-          </div>
-          <div className="inline-actions">
-            <button className="btn btn-danger" onClick={() => handleUnlock(unlockId)}>
-              Xác nhận mở khóa
-            </button>
-            <button className="btn btn-outline" onClick={() => setUnlockId('')}>
-              Hủy
-            </button>
-          </div>
-        </section>
-      )}
+      <ActionConfirmModal
+        isOpen={Boolean(unlockTarget)}
+        title="Mở khóa kỳ kế toán"
+        description={
+          unlockTarget
+            ? `Xác nhận mở khóa kỳ ${formatPeriodKey(unlockTarget.periodType, unlockTarget.periodKey)}?`
+            : undefined
+        }
+        confirmLabel="Xác nhận mở khóa"
+        reasonRequired
+        reasonLabel="Lý do mở khóa"
+        reasonPlaceholder="Nhập lý do mở khóa kỳ"
+        loading={unlockLoading}
+        error={unlockError}
+        tone="danger"
+        onClose={() => {
+          if (unlockLoading) return
+          setUnlockTarget(null)
+          setUnlockError(null)
+        }}
+        onConfirm={(payload) => {
+          void handleUnlock(payload)
+        }}
+      />
     </div>
   )
 }

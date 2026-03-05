@@ -1,6 +1,7 @@
 using CongNoGolden.Api;
 using CongNoGolden.Application.Collections;
 using CongNoGolden.Application.Risk;
+using Microsoft.Extensions.Options;
 
 namespace CongNoGolden.Api.Endpoints;
 
@@ -37,6 +38,7 @@ public static class CollectionEndpoints
             CollectionTaskGenerateRequest request,
             IRiskService riskService,
             ICollectionTaskQueue queue,
+            IOptions<CollectionTaskScoringOptions> scoringOptions,
             CancellationToken ct) =>
         {
             try
@@ -66,7 +68,8 @@ public static class CollectionEndpoints
                         Order: null),
                     ct);
 
-                var minPriorityScore = request.MinPriorityScore.GetValueOrDefault(0.35m);
+                var defaultMinPriorityScore = Clamp01(scoringOptions.Value.DefaultMinPriorityScore);
+                var minPriorityScore = Clamp01(request.MinPriorityScore.GetValueOrDefault(defaultMinPriorityScore));
                 var created = queue.EnqueueFromRisk(
                     riskCustomers.Items,
                     take,
@@ -131,5 +134,20 @@ public static class CollectionEndpoints
         .RequireAuthorization("RiskManage");
 
         return app;
+    }
+
+    private static decimal Clamp01(decimal value)
+    {
+        if (value < 0m)
+        {
+            return 0m;
+        }
+
+        if (value > 1m)
+        {
+            return 1m;
+        }
+
+        return value;
     }
 }

@@ -42,7 +42,8 @@ const storeFilter = (key: string, value: string) => {
   }
 }
 
-const importTypes = ['INVOICE', 'ADVANCE', 'RECEIPT']
+const importTypes = ['INVOICE', 'ADVANCE', 'RECEIPT'] as const
+type ImportDataType = (typeof importTypes)[number]
 const importTypeLabels: Record<string, string> = {
   INVOICE: 'Hóa đơn',
   ADVANCE: 'Khoản trả hộ KH',
@@ -91,12 +92,18 @@ type ImportBatchSectionProps = {
   token: string
   canStage: boolean
   canCommit: boolean
+  fixedType?: ImportDataType
 }
 
-export default function ImportBatchSection({ token, canStage, canCommit }: ImportBatchSectionProps) {
+export default function ImportBatchSection({
+  token,
+  canStage,
+  canCommit,
+  fixedType,
+}: ImportBatchSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [type, setType] = useState('INVOICE')
+  const [type, setType] = useState<ImportDataType>(fixedType ?? 'INVOICE')
   const [file, setFile] = useState<File | null>(null)
   const [periodFrom, setPeriodFrom] = useState('')
   const [periodTo, setPeriodTo] = useState('')
@@ -152,7 +159,12 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
   const previewTotalPages = preview
     ? Math.max(1, Math.ceil(preview.totalRows / preview.pageSize))
     : 1
+  const templateTypes = fixedType ? [fixedType] : importTypes
 
+  useEffect(() => {
+    if (!fixedType) return
+    setType(fixedType)
+  }, [fixedType])
 
   useEffect(() => {
     if (!batchId || !token || !previewLoaded) return
@@ -433,7 +445,9 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
     periodTo?: string | null
   }) => {
     setBatchId(row.batchId)
-    setType(row.type)
+    if (!fixedType) {
+      setType(row.type as ImportDataType)
+    }
     setPeriodFrom(row.periodFrom ?? '')
     setPeriodTo(row.periodTo ?? '')
     setPreviewStatus('')
@@ -473,15 +487,21 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
         </p>
         <div className="inline-actions">
           <span className="muted">Tải template:</span>
-          <a className="btn btn-ghost" href="/templates/invoice_template.xlsx" download>
-            Hóa đơn
-          </a>
-          <a className="btn btn-ghost" href="/templates/advance_template.xlsx" download>
-            Khoản trả hộ KH
-          </a>
-          <a className="btn btn-ghost" href="/templates/receipt_template.xlsx" download>
-            Phiếu thu
-          </a>
+          {templateTypes.includes('INVOICE') && (
+            <a className="btn btn-ghost" href="/templates/invoice_template.xlsx" download>
+              Hóa đơn
+            </a>
+          )}
+          {templateTypes.includes('ADVANCE') && (
+            <a className="btn btn-ghost" href="/templates/advance_template.xlsx" download>
+              Khoản trả hộ KH
+            </a>
+          )}
+          {templateTypes.includes('RECEIPT') && (
+            <a className="btn btn-ghost" href="/templates/receipt_template.xlsx" download>
+              Phiếu thu
+            </a>
+          )}
         </div>
         <p className="muted">
           Hóa đơn hỗ trợ cả template đơn giản và ReportDetail.xlsx (sheet ExportData).
@@ -492,16 +512,23 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
         <p className="eyebrow">Bước 2</p>
         <h3>Tải file nhập liệu</h3>
         <div className="form-grid form-grid--upload">
-          <label className="field">
-            <span>Loại dữ liệu</span>
-            <select value={type} onChange={(event) => setType(event.target.value)}>
-              {importTypes.map((item) => (
-                <option key={item} value={item}>
-                  {importTypeLabels[item] ?? item}
-                </option>
-              ))}
-            </select>
-          </label>
+          {fixedType ? (
+            <label className="field">
+              <span>Loại dữ liệu</span>
+              <div className="readonly-field">{importTypeLabels[fixedType] ?? fixedType}</div>
+            </label>
+          ) : (
+            <label className="field">
+              <span>Loại dữ liệu</span>
+              <select value={type} onChange={(event) => setType(event.target.value as ImportDataType)}>
+                {importTypes.map((item) => (
+                  <option key={item} value={item}>
+                    {importTypeLabels[item] ?? item}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className={fieldErrors.file ? 'field field--error' : 'field'}>
             <span>Chọn file</span>
             <input
@@ -731,6 +758,7 @@ export default function ImportBatchSection({ token, canStage, canCommit }: Impor
         importTypeLabels={importTypeLabels}
         historyStatusLabels={historyStatusLabels}
         refreshKey={historyReload}
+        fixedType={fixedType}
         onResumeBatch={handleResumeBatch}
       />
     </div>

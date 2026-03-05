@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../../api/client'
 import { cancelImport, listImportBatches, rollbackImport } from '../../api/imports'
 import DataTable from '../../components/DataTable'
+import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { formatDate, formatDateTime } from '../../utils/format'
 import { formatRollbackErrorMessage } from './rollbackErrorMessages'
 
@@ -12,6 +13,7 @@ type ImportHistorySectionProps = {
   importTypeLabels: Record<string, string>
   historyStatusLabels: Record<string, string>
   refreshKey: number
+  fixedType?: 'INVOICE' | 'ADVANCE' | 'RECEIPT'
   onResumeBatch: (row: {
     batchId: string
     type: string
@@ -51,6 +53,10 @@ const storeFilter = (key: string, value: string) => {
   }
 }
 
+type HistoryConfirmState =
+  | { action: 'rollback'; batchId: string }
+  | { action: 'cancel'; batchId: string }
+
 export default function ImportHistorySection({
   token,
   canStage,
@@ -58,6 +64,7 @@ export default function ImportHistorySection({
   importTypeLabels,
   historyStatusLabels,
   refreshKey,
+  fixedType,
   onResumeBatch,
 }: ImportHistorySectionProps) {
   const [rows, setRows] = useState<
@@ -91,6 +98,14 @@ export default function ImportHistorySection({
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  const [confirmState, setConfirmState] = useState<HistoryConfirmState | null>(null)
+  const [confirmLoading, setConfirmLoading] = useState(false)
+  const [confirmError, setConfirmError] = useState<string | null>(null)
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([])
+  const [bulkConfirmAction, setBulkConfirmAction] = useState<'rollback' | 'cancel' | null>(null)
+  const [bulkConfirmLoading, setBulkConfirmLoading] = useState(false)
+  const [bulkConfirmError, setBulkConfirmError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
 
   useEffect(() => {
     const trimmed = search.trim()
@@ -112,7 +127,7 @@ export default function ImportHistorySection({
       try {
         const result = await listImportBatches({
           token,
-          type: type || undefined,
+          type: (fixedType ?? type) || undefined,
           status: status || undefined,
           search: searchApplied || undefined,
           page,
@@ -139,57 +154,196 @@ export default function ImportHistorySection({
     return () => {
       isActive = false
     }
-  }, [token, page, pageSize, type, status, searchApplied, refreshKey, reloadTick])
+  }, [token, page, pageSize, type, status, searchApplied, refreshKey, reloadTick, fixedType])
+
+  useEffect(() => {
+    setSelectedBatchIds((prev) => {
+      if (prev.length === 0) return prev
+      const rowIds = new Set(rows.map((row) => row.batchId))
+      return prev.filter((id) => rowIds.has(id))
+    })
+  }, [rows])
 
   const handleRollback = useCallback(
-    async (batchId: string) => {
+    (batchId: string) => {
       if (!token || !canCommit) return
-      if (!window.confirm(`Hoàn tác lô nhập ${batchId}?`)) return
-      setLoading(true)
-      setError(null)
-      try {
-        await rollbackImport({ token, batchId })
-        setPage(1)
-        setReloadTick((value) => value + 1)
-      } catch (err) {
-        setError(formatRollbackErrorMessage(err))
-      } finally {
-        setLoading(false)
-      }
+      setActionMessage(null)
+      setConfirmError(null)
+      setConfirmState({ action: 'rollback', batchId })
     },
     [token, canCommit],
   )
 
   const handleCancel = useCallback(
-    async (batchId: string) => {
+    (batchId: string) => {
       if (!token || !canStage) return
-      const reason = window.prompt('Nhập lý do hủy lô nhập liệu:', '')
-      if (reason === null) return
-      if (!reason.trim()) {
-        setError('Vui lòng nhập lý do hủy lô.')
-        return
-      }
-      setLoading(true)
-      setError(null)
-      try {
-        await cancelImport({ token, batchId, reason: reason.trim() })
-        setPage(1)
-        setReloadTick((value) => value + 1)
-      } catch (err) {
-        if (err instanceof ApiError) {
-          setError(err.message)
-        } else {
-          setError('Hủy lô thất bại.')
-        }
-      } finally {
-        setLoading(false)
-      }
+      setActionMessage(null)
+      setConfirmError(null)
+      setConfirmState({ action: 'cancel', batchId })
     },
     [token, canStage],
   )
 
+  const handleConfirmAction = useCallback(
+    async (payload: ActionConfirmPayload) => {
+      if (!token || !confirmState) return
+      setConfirmLoading(true)
+      setConfirmError(null)
+      setError(null)
+      setActionMessage(null)
+      setLoading(true)
+      try {
+        if (confirmState.action === 'rollback') {
+          await rollbackImport({ token, batchId: confirmState.batchId })
+        } else {
+          await cancelImport({ token, batchId: confirmState.batchId, reason: payload.reason })
+        }
+        setSelectedBatchIds((prev) => prev.filter((id) => id !== confirmState.batchId))
+        setConfirmState(null)
+        setPage(1)
+        setReloadTick((value) => value + 1)
+        setActionMessage(
+          confirmState.action === 'rollback'
+            ? `Đã hoàn tác lô ${confirmState.batchId}.`
+            : `Đã hủy lô ${confirmState.batchId}.`,
+        )
+      } catch (err) {
+        if (confirmState.action === 'rollback') {
+          setConfirmError(formatRollbackErrorMessage(err))
+        } else if (err instanceof ApiError) {
+          setConfirmError(err.message)
+        } else {
+          setConfirmError('Hủy lô thất bại.')
+        }
+      } finally {
+        setLoading(false)
+        setConfirmLoading(false)
+      }
+    },
+    [token, confirmState],
+  )
+
+  const isRollbackEligible = useCallback(
+    (row: { status: string }) => row.status.toUpperCase() === 'COMMITTED' && canCommit,
+    [canCommit],
+  )
+  const isCancelEligible = useCallback(
+    (row: { status: string }) => row.status.toUpperCase() === 'STAGING' && canStage,
+    [canStage],
+  )
+  const isActionable = useCallback(
+    (row: { status: string }) => isRollbackEligible(row) || isCancelEligible(row),
+    [isCancelEligible, isRollbackEligible],
+  )
+
+  const selectedRows = rows.filter((row) => selectedBatchIds.includes(row.batchId))
+  const selectedRollbackCount = selectedRows.filter((row) => isRollbackEligible(row)).length
+  const selectedCancelCount = selectedRows.filter((row) => isCancelEligible(row)).length
+  const selectableBatchIds = rows.filter((row) => isActionable(row)).map((row) => row.batchId)
+
+  const handleOpenBulkConfirm = (action: 'rollback' | 'cancel') => {
+    if (action === 'rollback' && selectedRollbackCount === 0) return
+    if (action === 'cancel' && selectedCancelCount === 0) return
+    setBulkConfirmError(null)
+    setBulkConfirmAction(action)
+    setActionMessage(null)
+  }
+
+  const handleBulkConfirm = useCallback(
+    async (payload: ActionConfirmPayload) => {
+      if (!token || !bulkConfirmAction) return
+      const targetRows = selectedRows.filter((row) =>
+        bulkConfirmAction === 'rollback' ? isRollbackEligible(row) : isCancelEligible(row),
+      )
+      if (targetRows.length === 0) return
+
+      setBulkConfirmLoading(true)
+      setBulkConfirmError(null)
+      setError(null)
+      setActionMessage(null)
+
+      let successCount = 0
+      const failedIds: string[] = []
+      const failedMessages: string[] = []
+
+      for (const row of targetRows) {
+        try {
+          if (bulkConfirmAction === 'rollback') {
+            await rollbackImport({
+              token,
+              batchId: row.batchId,
+              overridePeriodLock: payload.overridePeriodLock,
+              overrideReason: payload.overrideReason,
+            })
+          } else {
+            await cancelImport({
+              token,
+              batchId: row.batchId,
+              reason: payload.reason,
+            })
+          }
+          successCount += 1
+        } catch (err) {
+          failedIds.push(row.batchId)
+          if (bulkConfirmAction === 'rollback') {
+            failedMessages.push(`${row.batchId}: ${formatRollbackErrorMessage(err)}`)
+          } else if (err instanceof ApiError) {
+            failedMessages.push(`${row.batchId}: ${err.message}`)
+          } else {
+            failedMessages.push(`${row.batchId}: Hủy lô thất bại.`)
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        const actionLabel = bulkConfirmAction === 'rollback' ? 'hoàn tác' : 'hủy'
+        setActionMessage(`Đã ${actionLabel} ${successCount}/${targetRows.length} lô đã chọn.`)
+        setPage(1)
+        setReloadTick((value) => value + 1)
+      }
+
+      if (failedIds.length > 0) {
+        setBulkConfirmError(
+          `Thất bại ${failedIds.length} lô: ${failedMessages.slice(0, 2).join('; ')}`,
+        )
+        setSelectedBatchIds(failedIds)
+      } else {
+        setSelectedBatchIds([])
+        setBulkConfirmAction(null)
+      }
+
+      setBulkConfirmLoading(false)
+    },
+    [bulkConfirmAction, isCancelEligible, isRollbackEligible, selectedRows, token],
+  )
+
   const columns = useMemo(
     () => [
+      {
+        key: 'select',
+        label: 'Chọn',
+        align: 'center' as const,
+        width: '72px',
+        render: (row: { batchId: string; status: string }) => {
+          if (!isActionable(row)) return <span className="muted">-</span>
+          return (
+            <input
+              type="checkbox"
+              checked={selectedBatchIds.includes(row.batchId)}
+              onChange={(event) => {
+                setSelectedBatchIds((prev) => {
+                  if (event.target.checked) {
+                    if (prev.includes(row.batchId)) return prev
+                    return [...prev, row.batchId]
+                  }
+                  return prev.filter((id) => id !== row.batchId)
+                })
+              }}
+              aria-label={`Chọn lô ${row.batchId}`}
+            />
+          )
+        },
+      },
       {
         key: 'type',
         label: 'Loại',
@@ -317,7 +471,18 @@ export default function ImportHistorySection({
         },
       },
     ],
-    [canCommit, canStage, handleCancel, handleRollback, historyStatusLabels, importTypeLabels, loading, onResumeBatch],
+    [
+      canCommit,
+      canStage,
+      handleCancel,
+      handleRollback,
+      historyStatusLabels,
+      importTypeLabels,
+      isActionable,
+      loading,
+      onResumeBatch,
+      selectedBatchIds,
+    ],
   )
 
   return (
@@ -340,22 +505,29 @@ export default function ImportHistorySection({
             disabled={loading}
           />
         </label>
-        <label className="field">
-          <span>Loại dữ liệu</span>
-          <select
-            value={type}
-            onChange={(event) => {
-              setType(event.target.value)
-              setPage(1)
-            }}
-            disabled={loading}
-          >
-            <option value="">Tất cả</option>
-            <option value="INVOICE">Hóa đơn</option>
-            <option value="ADVANCE">Khoản trả hộ KH</option>
-            <option value="RECEIPT">Phiếu thu</option>
-          </select>
-        </label>
+        {fixedType ? (
+          <label className="field">
+            <span>Loại dữ liệu</span>
+            <div className="readonly-field">{importTypeLabels[fixedType] ?? fixedType}</div>
+          </label>
+        ) : (
+          <label className="field">
+            <span>Loại dữ liệu</span>
+            <select
+              value={type}
+              onChange={(event) => {
+                setType(event.target.value)
+                setPage(1)
+              }}
+              disabled={loading}
+            >
+              <option value="">Tất cả</option>
+              <option value="INVOICE">Hóa đơn</option>
+              <option value="ADVANCE">Khoản trả hộ KH</option>
+              <option value="RECEIPT">Phiếu thu</option>
+            </select>
+          </label>
+        )}
         <label className="field">
           <span>Trạng thái</span>
           <select
@@ -382,6 +554,48 @@ export default function ImportHistorySection({
           {error}
         </div>
       )}
+      {actionMessage && (
+        <div className="alert alert--success" role="alert" aria-live="polite">
+          {actionMessage}
+        </div>
+      )}
+      <div className="filters-actions">
+        <span className="muted">
+          Đã chọn {selectedBatchIds.length}/{selectableBatchIds.length} lô khả dụng.
+        </span>
+        <button
+          className="btn btn-ghost"
+          type="button"
+          onClick={() => setSelectedBatchIds(selectableBatchIds)}
+          disabled={selectableBatchIds.length === 0 || bulkConfirmLoading}
+        >
+          Chọn tất cả
+        </button>
+        <button
+          className="btn btn-ghost"
+          type="button"
+          onClick={() => setSelectedBatchIds([])}
+          disabled={selectedBatchIds.length === 0 || bulkConfirmLoading}
+        >
+          Bỏ chọn
+        </button>
+        <button
+          className="btn btn-outline-danger"
+          type="button"
+          onClick={() => handleOpenBulkConfirm('rollback')}
+          disabled={selectedRollbackCount === 0 || bulkConfirmLoading}
+        >
+          Hoàn tác đã chọn ({selectedRollbackCount})
+        </button>
+        <button
+          className="btn btn-outline-danger"
+          type="button"
+          onClick={() => handleOpenBulkConfirm('cancel')}
+          disabled={selectedCancelCount === 0 || bulkConfirmLoading}
+        >
+          Hủy đã chọn ({selectedCancelCount})
+        </button>
+      </div>
       <DataTable
         columns={columns}
         rows={rows}
@@ -398,6 +612,62 @@ export default function ImportHistorySection({
           setPageSize(size)
           setPage(1)
         }}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(confirmState)}
+        title={confirmState ? `${confirmState.action === 'rollback' ? 'Hoàn tác' : 'Hủy'} lô ${confirmState.batchId}` : ''}
+        description={
+          confirmState?.action === 'rollback'
+            ? `Xác nhận hoàn tác dữ liệu của lô ${confirmState.batchId}.`
+            : confirmState
+              ? `Nhập lý do hủy lô ${confirmState.batchId}.`
+              : undefined
+        }
+        confirmLabel={confirmState?.action === 'rollback' ? 'Xác nhận hoàn tác' : 'Xác nhận hủy'}
+        reasonRequired={confirmState?.action === 'cancel'}
+        reasonLabel="Lý do hủy lô"
+        reasonPlaceholder="Nhập lý do hủy lô nhập liệu"
+        loading={confirmLoading}
+        error={confirmError}
+        tone="danger"
+        onClose={() => {
+          if (confirmLoading) return
+          setConfirmState(null)
+          setConfirmError(null)
+        }}
+        onConfirm={handleConfirmAction}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(bulkConfirmAction)}
+        title={
+          bulkConfirmAction === 'rollback'
+            ? 'Hoàn tác các lô đã chọn'
+            : 'Hủy các lô đã chọn'
+        }
+        description={
+          bulkConfirmAction === 'rollback'
+            ? `Xác nhận hoàn tác ${selectedRollbackCount} lô đã chọn.`
+            : `Nhập lý do hủy cho ${selectedCancelCount} lô đã chọn.`
+        }
+        confirmLabel={
+          bulkConfirmAction === 'rollback' ? 'Xác nhận hoàn tác' : 'Xác nhận hủy'
+        }
+        reasonRequired={bulkConfirmAction === 'cancel'}
+        reasonLabel="Lý do hủy lô"
+        reasonPlaceholder="Nhập lý do hủy lô nhập liệu"
+        showOverrideOption={bulkConfirmAction === 'rollback'}
+        overrideReasonPlaceholder="Nhập lý do vượt khóa kỳ"
+        loading={bulkConfirmLoading}
+        error={bulkConfirmError}
+        tone="danger"
+        onClose={() => {
+          if (bulkConfirmLoading) return
+          setBulkConfirmAction(null)
+          setBulkConfirmError(null)
+        }}
+        onConfirm={handleBulkConfirm}
       />
     </section>
   )

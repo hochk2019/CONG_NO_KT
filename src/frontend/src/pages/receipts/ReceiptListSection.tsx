@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   approveReceipt,
+  approveReceiptsBulk,
   fetchReceiptAllocations,
   fetchReceiptOpenItems,
   getReceipt,
@@ -21,6 +22,7 @@ import {
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
+import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatDate, formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
@@ -86,23 +88,6 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
-const collectOverrideOptions = (actionLabel: string) => {
-  const overrideInput = window.prompt(
-    `${actionLabel}: nếu cần vượt khóa kỳ, nhập lý do (bỏ trống nếu không).`,
-    '',
-  )
-  if (overrideInput === null) {
-    return null
-  }
-
-  const reason = overrideInput.trim()
-  if (!reason) {
-    return { overridePeriodLock: false, overrideReason: undefined }
-  }
-
-  return { overridePeriodLock: true, overrideReason: reason }
-}
-
 type ReceiptListSectionProps = {
   token: string
   reloadSignal: number
@@ -139,12 +124,20 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [listReminder, setListReminder] = useState(() => getStoredReminderFilter())
   const [listLoading, setListLoading] = useState(false)
   const [listError, setListError] = useState<string | null>(null)
+  const [listMessage, setListMessage] = useState<string | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [listReloadTick, setListReloadTick] = useState(0)
+  const [selectedReceiptIds, setSelectedReceiptIds] = useState<string[]>([])
 
   const [cancelRow, setCancelRow] = useState<ReceiptListItem | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
   const [cancelError, setCancelError] = useState<string | null>(null)
+  const [unvoidRow, setUnvoidRow] = useState<ReceiptListItem | null>(null)
+  const [unvoidError, setUnvoidError] = useState<string | null>(null)
   const [unvoidLoadingId, setUnvoidLoadingId] = useState<string | null>(null)
+  const [bulkApproveOpen, setBulkApproveOpen] = useState(false)
+  const [bulkApproveError, setBulkApproveError] = useState<string | null>(null)
+  const [bulkApproveLoading, setBulkApproveLoading] = useState(false)
 
   const [approvalRow, setApprovalRow] = useState<ReceiptListItem | null>(null)
   const [approvalTargets, setApprovalTargets] = useState<ReceiptTargetRef[]>([])
@@ -286,12 +279,22 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     listCustomer,
     listSeller,
     reloadSignal,
+    listReloadTick,
     validationError,
   ])
+
+  useEffect(() => {
+    setSelectedReceiptIds((prev) => {
+      if (prev.length === 0) return prev
+      const rowIds = new Set(listRows.map((row) => row.id))
+      return prev.filter((id) => rowIds.has(id))
+    })
+  }, [listRows])
 
   const handleToggleReminder = useCallback(
     async (row: ReceiptListItem) => {
       if (!token) return
+      setListMessage(null)
       try {
         await updateReceiptReminder(token, row.id, !row.reminderDisabledAt)
         setListRows((prev) =>
@@ -311,6 +314,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const handleOpenApprove = useCallback(
     async (row: ReceiptListItem) => {
       if (!token) return
+      setListMessage(null)
       setApprovalLoading(true)
       setApprovalError(null)
       try {
@@ -338,6 +342,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
 
   const handleApprove = async (targets: ReceiptTargetRef[]) => {
     if (!token || !approvalRow) return
+    setListMessage(null)
     setApprovalLoading(true)
     setApprovalError(null)
     try {
@@ -353,6 +358,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
           item.id === approvalRow.id ? { ...item, status: 'APPROVED', allocationStatus: 'ALLOCATED' } : item,
         ),
       )
+      setSelectedReceiptIds((prev) => prev.filter((id) => id !== approvalRow.id))
     } catch (err) {
       setApprovalError(err instanceof ApiError ? err.message : 'Không duyệt được phiếu thu.')
     } finally {
@@ -363,6 +369,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const handleOpenView = useCallback(
     async (row: ReceiptListItem) => {
       if (!token) return
+      setListMessage(null)
       setViewRow(row)
       setViewLoading(true)
       setViewError(null)
@@ -379,35 +386,36 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   )
 
   const handleUnvoid = useCallback(
-    async (row: ReceiptListItem) => {
+    (row: ReceiptListItem) => {
       if (!token || !row.canManage) return
+      setListMessage(null)
       setListError(null)
+      setUnvoidError(null)
+      setUnvoidRow(row)
+    },
+    [token],
+  )
 
-      const confirmed = window.confirm(`Bạn chắc chắn muốn bỏ hủy phiếu thu ${row.receiptNo ?? row.id}?`)
-      if (!confirmed) {
-        return
-      }
-
-      const overrideOptions = collectOverrideOptions(`Bỏ hủy ${row.receiptNo ?? row.id}`)
-      if (!overrideOptions) {
-        return
-      }
-
-      setUnvoidLoadingId(row.id)
+  const handleUnvoidConfirm = useCallback(
+    async (payload: ActionConfirmPayload) => {
+      if (!token || !unvoidRow) return
+      setListMessage(null)
+      setUnvoidError(null)
+      setUnvoidLoadingId(unvoidRow.id)
       try {
-        const restored = await unvoidReceipt(token, row.id, {
-          version: row.version,
-          overridePeriodLock: overrideOptions.overridePeriodLock,
-          overrideReason: overrideOptions.overrideReason,
+        const restored = await unvoidReceipt(token, unvoidRow.id, {
+          version: unvoidRow.version,
+          overridePeriodLock: payload.overridePeriodLock,
+          overrideReason: payload.overrideReason,
         })
 
         setListRows((prev) => {
           if (listStatus === 'VOID') {
-            return prev.filter((item) => item.id !== row.id)
+            return prev.filter((item) => item.id !== unvoidRow.id)
           }
 
           return prev.map((item) =>
-            item.id === row.id
+            item.id === unvoidRow.id
               ? {
                   ...item,
                   status: restored.status,
@@ -425,21 +433,49 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         if (listStatus === 'VOID') {
           setListTotal((prev) => Math.max(0, prev - 1))
         }
+        setSelectedReceiptIds((prev) => prev.filter((id) => id !== unvoidRow.id))
+        setUnvoidRow(null)
       } catch (err) {
         if (err instanceof ApiError) {
-          setListError(err.message)
+          setUnvoidError(err.message)
         } else {
-          setListError('Không bỏ hủy được phiếu thu.')
+          setUnvoidError('Không bỏ hủy được phiếu thu.')
         }
       } finally {
         setUnvoidLoadingId(null)
       }
     },
-    [listStatus, token],
+    [listStatus, token, unvoidRow],
   )
 
   const columns = useMemo(
     () => [
+      {
+        key: 'select',
+        label: 'Chọn',
+        align: 'center' as const,
+        width: '72px',
+        render: (row: ReceiptListItem) => {
+          const canSelect = row.canManage && row.status.toUpperCase() === 'DRAFT'
+          if (!canSelect) return <span className="muted">-</span>
+          return (
+            <input
+              type="checkbox"
+              checked={selectedReceiptIds.includes(row.id)}
+              onChange={(event) => {
+                setSelectedReceiptIds((prev) => {
+                  if (event.target.checked) {
+                    if (prev.includes(row.id)) return prev
+                    return [...prev, row.id]
+                  }
+                  return prev.filter((id) => id !== row.id)
+                })
+              }}
+              aria-label={`Chọn phiếu thu ${row.receiptNo?.trim() || row.id}`}
+            />
+          )
+        },
+      },
       {
         key: 'receiptDate',
         label: 'Ngày',
@@ -520,7 +556,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
               <button
                 className="btn btn-ghost btn-sm"
                 type="button"
-                onClick={() => void handleUnvoid(row)}
+                onClick={() => handleUnvoid(row)}
                 disabled={unvoidLoadingId === row.id}
               >
                 {unvoidLoadingId === row.id ? 'Đang bỏ hủy...' : 'Bỏ hủy'}
@@ -533,8 +569,21 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         ),
       },
     ],
-    [handleOpenApprove, handleOpenView, handleToggleReminder, handleUnvoid, unvoidLoadingId],
+    [
+      handleOpenApprove,
+      handleOpenView,
+      handleToggleReminder,
+      handleUnvoid,
+      selectedReceiptIds,
+      unvoidLoadingId,
+    ],
   )
+
+  const unvoidReceiptLabel = useMemo(() => {
+    if (!unvoidRow) return ''
+    const receiptNo = unvoidRow.receiptNo?.trim()
+    return receiptNo || unvoidRow.id
+  }, [unvoidRow])
 
   const handleCancelConfirm = async (payload: {
     reason: string
@@ -542,6 +591,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     overrideReason?: string
   }) => {
     if (!token || !cancelRow) return
+    setListMessage(null)
     setCancelLoading(true)
     setCancelError(null)
     try {
@@ -553,12 +603,96 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
       })
       setCancelRow(null)
       setListRows((prev) => prev.filter((row) => row.id !== cancelRow.id))
+      setSelectedReceiptIds((prev) => prev.filter((id) => id !== cancelRow.id))
     } catch (err) {
       setCancelError(err instanceof ApiError ? err.message : 'Không hủy được phiếu thu.')
     } finally {
       setCancelLoading(false)
     }
   }
+
+  const selectableRows = useMemo(
+    () => listRows.filter((row) => row.canManage && row.status.toUpperCase() === 'DRAFT'),
+    [listRows],
+  )
+
+  const selectedEligibleRows = useMemo(
+    () => selectableRows.filter((row) => selectedReceiptIds.includes(row.id)),
+    [selectableRows, selectedReceiptIds],
+  )
+
+  const handleSelectAllReceipts = useCallback(() => {
+    setSelectedReceiptIds(selectableRows.map((row) => row.id))
+  }, [selectableRows])
+
+  const handleClearSelection = useCallback(() => {
+    setSelectedReceiptIds([])
+  }, [])
+
+  const handleBulkApproveConfirm = useCallback(
+    async (payload: ActionConfirmPayload) => {
+      if (!token || selectedEligibleRows.length === 0) return
+      setBulkApproveLoading(true)
+      setBulkApproveError(null)
+      setListError(null)
+      setListMessage(null)
+      try {
+        const result = await approveReceiptsBulk(token, {
+          items: selectedEligibleRows.map((row) => ({
+            receiptId: row.id,
+            version: row.version,
+            overridePeriodLock: payload.overridePeriodLock,
+            overrideReason: payload.overrideReason,
+          })),
+          continueOnError: true,
+        })
+
+        const failedIds = new Set(
+          result.items
+            .filter(
+              (item) =>
+                Boolean(item.errorCode) ||
+                Boolean(item.errorMessage) ||
+                item.result?.toUpperCase() === 'FAILED',
+            )
+            .map((item) => item.receiptId),
+        )
+        const failedMessages = result.items
+          .filter((item) => failedIds.has(item.receiptId))
+          .map((item) => item.errorMessage || item.errorCode || `Lỗi ${item.receiptId}`)
+
+        setSelectedReceiptIds((prev) => prev.filter((id) => failedIds.has(id)))
+        setBulkApproveOpen(false)
+        setListReloadTick((prev) => prev + 1)
+
+        if (result.approved > 0) {
+          const successMessage = `Đã duyệt ${result.approved}/${result.total} phiếu thu đã chọn.`
+          if (failedIds.size > 0) {
+            setListError(
+              `${successMessage} ${failedIds.size} phiếu thu thất bại: ${failedMessages
+                .slice(0, 2)
+                .join('; ')}`,
+            )
+          } else {
+            setListMessage(successMessage)
+          }
+        } else {
+          setListError(
+            `Không duyệt được phiếu thu nào: ${failedMessages.slice(0, 2).join('; ') || 'Lỗi không xác định.'}`,
+          )
+        }
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setBulkApproveError(err.message)
+        } else {
+          setBulkApproveError('Không duyệt hàng loạt được phiếu thu.')
+        }
+      } finally {
+        setBulkApproveLoading(false)
+      }
+    },
+    [selectedEligibleRows, token],
+  )
 
   return (
     <section className="card">
@@ -803,6 +937,40 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
 
       {validationError && <div className="alert alert--error">{validationError}</div>}
       {listError && <div className="alert alert--error">{listError}</div>}
+      {listMessage && <div className="alert alert--success">{listMessage}</div>}
+
+      <div className="filters-actions">
+        <span className="muted">
+          Đã chọn {selectedEligibleRows.length}/{selectableRows.length} phiếu thu nháp có thể duyệt.
+        </span>
+        <button
+          className="btn btn-ghost btn-sm"
+          type="button"
+          onClick={handleSelectAllReceipts}
+          disabled={selectableRows.length === 0 || bulkApproveLoading}
+        >
+          Chọn tất cả
+        </button>
+        <button
+          className="btn btn-ghost btn-sm"
+          type="button"
+          onClick={handleClearSelection}
+          disabled={selectedReceiptIds.length === 0 || bulkApproveLoading}
+        >
+          Bỏ chọn
+        </button>
+        <button
+          className="btn btn-primary btn-sm"
+          type="button"
+          onClick={() => {
+            setBulkApproveError(null)
+            setBulkApproveOpen(true)
+          }}
+          disabled={selectedEligibleRows.length === 0 || bulkApproveLoading}
+        >
+          Duyệt đã chọn
+        </button>
+      </div>
 
       <DataTable
         columns={columns}
@@ -865,6 +1033,52 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
           setViewRow(null)
           setViewAllocations([])
           setViewError(null)
+        }}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(unvoidRow)}
+        title="Bỏ hủy phiếu thu"
+        description={
+          unvoidRow
+            ? `Xác nhận bỏ hủy phiếu thu ${unvoidReceiptLabel}. Bạn có thể bật tùy chọn mở khóa kỳ nếu cần.`
+            : undefined
+        }
+        confirmLabel="Xác nhận bỏ hủy"
+        showOverrideOption
+        overrideLabel="Cho phép bỏ hủy ngoài kỳ khóa"
+        overrideReasonLabel="Lý do mở khóa kỳ"
+        overrideReasonPlaceholder="Nhập lý do mở khóa kỳ"
+        loading={Boolean(unvoidRow && unvoidLoadingId === unvoidRow.id)}
+        error={unvoidError}
+        tone="danger"
+        onClose={() => {
+          setUnvoidRow(null)
+          setUnvoidError(null)
+        }}
+        onConfirm={(payload) => {
+          void handleUnvoidConfirm(payload)
+        }}
+      />
+
+      <ActionConfirmModal
+        isOpen={bulkApproveOpen}
+        title="Duyệt phiếu thu đã chọn"
+        description={`Xác nhận duyệt ${selectedEligibleRows.length} phiếu thu nháp đã chọn.`}
+        confirmLabel="Xác nhận duyệt"
+        showOverrideOption
+        overrideLabel="Cho phép duyệt ngoài kỳ khóa"
+        overrideReasonLabel="Lý do mở khóa kỳ"
+        overrideReasonPlaceholder="Nhập lý do mở khóa kỳ"
+        loading={bulkApproveLoading}
+        error={bulkApproveError}
+        onClose={() => {
+          if (bulkApproveLoading) return
+          setBulkApproveOpen(false)
+          setBulkApproveError(null)
+        }}
+        onConfirm={(payload) => {
+          void handleBulkApproveConfirm(payload)
         }}
       />
 

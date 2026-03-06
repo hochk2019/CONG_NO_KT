@@ -11,6 +11,29 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 52 - Import UX dedup (2026-03-06)
+- [x] `cng-s7d` Gom import template về `/imports`, bỏ tab import khỏi `/advances`, thêm deep-link `/imports?tab=batch&type=ADVANCE`, cập nhật test trang Advances/Imports.
+
+## Phase 53 - Receipts import CTA (2026-03-06)
+- [x] `cng-ukd` Thêm nút `Import từ template` trên trang Receipts để điều hướng `/imports?tab=batch&type=RECEIPT`, cập nhật test điều hướng.
+
+## Phase 91 - Reports full redesign (2026-03-06)
+- [x] `cng-dnq` Redesign tổng thể trang Reports theo layout đồng bộ, tăng tính trực quan và nhất quán giữa các block.
+- [x] Chuẩn hóa cấu trúc section/card: hero, filters, KPI, charts, insights, tables và quick actions theo cùng visual language.
+- [x] Cải thiện UX bộ lọc: status pill, action bar rõ ràng, grouping theo ngữ cảnh thời gian/phạm vi.
+- [x] Nâng cấp responsive + print stylesheet để đọc dữ liệu tốt hơn ở mobile và khi in.
+- [x] Cập nhật test/lint xác nhận không hồi quy hành vi.
+
+### Verification evidence (2026-03-06, phase 91 / cng-dnq)
+- [x] `npm --prefix src/frontend test -- --run src/pages/reports/__tests__/reports-modules.test.tsx src/pages/reports/__tests__/reports-quick-actions.test.tsx src/pages/reports/__tests__/reports-validation-modal.test.tsx` => pass (`11/11`).
+- [x] `npm --prefix src/frontend run lint -- src/pages/ReportsPage.tsx src/pages/reports/ReportsFilters.tsx src/pages/reports/ReportsKpiSection.tsx src/pages/reports/ReportsChartsSection.tsx src/pages/reports/ReportsInsightsSection.tsx src/pages/reports/ReportsTablesSection.tsx src/pages/reports/reports.css` => pass (`0` error, `1` warning do ESLint bỏ qua file CSS).
+
+## Phase 92 - Advances workflow redesign (2026-03-06)
+- [x] `cng-j87` Redesign trang Advances theo workflow nhập liệu gọn, rõ và thuận tiện.
+- [ ] Chuẩn hóa hero/action bar của `/advances` để bỏ cảm giác lặp heading và gom CTA đúng ngữ cảnh.
+- [ ] Tái cấu trúc phần tạo khoản trả hộ và worklist thành các block/card rõ ràng, chuẩn bị tách nhỏ module khỏi `ManualAdvancesSection`.
+- [ ] Cập nhật test/lint xác nhận không hồi quy hành vi điều hướng và CTA chính.
+
 ## Phase 0 - Spec alignment (done)
 - [x] Quy ước ADJUST lưu số âm + constraint DB.
 - [x] Import RECEIPT included in scope (staging/preview/commit).
@@ -1401,3 +1424,23 @@
 ### Verification evidence (2026-03-05, phase 90 / cng-5ys)
 - [x] `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx` => pass (`8/8`).
 - [x] `npm --prefix src/frontend run lint` => pass.
+
+## Phase 93 - Advances compact dark-mode redesign (2026-03-06) [bead: cng-ct4]
+- [x] Chuyển `/advances` sang hướng compact operational workspace, giữ hero thấp và giảm chrome ở vùng nhập liệu.
+- [x] Loại bỏ các surface sáng hard-code trong `advances.css`, thay bằng token-based surfaces để dark mode đồng bộ theme chung.
+- [x] Thu gọn `Tạo nhanh` trong `ManualAdvancesSection`:
+  - [x] bỏ aside cồng kềnh.
+  - [x] đưa trạng thái quyền thao tác lên toolbar ngắn.
+  - [x] giảm helper text/phần phụ gây loãng form.
+  - [x] đưa action row xuống sát form.
+- [x] Nén `Worklist`:
+  - [x] mini stats gọn hơn.
+  - [x] filter shell và selection bar theo surface tối thống nhất.
+  - [x] giảm `DataTable` min width xuống `920px`.
+- [x] Cập nhật test hero/page cho copy và interaction mới của `/advances`.
+- [x] Đồng bộ bead tracker `cng-ct4`.
+
+### Verification evidence (2026-03-06, phase 93 / cng-ct4)
+- [x] `npm exec vitest run src/pages/__tests__/advances-page.test.tsx src/pages/advances/__tests__/AdvancesHero.test.tsx` (cwd `src/frontend`) => pass (`5/5`).
+- [x] `npm run lint` (cwd `src/frontend`) => pass.
+- [x] `npm run build` (cwd `src/frontend`) => pass.

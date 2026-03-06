@@ -127,7 +127,7 @@ export function ReportsKpiSection({
   }
 
   return (
-    <section className="card reports-kpi" id={sectionId}>
+    <section className="card reports-kpi reports-panel" id={sectionId}>
       <div className="card-row">
         <div>
           <h3>Tổng quan chỉ số</h3>

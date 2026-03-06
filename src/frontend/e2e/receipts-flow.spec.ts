@@ -27,15 +27,28 @@ test.describe('Receipts flow', () => {
       return
     }
 
-    const receiptForm = page.locator('section.card', {
+    const customerSection = page.locator('section.card', {
+      has: page.getByRole('heading', { name: 'Thông tin khách hàng', level: 2 }),
+    })
+    const receiptInfoSection = page.locator('section.card', {
       has: page.getByRole('heading', { name: 'Thông tin phiếu thu', level: 2 }),
     })
-    await expect(receiptForm).toBeVisible()
+    const allocationSection = page.locator('section.card', {
+      has: page.getByRole('heading', { name: 'Phân bổ phiếu thu', level: 2 }),
+    })
+    const submitSection = page.locator('section.card', {
+      has: page.getByRole('heading', { name: 'Xác nhận và lưu', level: 2 }),
+    })
 
-    const sellerField = receiptForm
+    await expect(customerSection).toBeVisible()
+    await expect(receiptInfoSection).toBeVisible()
+    await expect(allocationSection).toBeVisible()
+    await expect(submitSection).toBeVisible()
+
+    const sellerField = customerSection
       .locator('label.field', { has: page.getByText('MST bên bán', { exact: true }) })
       .first()
-    const customerField = receiptForm
+    const customerField = customerSection
       .locator('label.field', { has: page.getByText('MST bên mua', { exact: true }) })
       .first()
 
@@ -56,11 +69,11 @@ test.describe('Receipts flow', () => {
 
     await sellerField.getByRole('combobox').fill(sellerTaxCode)
     await customerField.getByRole('combobox').fill(customerTaxCode)
-    await receiptForm.getByLabel('Số chứng từ', { exact: true }).fill(receiptNo)
-    await receiptForm.getByLabel('Ngày thu', { exact: true }).fill(today())
-    await receiptForm.getByLabel('Số tiền', { exact: true }).fill('100000')
+    await receiptInfoSection.getByLabel('Số chứng từ', { exact: true }).fill(receiptNo)
+    await receiptInfoSection.getByLabel('Ngày thu', { exact: true }).fill(today())
+    await receiptInfoSection.getByLabel('Số tiền', { exact: true }).fill('100000')
 
-    const allocationButton = receiptForm.getByRole('button', { name: 'Chọn phân bổ' })
+    const allocationButton = allocationSection.getByRole('button', { name: 'Chọn phân bổ' })
     await expect(allocationButton).toBeVisible()
 
     if (await allocationButton.isDisabled()) {
@@ -74,7 +87,7 @@ test.describe('Receipts flow', () => {
     await allocationDialog.getByRole('button', { name: 'Lưu phân bổ' }).click()
     await expect(allocationDialog).toBeHidden()
 
-    await receiptForm.getByRole('button', { name: 'Lưu nháp' }).click()
+    await submitSection.getByRole('button', { name: 'Lưu nháp' }).click()
     await expect(page.getByText(`Đã tạo phiếu thu`, { exact: false })).toBeVisible()
 
     const rowByReceiptNo = page.locator('tr', { has: page.getByText(receiptNo, { exact: true }) }).first()

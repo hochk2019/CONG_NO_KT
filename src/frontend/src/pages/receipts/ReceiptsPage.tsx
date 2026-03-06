@@ -1,16 +1,21 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthStore'
-import ReceiptFormSection, { type ReceiptFormHandle } from './ReceiptFormSection'
+import ReceiptFormSection from './ReceiptFormSection'
 import ReceiptListSection from './ReceiptListSection'
 
 export default function ReceiptsPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
   const [reloadSignal, setReloadSignal] = useState(0)
-  const formRef = useRef<ReceiptFormHandle>(null)
+  const navigate = useNavigate()
 
   const handleReload = () => {
     setReloadSignal((prev) => prev + 1)
+  }
+
+  const handleGoToReceiptTemplateImport = () => {
+    navigate('/imports?tab=batch&type=RECEIPT')
   }
 
   return (
@@ -18,26 +23,20 @@ export default function ReceiptsPage() {
       <div className="page-header">
         <div className="page-title">
           <h1>Nhập phiếu thu</h1>
+          <p className="muted">Luồng nhập liệu tuần tự từ trên xuống dưới để giảm sai sót.</p>
         </div>
         <div className="header-actions">
           <button
-            className="btn btn-primary"
+            className="btn btn-outline btn-sm"
             type="button"
-            onClick={() => formRef.current?.createAndApprove()}
+            onClick={handleGoToReceiptTemplateImport}
           >
-            Lưu & duyệt
-          </button>
-          <button
-            className="btn btn-outline"
-            type="button"
-            onClick={() => formRef.current?.createDraft()}
-          >
-            Lưu nháp
+            Import từ template
           </button>
         </div>
       </div>
 
-      <ReceiptFormSection ref={formRef} token={token} onReload={handleReload} />
+      <ReceiptFormSection token={token} onReload={handleReload} />
       <ReceiptListSection token={token} reloadSignal={reloadSignal} />
     </div>
   )

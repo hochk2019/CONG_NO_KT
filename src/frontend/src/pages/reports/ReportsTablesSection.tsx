@@ -144,8 +144,8 @@ export function ReportsTablesSection({
   }
 
   return (
-    <section className="reports-tables">
-      <section className="card" id="summary">
+    <section className="reports-tables reports-section-grid">
+      <section className="card reports-panel reports-table-card" id="summary">
         <div className="card-row">
           <h3>Báo cáo tổng hợp</h3>
           <div className="table-actions">
@@ -235,7 +235,7 @@ export function ReportsTablesSection({
         )}
       </section>
 
-      <section className="card" id="statement">
+      <section className="card reports-panel reports-table-card" id="statement">
         <div className="card-row">
           <h3>Sao kê khách hàng</h3>
           {onExportStatement && (
@@ -319,7 +319,7 @@ export function ReportsTablesSection({
         )}
       </section>
 
-      <section className="card" id="aging">
+      <section className="card reports-panel reports-table-card" id="aging">
         <div className="card-row">
           <h3>Báo cáo tuổi nợ</h3>
           <div className="table-actions">

@@ -70,8 +70,8 @@ export function ReportsChartsSection({ charts, loading }: ReportsChartsSectionPr
   )
 
   return (
-    <section className="reports-charts">
-      <section className="card">
+    <section className="reports-charts reports-section-grid">
+      <section className="card reports-panel reports-chart-card">
         <h3>Luồng tiền thu theo ngày</h3>
         <p className="muted">Dòng tiền thu theo ngày trong kỳ đã chọn.</p>
         {loading ? (
@@ -122,7 +122,7 @@ export function ReportsChartsSection({ charts, loading }: ReportsChartsSectionPr
         )}
       </section>
 
-      <section className="card">
+      <section className="card reports-panel reports-chart-card">
         <h3>Tuổi nợ</h3>
         <p className="muted">Tỷ trọng công nợ theo nhóm ngày quá hạn.</p>
         {loading ? (
@@ -154,7 +154,7 @@ export function ReportsChartsSection({ charts, loading }: ReportsChartsSectionPr
         )}
       </section>
 
-      <section className="card">
+      <section className="card reports-panel reports-chart-card">
         <h3>Trạng thái phân bổ</h3>
         <p className="muted">Tỷ trọng phiếu thu theo tình trạng phân bổ.</p>
         {loading ? (

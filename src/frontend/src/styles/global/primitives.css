@@ -79,6 +79,13 @@
   white-space: nowrap;
 }
 
+.btn-sm {
+  padding: 0.38rem 0.95rem;
+  font-size: 0.84rem;
+  border-radius: 12px;
+  min-height: 34px;
+}
+
 .cell-wrap {
   white-space: normal;
   word-break: break-word;
@@ -152,6 +159,109 @@ a:focus-visible {
   color: var(--color-muted);
 }
 
+.receipts-page .page-title {
+  display: grid;
+  gap: 0.35rem;
+}
+
+.receipts-page .page-title p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.receipt-step-card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.receipt-step-header {
+  margin-bottom: 0;
+}
+
+.receipt-step-title {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.receipt-step-index {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--color-accent-deep);
+  border: 1px solid rgba(37, 99, 235, 0.28);
+  flex: 0 0 auto;
+}
+
+.receipt-step-header--submit {
+  align-items: center;
+}
+
+.receipt-submit-card {
+  position: sticky;
+  bottom: 0.75rem;
+  z-index: 12;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+}
+
+.receipt-submit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.receipt-submit-actions .btn {
+  min-width: 116px;
+}
+
+.receipts-page .header-actions .btn {
+  min-height: 34px;
+  border-radius: 12px;
+}
+
+.receipts-page .receipt-submit-actions .btn {
+  min-height: 36px;
+  min-width: 120px;
+  border-radius: 10px;
+  padding: 0.4rem 0.95rem;
+  font-size: 0.83rem;
+  line-height: 1.2;
+}
+
+.receipts-page .receipt-submit-actions .btn:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+.receipts-page .receipt-submit-actions .btn-outline {
+  border-color: var(--color-border);
+  color: var(--color-ink);
+  background: rgba(15, 23, 42, 0.02);
+}
+
+.receipts-page .receipt-submit-actions .btn-outline:hover {
+  border-color: var(--color-border);
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.receipts-page .receipt-submit-actions .btn-primary:disabled {
+  background: rgba(37, 99, 235, 0.45);
+}
+
+.receipt-blockers {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
 .receipt-allocation-row {
   display: flex;
   align-items: center;
@@ -168,6 +278,11 @@ a:focus-visible {
   background: var(--color-bg);
   display: grid;
   gap: 0.5rem;
+}
+
+.receipt-summary--error {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(220, 38, 38, 0.06);
 }
 
 .receipt-pill-row {

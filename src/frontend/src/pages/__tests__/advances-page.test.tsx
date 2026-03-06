@@ -1,20 +1,12 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../context/AuthStore'
 import AdvancesPage from '../AdvancesPage'
 
 const mocks = vi.hoisted(() => ({
-  importBatchSectionMock: vi.fn(),
   manualAdvancesSectionMock: vi.fn(),
-}))
-
-vi.mock('../imports/ImportBatchSection', () => ({
-  default: (props: unknown) => {
-    mocks.importBatchSectionMock(props)
-    return <div data-testid="import-batch-section" />
-  },
 }))
 
 vi.mock('../imports/ManualAdvancesSection', () => ({
@@ -56,36 +48,45 @@ function renderPage(initialEntry: string) {
 
 describe('AdvancesPage', () => {
   beforeEach(() => {
-    mocks.importBatchSectionMock.mockReset()
     mocks.manualAdvancesSectionMock.mockReset()
-    window.localStorage.clear()
   })
 
-  it('defaults to manual tab and writes tab query', async () => {
+  it('renders the redesigned hero and manual advances section without legacy tabs', async () => {
     renderPage('/advances')
 
+    expect(
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'Workspace nhập liệu và xử lý khoản trả hộ KH',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Khoản trả hộ KH')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Xem danh sách' })).toHaveAttribute(
+      'href',
+      '#advances-worklist',
+    )
+
     expect(await screen.findByTestId('manual-advances-section')).toBeInTheDocument()
-    expect(screen.getByRole('tab', { name: 'Nhập thủ công' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.getByTestId('location-probe').textContent).toBe('/advances')
+  })
+
+  it('navigates to centralized import page with ADVANCE type', async () => {
+    const user = userEvent.setup()
+    renderPage('/advances')
+
+    await user.click(screen.getByRole('button', { name: 'Import từ template' }))
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/advances?tab=manual')
+      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
     })
   })
 
-  it('renders import tab with fixed ADVANCE mode and switches query', async () => {
-    const user = userEvent.setup()
+  it('redirects legacy advances import tab query to centralized imports page', async () => {
     renderPage('/advances?tab=import')
 
-    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
-    const latestImportCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
-      fixedType?: string
-    }
-    expect(latestImportCall?.fixedType).toBe('ADVANCE')
-    expect(screen.getByRole('tab', { name: 'Import từ template' })).toHaveAttribute('aria-selected', 'true')
-
-    await user.click(screen.getByRole('tab', { name: 'Nhập thủ công' }))
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/advances?tab=manual')
+      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
     })
   })
 })

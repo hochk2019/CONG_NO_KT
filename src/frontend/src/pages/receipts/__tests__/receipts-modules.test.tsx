@@ -1,5 +1,6 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
 import ReceiptsPage from '../ReceiptsPage'
@@ -21,6 +22,22 @@ const baseAuth: AuthContextValue = {
   isBootstrapping: false,
   login: async () => undefined,
   logout: () => undefined,
+}
+
+function LocationProbe() {
+  const location = useLocation()
+  return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>
+}
+
+function renderReceiptsPageWithRouter() {
+  return render(
+    <MemoryRouter initialEntries={['/receipts']}>
+      <AuthContext.Provider value={baseAuth}>
+        <LocationProbe />
+        <ReceiptsPage />
+      </AuthContext.Provider>
+    </MemoryRouter>,
+  )
 }
 
 describe('receipts modules', () => {
@@ -148,11 +165,19 @@ describe('receipts modules', () => {
   })
 
   it('renders receipts page with auth context', () => {
-    render(
-      <AuthContext.Provider value={baseAuth}>
-        <ReceiptsPage />
-      </AuthContext.Provider>,
-    )
+    renderReceiptsPageWithRouter()
     expect(screen.getByText('Nhập phiếu thu')).toBeInTheDocument()
+    expect(screen.getByTestId('location-probe').textContent).toBe('/receipts')
+  })
+
+  it('navigates to centralized import page with RECEIPT type', async () => {
+    const user = userEvent.setup()
+    renderReceiptsPageWithRouter()
+
+    await user.click(screen.getByRole('button', { name: 'Import từ template' }))
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=RECEIPT')
+    })
   })
 })

@@ -831,28 +831,30 @@ export function ReportsPage() {
 
   return (
     <div className="page-stack reports-page">
-      <div className="page-header">
-        <div>
-          <h2>Tổng quan công nợ &amp; báo cáo chi tiết</h2>
-          <p className="muted">
-            Điều chỉnh bộ lọc, tải tổng quan và xuất báo cáo theo nhu cầu.
-          </p>
+      <section className="card reports-hero">
+        <div className="page-header reports-hero__header">
+          <div>
+            <h2>Tổng quan công nợ &amp; báo cáo chi tiết</h2>
+            <p className="muted">
+              Điều chỉnh bộ lọc, tải tổng quan và xuất báo cáo theo nhu cầu.
+            </p>
+          </div>
+          <div className="header-actions reports-hero__actions">
+            <button type="button" className="btn btn-ghost no-print" onClick={handlePrint}>
+              In báo cáo
+            </button>
+            <a className="btn btn-ghost" href="#filters">
+              Bộ lọc
+            </a>
+            <a className="btn btn-outline" href="#summary">
+              Tổng hợp
+            </a>
+            <a className="btn btn-outline" href="#aging">
+              Tuổi nợ
+            </a>
+          </div>
         </div>
-        <div className="header-actions">
-          <button type="button" className="btn btn-ghost no-print" onClick={handlePrint}>
-            In báo cáo
-          </button>
-          <a className="btn btn-ghost" href="#filters">
-            Bộ lọc
-          </a>
-          <a className="btn btn-outline" href="#summary">
-            Tổng hợp
-          </a>
-          <a className="btn btn-outline" href="#aging">
-            Tuổi nợ
-          </a>
-        </div>
-      </div>
+      </section>
 
       <section className="reports-print-header" aria-hidden="true">
         <div className="reports-print-header__brand">CongNo Golden</div>
@@ -905,7 +907,7 @@ export function ReportsPage() {
       />
 
       {exportJobs.length > 0 && (
-        <div className="export-queue">
+        <div className="export-queue reports-export-queue">
           {exportJobs.map((job) => (
             <div className={`export-job export-job--${job.state}`} key={job.id} role="status">
               <div className="export-job__header">
@@ -942,7 +944,7 @@ export function ReportsPage() {
       )}
 
       {error && (
-        <div className="alert alert--error" role="alert" aria-live="assertive">
+        <div className="alert alert--error reports-alert" role="alert" aria-live="assertive">
           {error}
         </div>
       )}

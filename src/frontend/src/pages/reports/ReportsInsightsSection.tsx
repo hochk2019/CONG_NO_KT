@@ -65,9 +65,9 @@ export function ReportsInsightsSection({
   const emptyMessage = 'Không có dữ liệu trong kỳ đã chọn'
 
   return (
-    <section className="reports-insights">
+    <section className="reports-insights reports-section-grid">
       <div className="reports-insights__column">
-        <section className="card">
+        <section className="card reports-panel reports-insight-card">
           <div className="card-row">
             <h3>Top cần chú ý</h3>
             <label className="table-page-size">
@@ -99,7 +99,7 @@ export function ReportsInsightsSection({
         </section>
       </div>
       <div className="reports-insights__column">
-        <section className="card">
+        <section className="card reports-panel reports-insight-card">
           <h3>Top trả đúng hạn nhất</h3>
           <p className="muted">Chỉ tính khách hàng phát sinh trong kỳ.</p>
           {renderTopList({
@@ -110,7 +110,7 @@ export function ReportsInsightsSection({
             loading,
           })}
         </section>
-        <section className="card">
+        <section className="card reports-panel reports-insight-card">
           <h3>Quá hạn theo phụ trách</h3>
           <p className="muted">So sánh mức quá hạn theo phụ trách.</p>
           {renderOverdueByOwner(

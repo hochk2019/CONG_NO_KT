@@ -134,14 +134,15 @@ export default function DataTable<T>({
                       ? ({ width: column.width, minWidth: column.width } as CSSProperties)
                       : undefined
                     return (
-                    <td
-                      key={column.key}
-                      style={{ textAlign: column.align ?? 'left', ...widthStyle }}
-                    >
-                      {column.render
-                        ? column.render(row)
-                        : (row as Record<string, ReactNode>)[column.key]}
-                    </td>
+                      <td
+                        key={column.key}
+                        data-label={column.label}
+                        style={{ textAlign: column.align ?? 'left', ...widthStyle }}
+                      >
+                        {column.render
+                          ? column.render(row)
+                          : (row as Record<string, ReactNode>)[column.key]}
+                      </td>
                     )
                   })}
                 </tr>

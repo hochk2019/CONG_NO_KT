@@ -77,6 +77,23 @@
     flex-wrap: wrap;
   }
 
+  .receipt-submit-card {
+    position: static;
+    bottom: auto;
+  }
+
+  .receipt-step-title {
+    align-items: center;
+  }
+
+  .receipt-submit-actions {
+    width: 100%;
+  }
+
+  .receipt-submit-actions .btn {
+    flex: 1 1 140px;
+  }
+
   .notification-panel {
     width: min(360px, calc(100vw - 2rem));
     right: 0;

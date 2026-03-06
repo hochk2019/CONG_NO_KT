@@ -5,6 +5,8 @@ import ImportBatchSection from './ImportBatchSection'
 import ManualInvoicesSection from './ManualInvoicesSection'
 
 const TAB_STORAGE_KEY = 'pref.imports.tab'
+const IMPORT_TYPES = ['INVOICE', 'ADVANCE', 'RECEIPT'] as const
+type ImportType = (typeof IMPORT_TYPES)[number]
 
 const getStoredTab = () => {
   if (typeof window === 'undefined') return 'batch'
@@ -21,6 +23,12 @@ const resolveTab = (value: string | null) => {
   return 'batch'
 }
 
+const resolveImportType = (value: string | null): ImportType | null => {
+  if (!value) return null
+  const normalized = value.toUpperCase()
+  return IMPORT_TYPES.includes(normalized as ImportType) ? (normalized as ImportType) : null
+}
+
 export default function ImportsPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
@@ -30,7 +38,9 @@ export default function ImportsPage() {
   const location = useLocation()
   const navigate = useNavigate()
   const storedTab = useMemo(() => resolveTab(getStoredTab()), [])
-  const queryTabParam = useMemo(() => new URLSearchParams(location.search).get('tab'), [location.search])
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const queryTabParam = useMemo(() => searchParams.get('tab'), [searchParams])
+  const fixedType = useMemo(() => resolveImportType(searchParams.get('type')), [searchParams])
   const activeTab = useMemo(() => resolveTab(queryTabParam ?? storedTab), [queryTabParam, storedTab])
 
   useEffect(() => {
@@ -39,13 +49,23 @@ export default function ImportsPage() {
 
   useEffect(() => {
     if (!queryTabParam) {
-      navigate(`/imports?tab=${activeTab}`, { replace: true })
+      const nextParams = new URLSearchParams()
+      nextParams.set('tab', activeTab)
+      if (fixedType) {
+        nextParams.set('type', fixedType)
+      }
+      navigate(`/imports?${nextParams.toString()}`, { replace: true })
     }
-  }, [queryTabParam, activeTab, navigate])
+  }, [queryTabParam, activeTab, fixedType, navigate])
 
   const handleTabChange = (tab: 'batch' | 'manual') => {
     storeTab(tab)
-    navigate(`/imports?tab=${tab}`)
+    const nextParams = new URLSearchParams()
+    nextParams.set('tab', tab)
+    if (fixedType) {
+      nextParams.set('type', fixedType)
+    }
+    navigate(`/imports?${nextParams.toString()}`)
   }
 
   return (
@@ -53,7 +73,7 @@ export default function ImportsPage() {
       <div className="page-header">
         <div>
           <h2>Nhập liệu công nợ</h2>
-          <p className="muted">Chọn hình thức nhập phù hợp cho hóa đơn (file hoặc thủ công).</p>
+          <p className="muted">Nhập file template tập trung cho hóa đơn, khoản trả hộ và phiếu thu.</p>
         </div>
       </div>
 
@@ -78,7 +98,9 @@ export default function ImportsPage() {
         </button>
       </div>
 
-      {activeTab === 'batch' && <ImportBatchSection token={token} canStage={canStage} canCommit={canCommit} />}
+      {activeTab === 'batch' && (
+        <ImportBatchSection token={token} canStage={canStage} canCommit={canCommit} fixedType={fixedType ?? undefined} />
+      )}
       {activeTab === 'manual' && <ManualInvoicesSection token={token} canCommit={canCommit} />}
     </div>
   )

@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   createReceipt,
   approveReceipt,
@@ -20,18 +20,20 @@ import ReceiptAllocationModal from './ReceiptAllocationModal'
 import ReceiptAdvancedModal from './ReceiptAdvancedModal'
 import { allocationPriorityLabels, methodLabels } from './receiptLabels'
 
-export type ReceiptFormHandle = {
-  createDraft: () => void
-  createAndApprove: () => void
-}
-
 type ReceiptFormSectionProps = {
   token: string
   onReload: () => void
 }
 
-const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps>(
-  ({ token, onReload }, ref) => {
+type FieldErrorKey =
+  | 'sellerTaxCode'
+  | 'customerTaxCode'
+  | 'receiptDate'
+  | 'amount'
+  | 'selectedTargets'
+  | 'overrideReason'
+
+export default function ReceiptFormSection({ token, onReload }: ReceiptFormSectionProps) {
     const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
     const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
     const [sellerQuery, setSellerQuery] = useState('')
@@ -56,6 +58,7 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
     const [overrideReason, setOverrideReason] = useState('')
     const [advancedOpen, setAdvancedOpen] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldErrorKey, string>>>({})
     const [createdReceipt, setCreatedReceipt] = useState<{
       id: string
       status: string
@@ -152,6 +155,15 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
       setSelectedTargets([])
     }, [sellerTaxCode, customerTaxCode])
 
+    const clearFieldError = useCallback((field: FieldErrorKey) => {
+      setFieldErrors((prev) => {
+        if (!prev[field]) return prev
+        const next = { ...prev }
+        delete next[field]
+        return next
+      })
+    }, [])
+
     const selectedCustomerOption = useMemo(
       () => customerOptions.find((option) => option.value === customerTaxCode.trim()),
       [customerOptions, customerTaxCode],
@@ -181,39 +193,71 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
         ? `${priorityLabel} (cũ hơn trước)`
         : priorityLabel
 
+    const amountValue = Number(amount)
+    const canSubmit =
+      sellerTaxCode.trim().length > 0 &&
+      customerTaxCode.trim().length > 0 &&
+      receiptDate.trim().length > 0 &&
+      Number.isFinite(amountValue) &&
+      amountValue > 0 &&
+      (!openItems.length || selectedTargets.length > 0) &&
+      (!overridePeriodLock || overrideReason.trim().length > 0)
+
+    const submitBlockers = useMemo(() => {
+      const blockers: string[] = []
+      if (!sellerTaxCode.trim()) blockers.push('Chưa chọn MST bên bán')
+      if (!customerTaxCode.trim()) blockers.push('Chưa chọn MST bên mua')
+      if (!receiptDate.trim()) blockers.push('Chưa chọn ngày thu')
+      if (!Number.isFinite(amountValue) || amountValue <= 0) blockers.push('Số tiền chưa hợp lệ')
+      if (openItems.length > 0 && selectedTargets.length === 0) {
+        blockers.push('Chưa chọn chứng từ để phân bổ')
+      }
+      if (overridePeriodLock && !overrideReason.trim()) blockers.push('Thiếu lý do vượt khóa kỳ')
+      return blockers
+    }, [
+      sellerTaxCode,
+      customerTaxCode,
+      receiptDate,
+      amountValue,
+      openItems.length,
+      selectedTargets.length,
+      overridePeriodLock,
+      overrideReason,
+    ])
+
     const handleApplyAllocation = (targets: ReceiptTargetRef[]) => {
       setSelectedTargets(targets)
+      clearFieldError('selectedTargets')
       setModalOpen(false)
     }
 
     const validate = useCallback(() => {
-      setError(null)
-      const amountValue = Number(amount)
+      const amountNumber = Number(amount)
+      const nextErrors: Partial<Record<FieldErrorKey, string>> = {}
+
       if (!sellerTaxCode.trim()) {
-        setError('Vui lòng nhập MST bên bán.')
-        return false
+        nextErrors.sellerTaxCode = 'Vui lòng nhập MST bên bán.'
       }
       if (!customerTaxCode.trim()) {
-        setError('Vui lòng nhập MST bên mua.')
-        return false
+        nextErrors.customerTaxCode = 'Vui lòng nhập MST bên mua.'
       }
       if (!receiptDate.trim()) {
-        setError('Vui lòng chọn ngày thu.')
-        return false
+        nextErrors.receiptDate = 'Vui lòng chọn ngày thu.'
       }
-      if (!Number.isFinite(amountValue) || amountValue <= 0) {
-        setError('Số tiền không hợp lệ.')
-        return false
+      if (!Number.isFinite(amountNumber) || amountNumber <= 0) {
+        nextErrors.amount = 'Số tiền phải lớn hơn 0.'
       }
       if (openItems.length > 0 && selectedTargets.length === 0) {
-        setError('Cần chọn chứng từ để phân bổ trước khi lưu.')
-        return false
+        nextErrors.selectedTargets = 'Cần chọn chứng từ để phân bổ trước khi lưu.'
       }
       if (overridePeriodLock && !overrideReason.trim()) {
-        setError('Vui lòng nhập lý do vượt khóa kỳ.')
-        return false
+        nextErrors.overrideReason = 'Vui lòng nhập lý do vượt khóa kỳ.'
       }
-      return true
+
+      setFieldErrors(nextErrors)
+      const isValid = Object.keys(nextErrors).length === 0
+      setError(isValid ? null : 'Vui lòng kiểm tra các trường bắt buộc trước khi lưu.')
+      return isValid
     }, [
       amount,
       sellerTaxCode,
@@ -235,6 +279,7 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
 
         const amountValue = Number(amount)
         try {
+          setError(null)
           const created = await createReceipt(token, {
             sellerTaxCode: sellerTaxCode.trim(),
             customerTaxCode: customerTaxCode.trim(),
@@ -289,22 +334,16 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
       ],
     )
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      createDraft: () => handleCreate(false),
-      createAndApprove: () => handleCreate(true),
-    }),
-    [handleCreate],
-  )
-
   return (
     <>
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2>Thông tin khách hàng</h2>
-            <p className="muted">Chọn bên bán/bên mua để hiển thị chứng từ còn nợ.</p>
+      <section className="card receipt-step-card">
+        <div className="card-header receipt-step-header">
+          <div className="receipt-step-title">
+            <span className="receipt-step-index">B1</span>
+            <div>
+              <h2>Thông tin khách hàng</h2>
+              <p className="muted">Chọn bên bán/bên mua để hiển thị chứng từ còn nợ.</p>
+            </div>
           </div>
         </div>
         <div className="form-grid form-grid--receipt">
@@ -314,9 +353,11 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
             placeholder="VD: 2301098313"
             options={sellerOptions}
             helpText="Gõ để tìm và chọn từ gợi ý."
+            errorText={fieldErrors.sellerTaxCode}
             onChange={(value) => {
               setSellerTaxCode(value)
               setSellerQuery(value)
+              clearFieldError('sellerTaxCode')
             }}
           />
           <LookupInput
@@ -325,52 +366,57 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
             placeholder="VD: 2300328765"
             options={customerOptions}
             helpText={customerHelpText}
+            errorText={fieldErrors.customerTaxCode}
             onChange={(value) => {
               setCustomerTaxCode(value)
               setCustomerQuery(value)
+              clearFieldError('customerTaxCode')
             }}
           />
         </div>
       </section>
 
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2>Thông tin phiếu thu</h2>
-            <p className="muted">Các trường bắt buộc được ưu tiên đặt lên trước.</p>
+      <section className="card receipt-step-card">
+        <div className="card-header receipt-step-header">
+          <div className="receipt-step-title">
+            <span className="receipt-step-index">B2</span>
+            <div>
+              <h2>Thông tin phiếu thu</h2>
+              <p className="muted">Nhập các trường bắt buộc trước, trường tùy chọn đặt phía sau.</p>
+            </div>
           </div>
-          <button className="btn btn-outline" type="button" onClick={() => setAdvancedOpen(true)}>
+          <button className="btn btn-outline btn-sm" type="button" onClick={() => setAdvancedOpen(true)}>
             Tùy chọn nâng cao
           </button>
         </div>
 
         <div className="form-grid form-grid--receipt">
-          <label className="field">
-            <span>Số chứng từ</span>
-            <input
-              value={receiptNo}
-              onChange={(event) => setReceiptNo(event.target.value)}
-              placeholder="VD: PT-001"
-            />
-          </label>
-          <label className="field">
+          <label className={fieldErrors.receiptDate ? 'field field--error' : 'field'}>
             <span>Ngày thu</span>
             <input
               type="date"
               value={receiptDate}
-              onChange={(event) => setReceiptDate(event.target.value)}
+              onChange={(event) => {
+                setReceiptDate(event.target.value)
+                clearFieldError('receiptDate')
+              }}
             />
+            {fieldErrors.receiptDate && <span className="field-error">{fieldErrors.receiptDate}</span>}
           </label>
-          <label className="field">
+          <label className={fieldErrors.amount ? 'field field--error' : 'field'}>
             <span>Số tiền</span>
             <input
               type="number"
               min="0"
               inputMode="decimal"
               value={amount}
-              onChange={(event) => setAmount(event.target.value)}
+              onChange={(event) => {
+                setAmount(event.target.value)
+                clearFieldError('amount')
+              }}
               placeholder="VD: 10000000"
             />
+            {fieldErrors.amount && <span className="field-error">{fieldErrors.amount}</span>}
           </label>
           <label className="field">
             <span>Hình thức</span>
@@ -379,6 +425,14 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
               <option value="CASH">{methodLabels.CASH}</option>
               <option value="OTHER">{methodLabels.OTHER}</option>
             </select>
+          </label>
+          <label className="field">
+            <span>Số chứng từ</span>
+            <input
+              value={receiptNo}
+              onChange={(event) => setReceiptNo(event.target.value)}
+              placeholder="VD: PT-001"
+            />
           </label>
           <label className="field field-span-full field-wide">
             <span>Diễn giải</span>
@@ -392,20 +446,22 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
 
         {(overridePeriodLock || overrideReason.trim()) && (
           <div className="alert alert--info">
-            Đang bật vượt khóa kỳ khi duyệt.{' '}
-            {overrideReason.trim() ? `Lý do: ${overrideReason.trim()}` : ''}
+            Đang bật vượt khóa kỳ khi duyệt. {overrideReason.trim() ? `Lý do: ${overrideReason.trim()}` : ''}
           </div>
         )}
       </section>
 
-      <section className="card">
-        <div className="card-header">
-          <div>
-            <h2>Phân bổ phiếu thu</h2>
-            <p className="muted">Chọn chứng từ cần thanh toán theo ưu tiên.</p>
+      <section className="card receipt-step-card">
+        <div className="card-header receipt-step-header">
+          <div className="receipt-step-title">
+            <span className="receipt-step-index">B3</span>
+            <div>
+              <h2>Phân bổ phiếu thu</h2>
+              <p className="muted">Chọn chứng từ cần thanh toán theo ưu tiên.</p>
+            </div>
           </div>
           <button
-            className="btn btn-outline"
+            className="btn btn-outline btn-sm"
             type="button"
             onClick={() => setModalOpen(true)}
             disabled={openItems.length === 0}
@@ -415,22 +471,17 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
         </div>
 
         <div className="receipt-allocation-row">
-          <div className="helper">
-            Ưu tiên: {priorityText}.
-          </div>
+          <div className="helper">Ưu tiên: {priorityText}.</div>
         </div>
 
-        <div className="receipt-summary">
+        <div className={fieldErrors.selectedTargets ? 'receipt-summary receipt-summary--error' : 'receipt-summary'}>
           <strong>Tóm tắt phân bổ</strong>
           <div className="receipt-pill-row">
             <span className="receipt-pill">Đã chọn: {selectedTargets.length} chứng từ</span>
-            <span className="receipt-pill receipt-pill--success">
-              Đã phân bổ: {formatMoney(selectedTotal)}
-            </span>
-            <span className="receipt-pill receipt-pill--warning">
-              Treo: {formatMoney(unallocatedAmount)}
-            </span>
+            <span className="receipt-pill receipt-pill--success">Đã phân bổ: {formatMoney(selectedTotal)}</span>
+            <span className="receipt-pill receipt-pill--warning">Treo: {formatMoney(unallocatedAmount)}</span>
           </div>
+          {fieldErrors.selectedTargets && <span className="field-error">{fieldErrors.selectedTargets}</span>}
         </div>
 
         {openItemsError && <div className="alert alert--error">{openItemsError}</div>}
@@ -441,13 +492,51 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
         )}
       </section>
 
-      {createdReceipt && (
-        <div className="alert alert--success">
-          Đã tạo phiếu thu {createdReceipt.id} ({createdReceipt.status}) -{' '}
-          {formatMoney(createdReceipt.amount)}.
+      <section className="card receipt-step-card receipt-submit-card">
+        <div className="card-header receipt-step-header receipt-step-header--submit">
+          <div className="receipt-step-title">
+            <span className="receipt-step-index">B4</span>
+            <div>
+              <h2>Xác nhận và lưu</h2>
+              <p className="muted">
+                {canSubmit
+                  ? 'Biểu mẫu đã sẵn sàng. Bạn có thể lưu nháp hoặc lưu và duyệt ngay.'
+                  : submitBlockers[0] ?? 'Vui lòng hoàn thiện biểu mẫu.'}
+              </p>
+            </div>
+          </div>
+          <div className="receipt-submit-actions">
+            <button className="btn btn-outline btn-sm" type="button" onClick={() => handleCreate(false)}>
+              Lưu nháp
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={() => handleCreate(true)}
+              disabled={!canSubmit}
+            >
+              Lưu & duyệt
+            </button>
+          </div>
         </div>
-      )}
-      {error && <div className="alert alert--error">{error}</div>}
+
+        {!canSubmit && submitBlockers.length > 1 && (
+          <div className="receipt-blockers">
+            {submitBlockers.slice(1).map((blocker) => (
+              <span key={blocker} className="receipt-pill">
+                {blocker}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {createdReceipt && (
+          <div className="alert alert--success">
+            Đã tạo phiếu thu {createdReceipt.id} ({createdReceipt.status}) - {formatMoney(createdReceipt.amount)}.
+          </div>
+        )}
+        {error && <div className="alert alert--error">{error}</div>}
+      </section>
 
       <ReceiptAllocationModal
         isOpen={modalOpen}
@@ -471,15 +560,13 @@ const ReceiptFormSection = forwardRef<ReceiptFormHandle, ReceiptFormSectionProps
         onSave={(nextOverride, nextReason) => {
           setOverridePeriodLock(nextOverride)
           setOverrideReason(nextReason)
+          if (!nextOverride || nextReason.trim()) {
+            clearFieldError('overrideReason')
+          }
           setAdvancedOpen(false)
         }}
         onClose={() => setAdvancedOpen(false)}
       />
     </>
   )
-  },
-)
-
-ReceiptFormSection.displayName = 'ReceiptFormSection'
-
-export default ReceiptFormSection
+}

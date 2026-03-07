@@ -1444,3 +1444,14 @@
 - [x] `npm exec vitest run src/pages/__tests__/advances-page.test.tsx src/pages/advances/__tests__/AdvancesHero.test.tsx` (cwd `src/frontend`) => pass (`5/5`).
 - [x] `npm run lint` (cwd `src/frontend`) => pass.
 - [x] `npm run build` (cwd `src/frontend`) => pass.
+
+## Phase 94 - Customers scroll hint fix (2026-03-07) [bead: cng-21b]
+- [x] Sửa `DataTable` để scroll hint bên phải chỉ hiện khi bảng còn có thể cuộn ngang, tự ẩn khi đã chạm mép phải.
+- [x] Thêm unit test cho trạng thái hiển thị/ẩn của scroll hint trong `DataTable`.
+- [x] Thêm regression E2E cho `/customers` để khóa hành vi ẩn hint sau khi cuộn hết sang phải.
+- [x] Đồng bộ bead tracker `cng-21b`.
+
+### Verification evidence (2026-03-07, phase 94 / cng-21b)
+- [x] `npm exec vitest run src/components/__tests__/data-table.test.tsx` (cwd `src/frontend`) => pass (`2/2`).
+- [x] `npm run lint` (cwd `src/frontend`) => pass.
+- [x] `npx playwright test e2e/customers.spec.ts` (cwd `src/frontend`) => pass (`2/2`).

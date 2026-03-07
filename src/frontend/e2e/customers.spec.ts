@@ -21,4 +21,37 @@ test.describe('Customers page', () => {
     await viewButtons.first().click()
     await expect(page.getByRole('heading', { name: 'Giao dịch khách hàng' })).toBeVisible()
   })
+
+  test('Hide horizontal scroll hint after reaching the right edge of the customers table', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await loginAsDefaultUser(page)
+    await page.getByRole('link', { name: 'Khách hàng' }).first().click()
+
+    const listSection = page.locator('section.card', {
+      has: page.getByRole('heading', { name: 'Danh sách khách hàng' }),
+    })
+    const tableScroll = listSection.locator('.table-scroll')
+    await expect(tableScroll).toBeVisible()
+
+    const overflowMetrics = await tableScroll.evaluate((node) => {
+      return {
+        className: node.className,
+        maxScrollLeft: node.scrollWidth - node.clientWidth,
+      }
+    })
+
+    expect(overflowMetrics.maxScrollLeft).toBeGreaterThan(0)
+    expect(overflowMetrics.className).not.toContain('table-scroll--no-hint')
+
+    await tableScroll.evaluate((node) => {
+      node.scrollLeft = node.scrollWidth
+      node.dispatchEvent(new Event('scroll', { bubbles: true }))
+    })
+
+    await expect
+      .poll(async () => {
+        return tableScroll.evaluate((node) => node.className)
+      })
+      .toContain('table-scroll--no-hint')
+  })
 })

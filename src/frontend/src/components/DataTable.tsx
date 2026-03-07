@@ -1,4 +1,11 @@
-import type { CSSProperties, ReactNode } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from 'react'
 
 type Column<T> = {
   key: string
@@ -36,6 +43,7 @@ type DataTableProps<T> = {
 }
 
 const pageSizes = [10, 20, 50, 100]
+const scrollHintThresholdPx = 2
 
 export default function DataTable<T>({
   columns,
@@ -51,6 +59,29 @@ export default function DataTable<T>({
   onPageChange,
   onPageSizeChange,
 }: DataTableProps<T>) {
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
+  const tableRef = useRef<HTMLTableElement | null>(null)
+  const [isScrollHintVisible, setIsScrollHintVisible] = useState(showScrollHint)
+
+  const updateScrollHintVisibility = useCallback(() => {
+    if (!showScrollHint) {
+      setIsScrollHintVisible(false)
+      return
+    }
+
+    const scrollContainer = scrollContainerRef.current
+    if (!scrollContainer) {
+      setIsScrollHintVisible(false)
+      return
+    }
+
+    const maxScrollLeft = Math.max(0, scrollContainer.scrollWidth - scrollContainer.clientWidth)
+    const hasHorizontalOverflow = maxScrollLeft > scrollHintThresholdPx
+    const isAtScrollEnd = maxScrollLeft - scrollContainer.scrollLeft <= scrollHintThresholdPx
+
+    setIsScrollHintVisible(hasHorizontalOverflow && !isAtScrollEnd)
+  }, [showScrollHint])
+
   const handleSort = (key: string, sortable?: boolean) => {
     if (!sortable || !onSort) {
       return
@@ -70,12 +101,57 @@ export default function DataTable<T>({
   const totalPages = pagination
     ? Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
     : 1
-  const tableScrollClassName = showScrollHint ? 'table-scroll' : 'table-scroll table-scroll--no-hint'
+  const tableScrollClassName =
+    showScrollHint && isScrollHintVisible
+      ? 'table-scroll'
+      : 'table-scroll table-scroll--no-hint'
+
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      updateScrollHintVisibility()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [columns, minWidth, pagination?.page, pagination?.pageSize, pagination?.total, rows, sort, updateScrollHintVisibility])
+
+  useEffect(() => {
+    if (!showScrollHint) {
+      return
+    }
+
+    const handleResize = () => updateScrollHintVisibility()
+    window.addEventListener('resize', handleResize)
+
+    let resizeObserver: ResizeObserver | undefined
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(() => {
+        updateScrollHintVisibility()
+      })
+
+      if (scrollContainerRef.current) {
+        resizeObserver.observe(scrollContainerRef.current)
+      }
+      if (tableRef.current) {
+        resizeObserver.observe(tableRef.current)
+      }
+    }
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      resizeObserver?.disconnect()
+    }
+  }, [columns, minWidth, rows, showScrollHint, updateScrollHintVisibility])
 
   return (
     <div>
-      <div className={tableScrollClassName}>
-        <table className="table" style={tableStyle}>
+      <div
+        className={tableScrollClassName}
+        ref={scrollContainerRef}
+        onScroll={updateScrollHintVisibility}
+      >
+        <table className="table" ref={tableRef} style={tableStyle}>
           <thead className="table-head">
             <tr className="table-row">
               {columns.map((column) => {

@@ -18,12 +18,13 @@ test.describe('Imports page', () => {
     await expect(page.getByText('Mã lô:')).toBeVisible({ timeout: 30000 })
   })
 
-  test('Manual advances shows advanced filters', async ({ page }) => {
+  test('Advances workspace shows advanced filters', async ({ page }) => {
     await loginAsDefaultUser(page)
-    await page.getByRole('link', { name: 'Nhập liệu HĐ' }).first().click()
+    await page.goto('/advances')
 
-    await page.getByRole('tab', { name: 'Nhập thủ công (Khoản trả hộ KH)' }).click()
-    await expect(page.getByRole('heading', { name: 'Khoản trả hộ KH', level: 2 })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Workspace nhập liệu và xử lý khoản trả hộ KH', level: 2 }),
+    ).toBeVisible()
 
     await page.getByRole('button', { name: 'Bộ lọc nâng cao' }).click()
     const advancedFilters = page.locator('.filters-grid--compact')
@@ -35,10 +36,10 @@ test.describe('Imports page', () => {
     await expect(advancedFilters.getByLabel('Nguồn dữ liệu')).toBeVisible()
   })
 
-  test('Advances route redirects to manual imports tab', async ({ page }) => {
+  test('Advances import shortcut redirects to batch import tab', async ({ page }) => {
     await loginAsDefaultUser(page)
-    await page.goto('/advances')
-    await expect(page).toHaveURL(/\/imports\?tab=manual$/)
-    await expect(page.getByRole('heading', { name: 'Khoản trả hộ KH', level: 2 })).toBeVisible()
+    await page.goto('/advances?tab=import')
+    await expect(page).toHaveURL(/\/imports\?tab=batch&type=ADVANCE$/)
+    await expect(page.getByRole('heading', { name: 'Nhập file, kiểm tra trước khi ghi dữ liệu' })).toBeVisible()
   })
 })

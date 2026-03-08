@@ -47,9 +47,11 @@ const verifyReports = async (page: Page) => {
   await expect(page.getByRole('heading', { name: 'Tổng quan công nợ & báo cáo chi tiết' })).toBeVisible()
 }
 
-const verifyImportsFilterGrid = async (page: Page) => {
-  await openRoute(page, '/imports?tab=manual')
-  await expect(page.getByRole('heading', { name: 'Khoản trả hộ KH', level: 2 })).toBeVisible()
+const verifyAdvancesFilterGrid = async (page: Page) => {
+  await openRoute(page, '/advances')
+  await expect(
+    page.getByRole('heading', { name: 'Workspace nhập liệu và xử lý khoản trả hộ KH', level: 2 }),
+  ).toBeVisible()
   await page.getByRole('button', { name: 'Bộ lọc nâng cao' }).click()
   await expect(page.locator('.filters-grid--compact').first()).toBeVisible()
 }
@@ -85,7 +87,7 @@ const runRegressionChecks = async (page: Page, viewportCase: ViewportCase) => {
   await verifyDashboard(page)
   await verifyCustomersTable(page)
   await verifyReports(page)
-  await verifyImportsFilterGrid(page)
+  await verifyAdvancesFilterGrid(page)
   await verifyReceiptsModal(page)
 }
 

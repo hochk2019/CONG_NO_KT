@@ -381,6 +381,7 @@ public sealed class ImportCommitService : IImportCommitService
             .Where(r => r.DeletedAt == null && r.Status == "APPROVED")
             .Where(r => r.SellerTaxCode == invoice.SellerTaxCode && r.CustomerTaxCode == invoice.CustomerTaxCode)
             .Where(r => r.UnallocatedAmount > 0)
+            .Where(r => r.AutoAllocateEnabled)
             .OrderBy(r => r.ReceiptDate)
             .ThenBy(r => r.CreatedAt)
             .ToListAsync(ct);
@@ -450,6 +451,7 @@ public sealed class ImportCommitService : IImportCommitService
             .Where(r => r.DeletedAt == null && r.Status == "APPROVED")
             .Where(r => r.SellerTaxCode == advance.SellerTaxCode && r.CustomerTaxCode == advance.CustomerTaxCode)
             .Where(r => r.UnallocatedAmount > 0)
+            .Where(r => r.AutoAllocateEnabled)
             .OrderBy(r => r.ReceiptDate)
             .ThenBy(r => r.CreatedAt)
             .ToListAsync(ct);

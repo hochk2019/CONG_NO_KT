@@ -18,6 +18,7 @@ export type ReceiptDto = {
   version: number
   amount: number
   unallocatedAmount: number
+  autoAllocateEnabled: boolean
   receiptNo?: string | null
   receiptDate: string
   appliedPeriodStart?: string | null
@@ -80,6 +81,7 @@ export type ReceiptListItem = {
   receiptDate: string
   amount: number
   unallocatedAmount: number
+  autoAllocateEnabled: boolean
   allocationMode: string
   allocationStatus: string
   allocationPriority: string
@@ -92,6 +94,25 @@ export type ReceiptListItem = {
   customerTaxCode: string
   customerName?: string | null
   ownerName?: string | null
+  canManage: boolean
+}
+
+export type ReceiptSurplusQueueItem = {
+  id: string
+  itemType: string
+  version: number
+  status: string
+  receiptId: string
+  receiptNo?: string | null
+  receiptDate: string
+  sellerTaxCode: string
+  customerTaxCode: string
+  customerName?: string | null
+  ownerName?: string | null
+  originalInvoiceNo?: string | null
+  originalInvoiceDate?: string | null
+  amountRemaining: number
+  ageDays: number
   canManage: boolean
 }
 
@@ -177,6 +198,40 @@ export const listReceipts = async (params: {
   return apiFetch<PagedResult<ReceiptListItem>>(`/receipts?${query.toString()}`, {
     token: params.token,
   })
+}
+
+export const listReceiptSurplusQueue = async (params: {
+  token: string
+  itemType?: string
+  search?: string
+  sellerTaxCode?: string
+  customerTaxCode?: string
+  from?: string
+  to?: string
+  amountMin?: number
+  amountMax?: number
+  page: number
+  pageSize: number
+}) => {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  })
+  if (params.itemType) query.append('itemType', params.itemType)
+  if (params.search) query.append('search', params.search)
+  if (params.sellerTaxCode) query.append('sellerTaxCode', params.sellerTaxCode)
+  if (params.customerTaxCode) query.append('customerTaxCode', params.customerTaxCode)
+  if (params.from) query.append('from', params.from)
+  if (params.to) query.append('to', params.to)
+  if (typeof params.amountMin === 'number') query.append('amountMin', String(params.amountMin))
+  if (typeof params.amountMax === 'number') query.append('amountMax', String(params.amountMax))
+
+  return apiFetch<PagedResult<ReceiptSurplusQueueItem>>(
+    `/receipts/surplus-queue?${query.toString()}`,
+    {
+      token: params.token,
+    },
+  )
 }
 
 export type ReceiptVoidResult = {
@@ -332,6 +387,46 @@ export const fetchReceiptOpenItems = async (params: {
   })
   return apiFetch<ReceiptOpenItem[]>(`/receipts/open-items?${query.toString()}`, {
     token: params.token,
+  })
+}
+
+export const updateReceiptAutoAllocation = async (
+  token: string,
+  receiptId: string,
+  payload: {
+    autoAllocateEnabled: boolean
+    version: number
+  },
+) => {
+  return apiFetch<ReceiptDto>(`/receipts/${receiptId}/auto-allocation`, {
+    method: 'POST',
+    token,
+    body: {
+      autoAllocateEnabled: payload.autoAllocateEnabled,
+      version: payload.version,
+    },
+  })
+}
+
+export const allocateApprovedReceipt = async (
+  token: string,
+  receiptId: string,
+  payload: {
+    selectedTargets: ReceiptTargetRef[]
+    version: number
+    overridePeriodLock?: boolean
+    overrideReason?: string
+  },
+) => {
+  return apiFetch<ReceiptPreviewResult>(`/receipts/${receiptId}/allocate-approved`, {
+    method: 'POST',
+    token,
+    body: {
+      selectedTargets: payload.selectedTargets,
+      version: payload.version,
+      override_period_lock: payload.overridePeriodLock ?? false,
+      override_reason: payload.overrideReason ?? null,
+    },
   })
 }
 

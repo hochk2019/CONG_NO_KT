@@ -22,6 +22,7 @@ public sealed class ConGNoDbContext : DbContext
     public DbSet<Advance> Advances => Set<Advance>();
     public DbSet<Receipt> Receipts => Set<Receipt>();
     public DbSet<ReceiptAllocation> ReceiptAllocations => Set<ReceiptAllocation>();
+    public DbSet<ReceiptHeldCredit> ReceiptHeldCredits => Set<ReceiptHeldCredit>();
     public DbSet<PeriodLock> PeriodLocks => Set<PeriodLock>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RiskRule> RiskRules => Set<RiskRule>();
@@ -126,11 +127,18 @@ public sealed class ConGNoDbContext : DbContext
             entity.ToTable("receipts");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AllocationTargets).HasColumnType("jsonb");
+            entity.Property(x => x.AutoAllocateEnabled).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<ReceiptAllocation>(entity =>
         {
             entity.ToTable("receipt_allocations");
+            entity.HasKey(x => x.Id);
+        });
+
+        modelBuilder.Entity<ReceiptHeldCredit>(entity =>
+        {
+            entity.ToTable("receipt_held_credits");
             entity.HasKey(x => x.Id);
         });
 

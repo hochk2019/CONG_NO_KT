@@ -6,7 +6,7 @@ import Customer360Section from './Customer360Section'
 import CustomerListSection from './CustomerListSection'
 import CustomerTransactionsSection from './CustomerTransactionsSection'
 
-type CustomerTab = 'invoices' | 'advances' | 'receipts'
+type CustomerTab = 'invoices' | 'advances' | 'receipts' | 'unallocatedReceipts' | 'heldCredits'
 
 const parseTaxCode = (value: string | null) => {
   const normalized = value?.trim() ?? ''
@@ -14,7 +14,13 @@ const parseTaxCode = (value: string | null) => {
 }
 
 const parseTab = (value: string | null): CustomerTab | undefined => {
-  if (value === 'invoices' || value === 'advances' || value === 'receipts') {
+  if (
+    value === 'invoices' ||
+    value === 'advances' ||
+    value === 'receipts' ||
+    value === 'unallocatedReceipts' ||
+    value === 'heldCredits'
+  ) {
     return value
   }
   return undefined

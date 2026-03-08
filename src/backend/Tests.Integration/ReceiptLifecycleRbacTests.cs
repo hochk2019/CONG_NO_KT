@@ -92,6 +92,156 @@ public class ReceiptLifecycleRbacTests
     }
 
     [Fact]
+    public async Task AllocateApprovedAsync_ManuallyAllocatesRemainingAmount_WhenAutoAllocateDisabled()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("12121212-1212-1212-1212-121212121212");
+        await SeedUserAsync(db, ownerId, "owner-manual-alloc");
+        var (seller, customer) = await SeedMasterAsync(db, ownerId);
+        var firstInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4001", 400_000m);
+        var secondInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4002", 300_000m);
+        var advance = await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-4001", 200_000m);
+
+        var service = BuildService(db, ownerId, ["Accountant"]);
+        var draft = await service.CreateAsync(
+            new ReceiptCreateRequest(
+                seller.SellerTaxCode,
+                customer.TaxCode,
+                "PT-4001",
+                DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                900_000m,
+                "MANUAL",
+                null,
+                "BANK",
+                "Manual allocation for approved receipt",
+                "ISSUE_DATE",
+                [new ReceiptTargetRef(firstInvoice.Id, "INVOICE")]),
+            CancellationToken.None);
+
+        var approveResult = await service.ApproveAsync(
+            draft.Id,
+            new ReceiptApproveRequest(null, draft.Version),
+            CancellationToken.None);
+
+        Assert.Equal(500_000m, approveResult.UnallocatedAmount);
+
+        var approvedReceipt = await service.GetAsync(draft.Id, CancellationToken.None);
+        var toggleResult = await service.UpdateAutoAllocateAsync(
+            draft.Id,
+            new ReceiptAutoAllocateUpdateRequest(false, approvedReceipt.Version),
+            CancellationToken.None);
+
+        Assert.False(toggleResult.AutoAllocateEnabled);
+        Assert.Equal(2, toggleResult.Version);
+
+        var allocationResult = await service.AllocateApprovedAsync(
+            draft.Id,
+            new ReceiptApprovedAllocationRequest(
+                [
+                    new ReceiptTargetRef(secondInvoice.Id, "INVOICE"),
+                    new ReceiptTargetRef(advance.Id, "ADVANCE")
+                ],
+                toggleResult.Version),
+            CancellationToken.None);
+
+        Assert.Equal(0m, allocationResult.UnallocatedAmount);
+        Assert.Equal(2, allocationResult.Lines.Count);
+
+        var receiptAfterManualAllocation = await service.GetAsync(draft.Id, CancellationToken.None);
+        var secondInvoiceAfter = await db.Invoices.AsNoTracking().FirstAsync(i => i.Id == secondInvoice.Id);
+        var advanceAfter = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.ReceiptId == draft.Id)
+            .ToListAsync();
+
+        Assert.Equal("ALLOCATED", receiptAfterManualAllocation.AllocationStatus);
+        Assert.Equal(0m, receiptAfterManualAllocation.UnallocatedAmount);
+        Assert.False(receiptAfterManualAllocation.AutoAllocateEnabled);
+        Assert.Equal(3, receiptAfterManualAllocation.Version);
+
+        Assert.Equal("PAID", secondInvoiceAfter.Status);
+        Assert.Equal(0m, secondInvoiceAfter.OutstandingAmount);
+        Assert.Equal("PAID", advanceAfter.Status);
+        Assert.Equal(0m, advanceAfter.OutstandingAmount);
+        Assert.Equal(3, allocations.Count);
+    }
+
+    [Fact]
+    public async Task UpdateAutoAllocateAsync_ReappliesRemainingAmount_WhenEnabledBackOn()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("13131313-1313-1313-1313-131313131313");
+        await SeedUserAsync(db, ownerId, "owner-auto-reapply");
+        var (seller, customer) = await SeedMasterAsync(db, ownerId);
+        var firstInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4101", 400_000m);
+        var secondInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4102", 300_000m);
+        var advance = await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-4101", 200_000m);
+
+        var service = BuildService(db, ownerId, ["Accountant"]);
+        var draft = await service.CreateAsync(
+            new ReceiptCreateRequest(
+                seller.SellerTaxCode,
+                customer.TaxCode,
+                "PT-4101",
+                DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                900_000m,
+                "MANUAL",
+                null,
+                "BANK",
+                "Re-enable auto allocation for approved receipt",
+                "ISSUE_DATE",
+                [new ReceiptTargetRef(firstInvoice.Id, "INVOICE")]),
+            CancellationToken.None);
+
+        var approveResult = await service.ApproveAsync(
+            draft.Id,
+            new ReceiptApproveRequest(null, draft.Version),
+            CancellationToken.None);
+
+        Assert.Equal(500_000m, approveResult.UnallocatedAmount);
+
+        var approvedReceipt = await service.GetAsync(draft.Id, CancellationToken.None);
+        var disabledResult = await service.UpdateAutoAllocateAsync(
+            draft.Id,
+            new ReceiptAutoAllocateUpdateRequest(false, approvedReceipt.Version),
+            CancellationToken.None);
+
+        Assert.False(disabledResult.AutoAllocateEnabled);
+        Assert.Equal(500_000m, disabledResult.UnallocatedAmount);
+
+        var reenabledResult = await service.UpdateAutoAllocateAsync(
+            draft.Id,
+            new ReceiptAutoAllocateUpdateRequest(true, disabledResult.Version),
+            CancellationToken.None);
+
+        var receiptAfterReenable = await service.GetAsync(draft.Id, CancellationToken.None);
+        var secondInvoiceAfter = await db.Invoices.AsNoTracking().FirstAsync(i => i.Id == secondInvoice.Id);
+        var advanceAfter = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.ReceiptId == draft.Id)
+            .ToListAsync();
+
+        Assert.True(reenabledResult.AutoAllocateEnabled);
+        Assert.Equal(0m, reenabledResult.UnallocatedAmount);
+        Assert.Equal("ALLOCATED", reenabledResult.AllocationStatus);
+        Assert.Equal(3, reenabledResult.Version);
+
+        Assert.True(receiptAfterReenable.AutoAllocateEnabled);
+        Assert.Equal(0m, receiptAfterReenable.UnallocatedAmount);
+        Assert.Equal("ALLOCATED", receiptAfterReenable.AllocationStatus);
+
+        Assert.Equal("PAID", secondInvoiceAfter.Status);
+        Assert.Equal(0m, secondInvoiceAfter.OutstandingAmount);
+        Assert.Equal("PAID", advanceAfter.Status);
+        Assert.Equal(0m, advanceAfter.OutstandingAmount);
+        Assert.Equal(3, allocations.Count);
+    }
+
+    [Fact]
     public async Task Approve_WhenAuditFails_RollsBackReceiptAndAllocations()
     {
         await using var db = _fixture.CreateContext();

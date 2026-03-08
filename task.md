@@ -1455,3 +1455,80 @@
 - [x] `npm exec vitest run src/components/__tests__/data-table.test.tsx` (cwd `src/frontend`) => pass (`2/2`).
 - [x] `npm run lint` (cwd `src/frontend`) => pass.
 - [x] `npx playwright test e2e/customers.spec.ts` (cwd `src/frontend`) => pass (`2/2`).
+
+## Phase 95 - Held credit flow for voided invoice replacements (2026-03-07) [bead: cng-may]
+- [x] Tách `credit chờ thay thế` khỏi `Receipt.UnallocatedAmount` bằng ledger/backend model riêng.
+- [x] Đổi luồng hủy hóa đơn đã thu tiền:
+  - [x] gỡ allocation khỏi hóa đơn gốc.
+  - [x] tạo held credit bám theo phiếu thu nguồn.
+  - [x] không ép remap trực tiếp sang hóa đơn thay thế trong modal hủy.
+- [x] Hỗ trợ áp held credit sang hóa đơn thay thế:
+  - [x] dùng held credit trước.
+  - [x] cho phép top-up từ credit chung chưa phân bổ của cùng khách hàng khi còn thiếu.
+  - [x] lưu lịch sử apply/release để audit được luồng tiền.
+- [x] Hỗ trợ release phần held credit còn lại về `credit chung` một cách chủ động.
+- [x] Bổ sung UI quản lý riêng ở `/customers`:
+  - [x] thêm tab `Tiền chờ thay thế`.
+  - [x] bảng trạng thái + action `Áp sang HĐ` / `Chuyển credit chung`.
+  - [x] cập nhật modal hủy hóa đơn theo UX mới.
+- [x] Thêm/cập nhật test backend + frontend cho các flow mới.
+- [x] Đồng bộ bead tracker `cng-may`.
+
+### Verification evidence (2026-03-07, phase 95 / cng-may)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~InvoiceHeldCreditFlowTests"` => pass (`4/4`).
+- [x] `npm test -- --run src/pages/customers/__tests__/customers-modules.test.tsx src/pages/customers/__tests__/customer-held-credits-panel.test.tsx` (cwd `src/frontend`) => pass (`10/10`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.
+
+## Phase 96 - Fix held credit customer tab Internal Server Error (2026-03-07) [bead: cng-oer]
+- [x] Thêm integration test tái hiện lỗi list held credit theo customer.
+- [x] Sửa truy vấn `ReceiptHeldCreditService.ListByCustomerAsync` để sort/filter trên projection SQL-friendly trước khi map DTO.
+- [x] Đồng bộ fallback `VITE_API_PROXY_TARGET` trong `vite.config.ts` về `127.0.0.1:18080` để `npm run dev` bám đúng backend Docker mặc định của repo.
+- [x] Rebuild Docker API và xác minh endpoint held-credit trả `200` qua cả `18080` và đường proxy `/api` của Vite dev server.
+- [x] Đồng bộ bead tracker `cng-oer`.
+
+### Verification evidence (2026-03-07, phase 96 / cng-oer)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ListHeldCredits_ByCustomer_ReturnsPagedItems"` => pass (`1/1`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~InvoiceHeldCreditFlowTests"` => pass (`5/5`).
+- [x] `npm test -- --run src/pages/customers/__tests__/customers-modules.test.tsx src/pages/customers/__tests__/customer-held-credits-panel.test.tsx` (cwd `src/frontend`) => pass (`10/10`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `Invoke-RestMethod http://127.0.0.1:18080/customers/2301098313/held-credits?page=1&pageSize=20` với token admin => `200 OK`.
+- [x] `Invoke-RestMethod http://127.0.0.1:5174/api/customers/2301098313/held-credits?page=1&pageSize=20` qua Vite proxy => `200 OK`.
+
+## Phase 97 - Customers unallocated receipt tab and held credit relabel (2026-03-07) [bead: cng-iz8]
+- [x] Thêm tab `Tiền chưa phân bổ` trong khu giao dịch khách hàng.
+- [x] Hiển thị riêng các phiếu thu đã duyệt còn `unallocatedAmount` > 0.
+- [x] Hỗ trợ bật/tắt `Tự phân bổ` trực tiếp từ tab mới, mặc định bám theo trạng thái auto-allocation của phiếu thu.
+- [x] Cho phép `Áp tay` từ tab mới vào các chứng từ mở của khách hàng khi tắt tự phân bổ hoặc cần can thiệp thủ công.
+- [x] Đổi copy UI `Tiền chờ thay thế` sang `Tiền thừa do hủy HĐ` trên tab/panel/modal liên quan.
+- [x] Cập nhật unit test/frontend regression cho tab mới, copy mới, và flow áp tay/toggle.
+- [x] Đồng bộ bead tracker `cng-iz8`.
+
+### Verification evidence (2026-03-07, phase 97 / cng-iz8)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptLifecycleRbacTests.UpdateAutoAllocateAsync_ReappliesRemainingAmount_WhenEnabledBackOn"` => pass (`1/1`).
+- [x] `npm test -- --run src/pages/customers/__tests__/customers-modules.test.tsx src/pages/customers/__tests__/customer-held-credits-panel.test.tsx src/pages/customers/__tests__/customer-unallocated-receipts-panel.test.tsx` (cwd `src/frontend`) => pass (`15/15`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.
+
+## Phase 98 - Receipts global surplus queue tab (2026-03-08) [bead: cng-iqs]
+- [x] Bổ sung endpoint global `GET /receipts/surplus-queue` để gom phiếu thu `chưa phân bổ`, `phân bổ một phần`, và `tiền treo do hủy HĐ` trên toàn hệ thống.
+- [x] Thêm integration test backend cho surplus queue gồm hợp nhất dữ liệu, filter search, và scope RBAC theo owner.
+- [x] Thêm tab `Tiền thừa chưa phân bổ` ngay trong block `Danh sách phiếu thu` ở `/receipts`.
+- [x] Hiển thị summary cards, filter `Loại khoản`/`Tìm chứng từ`, và deep-link sang đúng tab chi tiết trong `/customers`.
+- [x] Bổ sung regression test frontend cho tab mới và panel surplus queue.
+- [x] Sửa `DataTable` để `aria-label` của header non-sortable không đụng với form controls, ổn định truy cập và test selector.
+- [x] Đồng bộ bead tracker `cng-iqs`.
+
+### Verification evidence (2026-03-08, phase 98 / cng-iqs)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptSurplusQueueTests"` => pass (`3/3`).
+- [x] `npm test -- --run src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/receipts/__tests__/receipt-surplus-queue-panel.test.tsx` (cwd `src/frontend`) => pass (`11/11`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.
+
+## Phase 99 - Money input grouping format (2026-03-08) [bead: cng-fuk]
+- [x] Thêm util parse/format tiền dùng chung cho input thủ công theo locale nhập liệu kế toán (`.` ngăn cách hàng nghìn, `,` phần thập phân).
+- [x] Tạo component `MoneyInput` hiển thị dấu phân tách ngay khi gõ nhưng vẫn giữ raw numeric value ổn định để submit API và validate.
+- [x] Áp dụng `MoneyInput` cho các ô nhập số tiền thủ công trên receipts, imports, các filter số tiền, và `Hạn mức tín dụng` của khách hàng.
+- [x] Bổ sung test util/component và regression test frontend để khóa hành vi format khi nhập liệu.
+- [x] Đồng bộ bead tracker `cng-fuk`.
+
+### Verification evidence (2026-03-08, phase 99 / cng-fuk)
+- [x] `npm test -- --run src/utils/__tests__/moneyInput.test.ts src/components/__tests__/money-input.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/customers/__tests__/customers-modules.test.tsx` (cwd `src/frontend`) => pass (`31/31`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.

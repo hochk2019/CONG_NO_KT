@@ -20,6 +20,8 @@ test.describe('Customers page', () => {
 
     await viewButtons.first().click()
     await expect(page.getByRole('heading', { name: 'Giao dịch khách hàng' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Tiền chưa phân bổ' })).toBeVisible()
+    await expect(page.getByRole('tab', { name: 'Tiền thừa do hủy HĐ' })).toBeVisible()
   })
 
   test('Hide horizontal scroll hint after reaching the right edge of the customers table', async ({ page }) => {

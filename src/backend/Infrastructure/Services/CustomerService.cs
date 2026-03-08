@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Common;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -775,6 +776,13 @@ public sealed class CustomerService : ICustomerService
             query = query.Where(r => r.ReceiptDate <= request.To.Value);
         }
 
+        if (request.UnallocatedOnly == true)
+        {
+            query = query.Where(r =>
+                r.Status == ReceiptStatusCodes.Approved &&
+                r.UnallocatedAmount > 0);
+        }
+
         var total = await query.CountAsync(ct);
         var items = await query
             .OrderByDescending(r => r.ReceiptDate)
@@ -788,6 +796,8 @@ public sealed class CustomerService : ICustomerService
                 r.AppliedPeriodStart,
                 r.Amount,
                 r.UnallocatedAmount,
+                r.AutoAllocateEnabled,
+                r.Version,
                 r.Status,
                 r.SellerTaxCode,
                 _db.Sellers

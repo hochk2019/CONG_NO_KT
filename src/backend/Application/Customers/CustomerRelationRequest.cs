@@ -8,4 +8,5 @@ public sealed record CustomerRelationRequest(
     DateOnly? From,
     DateOnly? To,
     int Page,
-    int PageSize);
+    int PageSize,
+    bool? UnallocatedOnly = null);

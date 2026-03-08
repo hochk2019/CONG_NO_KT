@@ -600,6 +600,7 @@ public sealed class AdvanceService : IAdvanceService
             .Where(r => r.DeletedAt == null && r.Status == "APPROVED")
             .Where(r => r.SellerTaxCode == advance.SellerTaxCode && r.CustomerTaxCode == advance.CustomerTaxCode)
             .Where(r => r.UnallocatedAmount > 0)
+            .Where(r => r.AutoAllocateEnabled)
             .OrderBy(r => r.ReceiptDate)
             .ThenBy(r => r.CreatedAt)
             .ToListAsync(ct);

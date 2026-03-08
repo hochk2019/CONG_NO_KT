@@ -7,6 +7,8 @@ public sealed record CustomerReceiptDto(
     DateOnly? AppliedPeriodStart,
     decimal Amount,
     decimal UnallocatedAmount,
+    bool AutoAllocateEnabled,
+    int Version,
     string Status,
     string SellerTaxCode,
     string? SellerShortName);

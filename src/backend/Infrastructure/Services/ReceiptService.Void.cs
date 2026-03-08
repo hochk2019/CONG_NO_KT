@@ -60,6 +60,9 @@ public sealed partial class ReceiptService
         var allocations = await _db.ReceiptAllocations
             .Where(a => a.ReceiptId == receipt.Id)
             .ToListAsync(ct);
+        var heldCredits = await _db.ReceiptHeldCredits
+            .Where(item => item.ReceiptId == receipt.Id)
+            .ToListAsync(ct);
 
         var reversedAmount = allocations.Sum(a => a.Amount);
         var allocationCount = allocations.Count;
@@ -102,6 +105,11 @@ public sealed partial class ReceiptService
             _db.ReceiptAllocations.RemoveRange(allocations);
         }
 
+        if (heldCredits.Count > 0)
+        {
+            _db.ReceiptHeldCredits.RemoveRange(heldCredits);
+        }
+
         if (previousStatus == ReceiptStatusCodes.Approved)
         {
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
@@ -138,7 +146,14 @@ public sealed partial class ReceiptService
             "Receipt",
             receipt.Id.ToString(),
             new { status = previousStatus },
-            new { status = receipt.Status, reason = request.Reason, reversedAmount, allocationCount },
+            new
+            {
+                status = receipt.Status,
+                reason = request.Reason,
+                reversedAmount,
+                allocationCount,
+                removedHeldCreditCount = heldCredits.Count
+            },
             ct);
 
         return new ReceiptVoidResult(reversedAmount, allocationCount);
@@ -231,6 +246,7 @@ public sealed partial class ReceiptService
             receipt.Version,
             receipt.Amount,
             receipt.UnallocatedAmount,
+            receipt.AutoAllocateEnabled,
             receipt.ReceiptNo,
             receipt.ReceiptDate,
             receipt.AppliedPeriodStart,

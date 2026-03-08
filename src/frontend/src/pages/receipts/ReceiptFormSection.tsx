@@ -13,6 +13,7 @@ import {
   type LookupOption,
 } from '../../api/lookups'
 import LookupInput from '../../components/LookupInput'
+import MoneyInput from '../../components/MoneyInput'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
@@ -405,16 +406,13 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
           </label>
           <label className={fieldErrors.amount ? 'field field--error' : 'field'}>
             <span>Số tiền</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="decimal"
+            <MoneyInput
               value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value)
+              onValueChange={(nextValue) => {
+                setAmount(nextValue)
                 clearFieldError('amount')
               }}
-              placeholder="VD: 10000000"
+              placeholder="VD: 10.000.000"
             />
             {fieldErrors.amount && <span className="field-error">{fieldErrors.amount}</span>}
           </label>

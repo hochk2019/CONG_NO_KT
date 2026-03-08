@@ -87,6 +87,75 @@ public class AdvanceAutoAllocateTests
         Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
     }
 
+    [Fact]
+    public async Task ApproveAsync_SkipsReceipts_WhenAutoAllocateDisabled()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+
+        var receipt = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            ReceiptNo = "PT-HOLD",
+            ReceiptDate = new DateOnly(2026, 1, 21),
+            Amount = 600_000m,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "UNALLOCATED",
+            AllocationPriority = "ISSUE_DATE",
+            AutoAllocateEnabled = false,
+            UnallocatedAmount = 600_000m,
+            Status = "APPROVED",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        var advance = new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            AdvanceNo = "TH-MANUAL",
+            AdvanceDate = new DateOnly(2026, 2, 2),
+            Amount = 500_000m,
+            OutstandingAmount = 0m,
+            Status = "DRAFT",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Receipts.Add(receipt);
+        db.Advances.Add(advance);
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(new[] { "Admin" });
+        var audit = new AuditService(db, user);
+        var service = new AdvanceService(db, user, audit);
+
+        await service.ApproveAsync(
+            advance.Id,
+            new AdvanceApproveRequest(advance.Version),
+            CancellationToken.None);
+
+        var updatedAdvance = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var updatedReceipt = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == receipt.Id);
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.AdvanceId == advance.Id)
+            .ToListAsync();
+
+        Assert.Empty(allocations);
+        Assert.Equal("APPROVED", updatedAdvance.Status);
+        Assert.Equal(500_000m, updatedAdvance.OutstandingAmount);
+        Assert.Equal(600_000m, updatedReceipt.UnallocatedAmount);
+        Assert.Equal("UNALLOCATED", updatedReceipt.AllocationStatus);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(

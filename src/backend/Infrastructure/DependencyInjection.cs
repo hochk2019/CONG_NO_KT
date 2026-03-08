@@ -9,6 +9,7 @@ using CongNoGolden.Application.Integrations;
 using CongNoGolden.Application.Invoices;
 using CongNoGolden.Application.Notifications;
 using CongNoGolden.Application.PeriodLocks;
+using CongNoGolden.Application.ReceiptHeldCredits;
 using CongNoGolden.Application.Receipts;
 using CongNoGolden.Application.Reports;
 using CongNoGolden.Application.Reminders;
@@ -55,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<ICustomerBalanceReconcileService, CustomerBalanceReconcileService>();
         services.AddScoped<IPeriodLockService, PeriodLockService>();
         services.AddScoped<IReceiptService, ReceiptService>();
+        services.AddScoped<IReceiptHeldCreditService, ReceiptHeldCreditService>();
         services.AddScoped<IReceiptAutomationService, ReceiptAutomationService>();
         services.AddScoped<IInvoiceService, InvoiceService>();
         services.AddScoped<IInvoiceCreditReconcileService, InvoiceCreditReconcileService>();

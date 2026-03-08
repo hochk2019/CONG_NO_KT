@@ -207,7 +207,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    null),
                 ct);
             return Results.Ok(result);
         })
@@ -238,7 +239,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    null),
                 ct);
             return Results.Ok(result);
         })
@@ -254,6 +256,7 @@ public static class CustomerEndpoints
             string? receiptNo,
             DateOnly? from,
             DateOnly? to,
+            bool? unallocatedOnly,
             int? page,
             int? pageSize,
             ICustomerService service,
@@ -269,7 +272,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    unallocatedOnly),
                 ct);
             return Results.Ok(result);
         })

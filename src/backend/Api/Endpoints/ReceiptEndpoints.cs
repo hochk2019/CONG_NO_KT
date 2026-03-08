@@ -61,6 +61,50 @@ public static class ReceiptEndpoints
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 
+        app.MapGet("/receipts/surplus-queue", async (
+            string? itemType,
+            string? search,
+            string? sellerTaxCode,
+            string? customerTaxCode,
+            DateOnly? from,
+            DateOnly? to,
+            decimal? amountMin,
+            decimal? amountMax,
+            int? page,
+            int? pageSize,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            if (from.HasValue && to.HasValue && from.Value > to.Value)
+            {
+                return Results.BadRequest(new { message = "Ngày chứng từ từ phải nhỏ hơn hoặc bằng ngày chứng từ đến." });
+            }
+
+            if (amountMin.HasValue && amountMax.HasValue && amountMin.Value > amountMax.Value)
+            {
+                return Results.BadRequest(new { message = "Số tiền từ phải nhỏ hơn hoặc bằng số tiền đến." });
+            }
+
+            var result = await service.ListSurplusQueueAsync(
+                new ReceiptSurplusQueueRequest(
+                    itemType,
+                    search,
+                    sellerTaxCode,
+                    customerTaxCode,
+                    from,
+                    to,
+                    amountMin,
+                    amountMax,
+                    page.GetValueOrDefault(1),
+                    pageSize.GetValueOrDefault(20)),
+                ct);
+
+            return Results.Ok(result);
+        })
+        .WithName("ReceiptSurplusQueue")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
         app.MapGet("/receipts/{id:guid}", async (
             Guid id,
             IReceiptService service,
@@ -177,6 +221,46 @@ public static class ReceiptEndpoints
             }
         })
         .WithName("ReceiptApprove")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
+        app.MapPost("/receipts/{id:guid}/auto-allocation", async (
+            Guid id,
+            [FromBody] ReceiptAutoAllocateUpdateRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.UpdateAutoAllocateAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptAutoAllocationUpdate")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
+        app.MapPost("/receipts/{id:guid}/allocate-approved", async (
+            Guid id,
+            [FromBody] ReceiptApprovedAllocationRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.AllocateApprovedAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptAllocateApproved")
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 

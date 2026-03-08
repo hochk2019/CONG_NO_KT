@@ -163,7 +163,7 @@ export default function DataTable<T>({
                     : 'descending'
                   : 'none'
                 const ariaSort = column.sortable ? sortState : 'none'
-                const ariaLabel = column.sortable ? `Sắp xếp theo ${column.label}` : column.label
+                const ariaLabel = column.sortable ? `Sắp xếp theo ${column.label}` : `Cột ${column.label}`
                 const align = column.align ?? 'left'
                 const justifyContent =
                   align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start'

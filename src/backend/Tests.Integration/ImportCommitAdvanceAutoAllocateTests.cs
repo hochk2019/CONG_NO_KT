@@ -51,6 +51,37 @@ public class ImportCommitAdvanceAutoAllocateTests
         Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
     }
 
+    [Fact]
+    public async Task CommitAdvance_SkipsReceipts_WhenAutoAllocateDisabled()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db);
+        var receipt = await SeedOverpaidReceiptAsync(db, autoAllocateEnabled: false);
+        var batch = await SeedAdvanceBatchAsync(db);
+
+        var user = new TestCurrentUser(new[] { "Accountant" });
+        var audit = new AuditService(db, user);
+        var service = new ImportCommitService(db, user, audit);
+
+        var result = await service.CommitAsync(batch.Id, new ImportCommitRequest(null), CancellationToken.None);
+
+        Assert.Equal(1, result.InsertedAdvances);
+
+        var advance = await db.Advances.AsNoTracking().FirstAsync(a => a.SourceBatchId == batch.Id);
+        var updatedReceipt = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == receipt.Id);
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.AdvanceId == advance.Id)
+            .ToListAsync();
+
+        Assert.Empty(allocations);
+        Assert.Equal("APPROVED", advance.Status);
+        Assert.Equal(500_000m, advance.OutstandingAmount);
+        Assert.Equal(600_000m, updatedReceipt.UnallocatedAmount);
+        Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -81,7 +112,7 @@ public class ImportCommitAdvanceAutoAllocateTests
         await db.SaveChangesAsync();
     }
 
-    private static async Task<Receipt> SeedOverpaidReceiptAsync(ConGNoDbContext db)
+    private static async Task<Receipt> SeedOverpaidReceiptAsync(ConGNoDbContext db, bool autoAllocateEnabled = true)
     {
         var customer = new Customer
         {
@@ -106,6 +137,7 @@ public class ImportCommitAdvanceAutoAllocateTests
             AllocationMode = "MANUAL",
             AllocationStatus = "PARTIAL",
             AllocationPriority = "ISSUE_DATE",
+            AutoAllocateEnabled = autoAllocateEnabled,
             UnallocatedAmount = 600_000m,
             Status = "APPROVED",
             CreatedAt = DateTimeOffset.UtcNow,

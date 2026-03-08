@@ -406,6 +406,7 @@ app.MapPeriodLockEndpoints();
 app.MapReportEndpoints();
 app.MapDashboardEndpoints();
 app.MapCustomerEndpoints();
+app.MapReceiptHeldCreditEndpoints();
 app.MapAdminEndpoints();
 app.MapAdminMaintenanceEndpoints();
 app.MapLookupEndpoints();

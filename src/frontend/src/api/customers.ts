@@ -122,12 +122,14 @@ export type CustomerAdvance = {
 
 export type CustomerReceipt = {
   id: string
+  version: number
   receiptNo?: string | null
   receiptDate: string
   appliedPeriodStart?: string | null
   amount: number
   unallocatedAmount: number
   status: string
+  autoAllocateEnabled: boolean
   sellerTaxCode: string
   sellerShortName?: string | null
 }
@@ -137,6 +139,23 @@ export type CustomerReceiptRef = {
   receiptNo?: string | null
   receiptDate: string
   amount: number
+}
+
+export type CustomerHeldCredit = {
+  id: string
+  version: number
+  status: string
+  receiptId: string
+  receiptNo?: string | null
+  receiptDate: string
+  originalInvoiceId: string
+  originalInvoiceNo?: string | null
+  originalInvoiceDate?: string | null
+  originalAmount: number
+  amountRemaining: number
+  appliedAmount: number
+  createdAt: string
+  updatedAt: string
 }
 
 export const fetchCustomers = async (params: {
@@ -237,6 +256,35 @@ export const fetchCustomerReceipts = async (params: {
   search?: string
   from?: string
   to?: string
+  unallocatedOnly?: boolean
+  page: number
+  pageSize: number
+}) => {
+  const query = new URLSearchParams({
+    page: String(params.page),
+    pageSize: String(params.pageSize),
+  })
+  if (params.status) query.append('status', params.status)
+  if (params.search) query.append('search', params.search)
+  if (params.from) query.append('from', params.from)
+  if (params.to) query.append('to', params.to)
+  if (typeof params.unallocatedOnly === 'boolean') {
+    query.append('unallocatedOnly', String(params.unallocatedOnly))
+  }
+
+  return apiFetch<PagedResult<CustomerReceipt>>(
+    `/customers/${params.taxCode}/receipts?${query.toString()}`,
+    { token: params.token },
+  )
+}
+
+export const fetchCustomerHeldCredits = async (params: {
+  token: string
+  taxCode: string
+  status?: string
+  search?: string
+  from?: string
+  to?: string
   page: number
   pageSize: number
 }) => {
@@ -249,8 +297,8 @@ export const fetchCustomerReceipts = async (params: {
   if (params.from) query.append('from', params.from)
   if (params.to) query.append('to', params.to)
 
-  return apiFetch<PagedResult<CustomerReceipt>>(
-    `/customers/${params.taxCode}/receipts?${query.toString()}`,
+  return apiFetch<PagedResult<CustomerHeldCredit>>(
+    `/customers/${params.taxCode}/held-credits?${query.toString()}`,
     { token: params.token },
   )
 }

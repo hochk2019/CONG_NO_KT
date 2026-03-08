@@ -46,9 +46,23 @@ describe('receipts modules', () => {
     expect(screen.getByText('Thông tin khách hàng')).toBeInTheDocument()
   })
 
+  it('formats receipt amount input while typing', async () => {
+    const user = userEvent.setup()
+
+    render(<ReceiptFormSection token="" onReload={vi.fn()} />)
+
+    const input = screen.getByLabelText('Số tiền')
+    await user.clear(input)
+    await user.type(input, '1000000')
+
+    expect(input).toHaveValue('1.000.000')
+  })
+
   it('renders receipt list section', () => {
     render(<ReceiptListSection token="" reloadSignal={0} />)
     expect(screen.getByText('Danh sách phiếu thu')).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Tất cả phiếu thu' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Tiền thừa chưa phân bổ' })).toBeInTheDocument()
   })
 
   it('renders allocation modal', () => {
@@ -118,19 +132,20 @@ describe('receipts modules', () => {
     render(
       <ReceiptViewAllocationsModal
         isOpen
-        receipt={{
-          id: 'receipt-1',
-          status: 'APPROVED',
-          version: 0,
-          receiptNo: 'PT-001',
-          receiptDate: '2025-01-05',
-          amount: 1000000,
-          unallocatedAmount: 200000,
-          allocationMode: 'MANUAL',
-          allocationStatus: 'PARTIAL',
-          allocationPriority: 'ISSUE_DATE',
-          method: 'BANK',
-          sellerTaxCode: '2301098313',
+          receipt={{
+            id: 'receipt-1',
+            status: 'APPROVED',
+            version: 0,
+            receiptNo: 'PT-001',
+            receiptDate: '2025-01-05',
+            amount: 1000000,
+            unallocatedAmount: 200000,
+            autoAllocateEnabled: true,
+            allocationMode: 'MANUAL',
+            allocationStatus: 'PARTIAL',
+            allocationPriority: 'ISSUE_DATE',
+            method: 'BANK',
+            sellerTaxCode: '2301098313',
           customerTaxCode: '2300328765',
           canManage: true,
         }}

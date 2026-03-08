@@ -17,6 +17,7 @@ import {
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
+import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import {
@@ -748,14 +749,11 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
               </label>
               <label className={fieldErrors.amount ? 'field field--error advances-field-primary' : 'field advances-field-primary'}>
                 <span>Số tiền</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={amount}
-                  onChange={(event) => {
-                    setAmount(event.target.value)
-                    const amountValue = Number(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setAmount(nextValue)
+                    const amountValue = Number(nextValue)
                     if (Number.isFinite(amountValue) && amountValue > 0) {
                       setFieldError('amount')
                     }
@@ -965,26 +963,20 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
               </label>
               <label className="field">
                 <span>Số tiền từ</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={listAmountMin}
-                  onChange={(event) => {
-                    setListAmountMin(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setListAmountMin(nextValue)
                     setListPage(1)
                   }}
                 />
               </label>
               <label className="field">
                 <span>Số tiền đến</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={listAmountMax}
-                  onChange={(event) => {
-                    setListAmountMax(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setListAmountMax(nextValue)
                     setListPage(1)
                   }}
                 />

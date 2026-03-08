@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { utils, write } from 'xlsx'
 import { ApiError } from '../../api/client'
+import MoneyInput from '../../components/MoneyInput'
 import {
   commitImport,
   uploadImport,
@@ -338,14 +339,11 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
 
           <label className={fieldErrors.revenueExclVat ? 'field field--error' : 'field'}>
             <span>Doanh số chưa thuế</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="decimal"
+            <MoneyInput
               value={revenueExclVat}
-              onChange={(event) => {
-                setRevenueExclVat(event.target.value)
-                const parsed = Number(event.target.value)
+              onValueChange={(nextValue) => {
+                setRevenueExclVat(nextValue)
+                const parsed = Number(nextValue)
                 if (Number.isFinite(parsed) && parsed >= 0) setFieldError('revenueExclVat')
               }}
               onBlur={() => {
@@ -363,14 +361,11 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
 
           <label className={fieldErrors.vatAmount ? 'field field--error' : 'field'}>
             <span>Tiền VAT</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="decimal"
+            <MoneyInput
               value={vatAmount}
-              onChange={(event) => {
-                setVatAmount(event.target.value)
-                const parsed = Number(event.target.value)
+              onValueChange={(nextValue) => {
+                setVatAmount(nextValue)
+                const parsed = Number(nextValue)
                 if (Number.isFinite(parsed) && parsed >= 0) setFieldError('vatAmount')
               }}
               onBlur={() => {

@@ -32,7 +32,11 @@
 - [x] `cng-j87` Redesign trang Advances theo workflow nhập liệu gọn, rõ và thuận tiện.
 - [ ] Chuẩn hóa hero/action bar của `/advances` để bỏ cảm giác lặp heading và gom CTA đúng ngữ cảnh.
 - [ ] Tái cấu trúc phần tạo khoản trả hộ và worklist thành các block/card rõ ràng, chuẩn bị tách nhỏ module khỏi `ManualAdvancesSection`.
-- [ ] Cập nhật test/lint xác nhận không hồi quy hành vi điều hướng và CTA chính.
+- [x] Cập nhật test/lint xác nhận không hồi quy hành vi điều hướng và CTA chính.
+
+### Verification evidence (2026-03-08, phase 92 / cng-j87)
+- [x] `npm --prefix src/frontend run test:e2e -- e2e/css-regression-matrix.spec.ts e2e/customers-actions.spec.ts e2e/imports.spec.ts` => pass (`6` passed, `1` skipped).
+- [x] `npm --prefix src/frontend run lint` => pass (`0` error, `1` warning unrelated tại `src/pages/receipts/ReceiptListSection.tsx`).
 
 ## Phase 0 - Spec alignment (done)
 - [x] Quy ước ADJUST lưu số âm + constraint DB.

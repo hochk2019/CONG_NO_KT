@@ -114,12 +114,24 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("invoices");
             entity.HasKey(x => x.Id);
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("invoices_customer_tax_code_fkey");
         });
 
         modelBuilder.Entity<Advance>(entity =>
         {
             entity.ToTable("advances");
             entity.HasKey(x => x.Id);
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("advances_customer_tax_code_fkey");
         });
 
         modelBuilder.Entity<Receipt>(entity =>
@@ -128,6 +140,12 @@ public sealed class ConGNoDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AllocationTargets).HasColumnType("jsonb");
             entity.Property(x => x.AutoAllocateEnabled).HasDefaultValue(true);
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("receipts_customer_tax_code_fkey");
         });
 
         modelBuilder.Entity<ReceiptAllocation>(entity =>

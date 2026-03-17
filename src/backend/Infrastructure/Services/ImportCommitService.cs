@@ -281,7 +281,17 @@ public sealed class ImportCommitService : IImportCommitService
             progressSteps);
         batch.SummaryData = JsonSerializer.Serialize(summary);
 
-        await _db.SaveChangesAsync(ct);
+        try
+        {
+            await _db.SaveChangesAsync(ct);
+        }
+        catch (DbUpdateException ex)
+        {
+            throw new InvalidOperationException(
+                ImportCommitFailureMessages.Build(ex, batch.Type),
+                ex);
+        }
+
         await tx.CommitAsync(ct);
 
         if (overrideApplied)

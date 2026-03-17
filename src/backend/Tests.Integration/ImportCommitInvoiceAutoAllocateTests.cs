@@ -82,6 +82,36 @@ public class ImportCommitInvoiceAutoAllocateTests
         Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
     }
 
+    [Fact]
+    public async Task CommitInvoice_CreatesMissingCustomer_BeforeInsertInvoice()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db);
+        var batch = await SeedInvoiceBatchAsync(
+            db,
+            customerTaxCode: "CUSTNEW",
+            customerName: "Customer New");
+
+        var user = new TestCurrentUser(new[] { "Accountant" });
+        var audit = new AuditService(db, user);
+        var service = new ImportCommitService(db, user, audit);
+
+        var result = await service.CommitAsync(batch.Id, new ImportCommitRequest(null), CancellationToken.None);
+
+        Assert.Equal(1, result.InsertedInvoices);
+
+        var customer = await db.Customers.AsNoTracking().SingleAsync(c => c.TaxCode == "CUSTNEW");
+        var invoice = await db.Invoices.AsNoTracking().SingleAsync(i => i.SourceBatchId == batch.Id);
+
+        Assert.Equal("Customer New", customer.Name);
+        Assert.Equal(500_000m, customer.CurrentBalance);
+        Assert.Equal("CUSTNEW", invoice.CustomerTaxCode);
+        Assert.Equal("OPEN", invoice.Status);
+        Assert.Equal(500_000m, invoice.OutstandingAmount);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -151,7 +181,10 @@ public class ImportCommitInvoiceAutoAllocateTests
         return receipt;
     }
 
-    private static async Task<ImportBatch> SeedInvoiceBatchAsync(ConGNoDbContext db)
+    private static async Task<ImportBatch> SeedInvoiceBatchAsync(
+        ConGNoDbContext db,
+        string customerTaxCode = "CUST01",
+        string customerName = "Customer 01")
     {
         var batch = new ImportBatch
         {
@@ -166,8 +199,8 @@ public class ImportCommitInvoiceAutoAllocateTests
         var raw = new Dictionary<string, object?>
         {
             ["seller_tax_code"] = "SELLER01",
-            ["customer_tax_code"] = "CUST01",
-            ["customer_name"] = "Customer 01",
+            ["customer_tax_code"] = customerTaxCode,
+            ["customer_name"] = customerName,
             ["invoice_template_code"] = "01GTKT",
             ["invoice_series"] = "AA/23E",
             ["invoice_no"] = "INV001",

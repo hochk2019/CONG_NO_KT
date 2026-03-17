@@ -5,6 +5,7 @@ using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
 using CongNoGolden.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
 
 namespace CongNoGolden.Tests.Integration;
@@ -82,6 +83,46 @@ public class ImportCommitAdvanceAutoAllocateTests
         Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
     }
 
+    [Fact]
+    public async Task CommitAdvance_CreatesMissingCustomer_BeforeInsertAdvance()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db);
+        var batch = await SeedAdvanceBatchAsync(
+            db,
+            customerTaxCode: "CUSTNEW",
+            customerName: "Customer New");
+
+        var user = new TestCurrentUser(new[] { "Accountant" });
+        var audit = new AuditService(db, user);
+        var service = new ImportCommitService(db, user, audit);
+
+        var result = await service.CommitAsync(batch.Id, new ImportCommitRequest(null), CancellationToken.None);
+
+        Assert.Equal(1, result.InsertedAdvances);
+
+        var customer = await db.Customers.AsNoTracking().SingleAsync(c => c.TaxCode == "CUSTNEW");
+        var advance = await db.Advances.AsNoTracking().SingleAsync(a => a.SourceBatchId == batch.Id);
+
+        Assert.Equal("Customer New", customer.Name);
+        Assert.Equal(500_000m, customer.CurrentBalance);
+        Assert.Equal("CUSTNEW", advance.CustomerTaxCode);
+        Assert.Equal("APPROVED", advance.Status);
+        Assert.Equal(500_000m, advance.OutstandingAmount);
+    }
+
+    [Fact]
+    public async Task Model_MapsCustomerForeignKeys_ForImportedDocuments()
+    {
+        await using var db = _fixture.CreateContext();
+
+        AssertCustomerForeignKey<Invoice>(db, nameof(Invoice.CustomerTaxCode));
+        AssertCustomerForeignKey<Advance>(db, nameof(Advance.CustomerTaxCode));
+        AssertCustomerForeignKey<Receipt>(db, nameof(Receipt.CustomerTaxCode));
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -151,7 +192,10 @@ public class ImportCommitAdvanceAutoAllocateTests
         return receipt;
     }
 
-    private static async Task<ImportBatch> SeedAdvanceBatchAsync(ConGNoDbContext db)
+    private static async Task<ImportBatch> SeedAdvanceBatchAsync(
+        ConGNoDbContext db,
+        string customerTaxCode = "CUST01",
+        string customerName = "Customer 01")
     {
         var batch = new ImportBatch
         {
@@ -166,8 +210,8 @@ public class ImportCommitAdvanceAutoAllocateTests
         var raw = new Dictionary<string, object?>
         {
             ["seller_tax_code"] = "SELLER01",
-            ["customer_tax_code"] = "CUST01",
-            ["customer_name"] = "Customer 01",
+            ["customer_tax_code"] = customerTaxCode,
+            ["customer_name"] = customerName,
             ["advance_no"] = "TH-NEW",
             ["advance_date"] = "2026-02-01",
             ["amount"] = 500_000m,
@@ -202,5 +246,22 @@ public class ImportCommitAdvanceAutoAllocateTests
         public string? Username => "tester";
         public IReadOnlyList<string> Roles { get; }
         public string? IpAddress => "127.0.0.1";
+    }
+
+    private static void AssertCustomerForeignKey<TEntity>(
+        ConGNoDbContext db,
+        string foreignKeyPropertyName)
+        where TEntity : class
+    {
+        var entityType = db.Model.FindEntityType(typeof(TEntity));
+        Assert.NotNull(entityType);
+
+        var foreignKey = entityType!.GetForeignKeys()
+            .SingleOrDefault(fk =>
+                fk.PrincipalEntityType.ClrType == typeof(Customer) &&
+                fk.Properties.Select(p => p.Name).SequenceEqual(new[] { foreignKeyPropertyName }) &&
+                fk.PrincipalKey.Properties.Select(p => p.Name).SequenceEqual(new[] { nameof(Customer.TaxCode) }));
+
+        Assert.NotNull(foreignKey);
     }
 }

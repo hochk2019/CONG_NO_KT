@@ -1536,3 +1536,18 @@
 ### Verification evidence (2026-03-08, phase 99 / cng-fuk)
 - [x] `npm test -- --run src/utils/__tests__/moneyInput.test.ts src/components/__tests__/money-input.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/customers/__tests__/customers-modules.test.tsx` (cwd `src/frontend`) => pass (`31/31`).
 - [x] `npm run build` (cwd `src/frontend`) => pass.
+
+## Phase 100 - Fix ADVANCE import commit failure for missing customers (2026-03-17) [bead: cng-z39]
+- [x] Reproduce lỗi import batch `ADVANCE` từ file `up tra ho.xlsx` trên môi trường Docker đang chạy và xác định lỗi thực tế từ log backend.
+- [x] Xác nhận root cause: EF model chưa map quan hệ `Invoice`/`Advance`/`Receipt` -> `Customer`, làm `SaveChanges` insert chứng từ trước khi insert customer được auto-create từ import.
+- [x] Bổ sung mapping foreign key theo `CustomerTaxCode -> Customer.TaxCode` cho `Invoice`, `Advance`, `Receipt` trong `ConGNoDbContext`.
+- [x] Thêm regression test cho flow commit `ADVANCE` với customer chưa tồn tại và test metadata xác nhận model đã map đủ foreign key.
+- [x] Kiểm tra thêm luồng import file template cho `INVOICE` và `RECEIPT`: parser đã chặn trường hợp thiếu MST khách hàng ngay ở bước staging, không lặp lại lỗi generic này từ template validation.
+- [x] Bổ sung regression test commit cho `INVOICE` và `RECEIPT` với customer chưa tồn tại, đồng thời bọc `DbUpdateException` để trả thông điệp hướng dẫn rõ cho kế toán khi hệ thống không tạo/liên kết được khách hàng theo MST trên file.
+- [ ] Rebuild/redeploy stack Docker đang vận hành và verify lại import `/imports?tab=batch&type=ADVANCE` trên môi trường LAN.
+
+### Verification evidence (2026-03-17, phase 100 / cng-z39)
+- [x] Docker production log `api20260317.log` ghi nhận `Npgsql.PostgresException 23503`: vi phạm `advances_customer_tax_code_fkey` khi commit batch `ADVANCE`.
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests"` => pass (`4/4`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests|FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests|FullyQualifiedName~ImportCommitReceiptTests"` => pass (`8/8`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportCommitFailureMessagesTests"` => pass (`4/4`).

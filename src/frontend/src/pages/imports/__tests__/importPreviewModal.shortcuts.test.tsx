@@ -53,6 +53,32 @@ const renderModal = (overrides?: Partial<ComponentProps<typeof ImportPreviewModa
 }
 
 describe('ImportPreviewModal keyboard shortcuts', () => {
+  it('shows blocking guidance when preview contains validation errors', () => {
+    renderModal()
+
+    expect(screen.getByText('Còn 10 dòng lỗi.')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Lô này chưa thể ghi dữ liệu. Kế toán cần sửa file nguồn rồi tải lại để xử lý tiếp.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows review guidance when preview only contains warnings', () => {
+    renderModal({
+      preview: {
+        ...basePreview,
+        warnCount: 3,
+        errorCount: 0,
+      },
+    })
+
+    expect(screen.getByText('Còn 3 dòng cảnh báo.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Lô có thể ghi dữ liệu, nhưng nên rà soát các dòng cảnh báo trước khi chốt.'),
+    ).toBeInTheDocument()
+  })
+
   it('closes on Escape', () => {
     const { onClose } = renderModal()
 

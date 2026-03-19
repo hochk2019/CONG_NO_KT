@@ -35,7 +35,17 @@ export default function CustomersPage() {
   const { state } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const token = state.accessToken ?? ''
-  const canManageCustomers = state.roles.includes('Admin') || state.roles.includes('Supervisor')
+  const canManageCustomers =
+    state.roles.includes('Admin') ||
+    state.roles.includes('Supervisor') ||
+    state.permissions.some((permission) =>
+      [
+        'customer.edit.all',
+        'customer.edit.owned',
+        'customer.edit.unassigned',
+        'customer.assignment.manage',
+      ].includes(permission),
+    )
 
   const queryTaxCode = useMemo(() => parseTaxCode(searchParams.get('taxCode')), [searchParams])
   const queryTab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams])

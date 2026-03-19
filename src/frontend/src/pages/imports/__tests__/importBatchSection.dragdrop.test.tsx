@@ -171,4 +171,29 @@ describe('ImportBatchSection drag and drop', () => {
       )
     })
   })
+
+  it('shows recovery guidance and blocks commit when staged batch still has errors', async () => {
+    const user = userEvent.setup()
+    const file = new File(['demo'], 'invoice-error.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    uploadImportMock.mockResolvedValue({
+      batch: { batchId: 'batch-error-01', status: 'STAGING' },
+      staging: { totalRows: 4, okCount: 2, warnCount: 1, errorCount: 1 },
+    })
+
+    render(<ImportBatchSection token="token-1" canStage canCommit />)
+
+    fireEvent.drop(screen.getByTestId('import-dropzone'), createDropPayload(file))
+    await user.click(screen.getByRole('button', { name: 'Tải file' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Lô này còn 1 dòng lỗi nên chưa thể ghi dữ liệu.')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: 'Xem lỗi' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toBeDisabled()
+    expect(commitImportMock).not.toHaveBeenCalled()
+  })
 })

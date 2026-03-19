@@ -5,6 +5,7 @@ export type AuthState = {
   expiresAt: string | null
   username: string | null
   roles: string[]
+  permissions: string[]
 }
 
 export type AuthContextValue = {

@@ -64,6 +64,8 @@ describe('customer-held-credits-panel', () => {
           sellerTaxCode: '2301098313',
           sellerShortName: 'Hoàng Minh',
           receiptRefs: [],
+          reductionInvoiceRefs: [],
+          reducedInvoiceRefs: [],
         },
       ],
       page: 1,

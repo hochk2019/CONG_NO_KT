@@ -11,6 +11,7 @@ const emptyState: AuthState = {
   expiresAt: null,
   username: null,
   roles: [],
+  permissions: [],
 }
 
 const AUTH_SESSION_STORAGE_KEY = 'cng.auth.session.v1'
@@ -44,6 +45,9 @@ const readPersistedState = (): AuthState => {
     const roles = Array.isArray(parsed.roles)
       ? parsed.roles.filter((role): role is string => typeof role === 'string')
       : []
+    const permissions = Array.isArray(parsed.permissions)
+      ? parsed.permissions.filter((permission): permission is string => typeof permission === 'string')
+      : []
 
     if (!accessToken || isExpired(expiresAt)) {
       return emptyState
@@ -54,6 +58,7 @@ const readPersistedState = (): AuthState => {
       expiresAt,
       username,
       roles,
+      permissions,
     }
   } catch {
     return emptyState
@@ -106,11 +111,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const applySession = (accessToken: string, expiresAt: string, fallbackUsername?: string) => {
     const payload = decodeJwt(accessToken)
     const roles = payload.roles
+    const permissions = payload.permissions
     const nextState: AuthState = {
       accessToken,
       expiresAt,
       username: payload.username ?? fallbackUsername ?? null,
       roles,
+      permissions,
     }
     setState(nextState)
   }

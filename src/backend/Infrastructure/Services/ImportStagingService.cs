@@ -172,7 +172,7 @@ public sealed class ImportStagingService : IImportStagingService
         var raw = doc.RootElement;
 
         var seller = NormalizeKeyPart(ImportCommitJson.GetString(raw, "seller_tax_code"));
-        var customer = NormalizeKeyPart(ImportCommitJson.GetString(raw, "customer_tax_code"));
+        var customer = NormalizeKeyPart(ImportCommitJson.ResolveInvoiceCustomerTaxCode(raw));
         var invoiceNo = NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_no"));
         var series = NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_series"));
         var issueDate = ImportCommitJson.GetDate(raw, "issue_date");

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computePrefetchBudget,
+  computePrefetchPlan,
   createPrefetcher,
   readRouteHistory,
   recordRouteVisit,
@@ -56,6 +57,30 @@ describe('page loaders', () => {
     expect(targets).toEqual(['/dashboard', '/customers'])
   })
 
+  it('selects accountant affinity for permission-only users', () => {
+    const targets = selectPrefetchTargets({
+      roles: [],
+      permissions: ['import.upload', 'customer.edit.owned', 'receipt.approve'],
+      allowedPaths: ['/dashboard', '/imports', '/customers', '/receipts', '/reports'],
+      currentPath: '/customers',
+      max: 2,
+    } as Parameters<typeof selectPrefetchTargets>[0] & { permissions: string[] })
+
+    expect(targets).toEqual(['/receipts', '/dashboard'])
+  })
+
+  it('falls back to permission-driven priority when no role affinity exists', () => {
+    const targets = selectPrefetchTargets({
+      roles: [],
+      permissions: ['import.upload', 'customer.edit.owned', 'receipt.approve'],
+      allowedPaths: ['/reports', '/dashboard', '/imports', '/customers', '/receipts'],
+      currentPath: '/unknown',
+      max: 2,
+    } as Parameters<typeof selectPrefetchTargets>[0] & { permissions: string[] })
+
+    expect(targets).toEqual(['/dashboard', '/imports'])
+  })
+
   it('uses history to prioritize recent routes', () => {
     const allowedPaths = ['/dashboard', '/imports', '/customers', '/receipts', '/reports', '/risk']
     recordRouteVisit('/dashboard', allowedPaths)
@@ -100,5 +125,18 @@ describe('page loaders', () => {
   it('computes prefetch budget per role', () => {
     expect(computePrefetchBudget(['Admin'])).toBe(3)
     expect(computePrefetchBudget(['Viewer'])).toBe(1)
+  })
+
+  it('computes prefetch plan from permissions when no role is present', () => {
+    const adminPlan = (
+      computePrefetchPlan as (roles: string[], permissions: string[]) => { primary: number; deep: number }
+    )([], ['admin.manage'])
+    const viewerBudget = (computePrefetchBudget as (roles: string[], permissions: string[]) => number)(
+      [],
+      ['customer.view'],
+    )
+
+    expect(adminPlan).toEqual({ primary: 3, deep: 2 })
+    expect(viewerBudget).toBe(1)
   })
 })

@@ -54,6 +54,8 @@ public static class ImportInvoiceParser
             var revenue = ImportStagingHelpers.ParseDecimal(row.Cell(revenueCol));
             var vat = ImportStagingHelpers.ParseDecimal(row.Cell(vatCol));
             var note = noteCol > 0 ? row.Cell(noteCol).GetString().Trim() : null;
+            var isReductionAdjustment = ImportStagingHelpers.IsReductionAdjustmentNote(note);
+            var informationalSkipCode = ImportStagingHelpers.GetInformationalSkipCode(note, revenue, vat);
 
             var messages = new List<string>();
             ImportStagingHelpers.ValidateRequired(buyerTax, "BUYER_TAX_REQUIRED", messages);
@@ -67,9 +69,13 @@ public static class ImportInvoiceParser
             {
                 messages.Add("SELLER_TAX_REQUIRED");
             }
-            if (revenue < 0 || vat < 0)
+            if (!isReductionAdjustment && (revenue < 0 || vat < 0))
             {
                 messages.Add("NEGATIVE_AMOUNT");
+            }
+            if (!string.IsNullOrWhiteSpace(informationalSkipCode))
+            {
+                messages.Add(informationalSkipCode);
             }
 
             var total = revenue + vat;
@@ -81,7 +87,9 @@ public static class ImportInvoiceParser
             }
 
             var status = ImportStagingHelpers.GetStatus(messages);
-            var action = status == ImportStagingHelpers.StatusError || isDup ? "SKIP" : "INSERT";
+            var action = !string.IsNullOrWhiteSpace(informationalSkipCode) || status == ImportStagingHelpers.StatusError || isDup
+                ? "SKIP"
+                : "INSERT";
 
             var raw = new Dictionary<string, object?>
             {
@@ -97,6 +105,11 @@ public static class ImportInvoiceParser
                 ["total_amount"] = total,
                 ["note"] = note
             };
+            if (isReductionAdjustment)
+            {
+                raw["customer_tax_code_matching"] = ImportStagingHelpers.GetRootCustomerTaxCode(buyerTax);
+                raw["invoice_type"] = "ADJUSTMENT_REDUCTION";
+            }
 
             results.Add(new ImportStagingRow
             {

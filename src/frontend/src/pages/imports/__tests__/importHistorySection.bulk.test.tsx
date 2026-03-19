@@ -103,4 +103,25 @@ describe('ImportHistorySection bulk actions', () => {
       })
     })
   })
+
+  it('shows staging batches as review-only until they are committed', async () => {
+    render(
+      <ImportHistorySection
+        token="token"
+        canStage
+        canCommit
+        importTypeLabels={importTypeLabels}
+        historyStatusLabels={historyStatusLabels}
+        refreshKey={0}
+        onResumeBatch={() => undefined}
+      />,
+    )
+
+    await waitFor(() => {
+      expect(mocks.listImportBatches).toHaveBeenCalled()
+    })
+
+    expect(screen.getByText('Chưa ghi dữ liệu')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Kiểm tra lô' })).toBeInTheDocument()
+  })
 })

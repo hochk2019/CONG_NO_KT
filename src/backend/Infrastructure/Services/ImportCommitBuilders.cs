@@ -11,19 +11,24 @@ public static class ImportCommitBuilders
         EnsureSeller(seller, sellerSet);
 
         var issueDate = ImportCommitJson.GetDate(raw, "issue_date") ?? DateOnly.FromDateTime(DateTime.UtcNow);
+        var invoiceType = ImportCommitJson.GetInvoiceType(raw);
         var revenue = ImportCommitJson.GetDecimal(raw, "revenue_excl_vat");
         var vat = ImportCommitJson.GetDecimal(raw, "vat_amount");
         var total = ImportCommitJson.GetDecimal(raw, "total_amount");
-        if (total <= 0)
+        if (total == 0m && (revenue != 0m || vat != 0m))
         {
             total = revenue + vat;
         }
+
+        var isReductionInvoice = string.Equals(invoiceType, "ADJUSTMENT_REDUCTION", StringComparison.OrdinalIgnoreCase);
+        var outstandingAmount = isReductionInvoice ? 0m : total;
+        var status = isReductionInvoice ? "PAID" : "OPEN";
 
         return new Invoice
         {
             Id = Guid.NewGuid(),
             SellerTaxCode = seller,
-            CustomerTaxCode = ImportCommitJson.GetString(raw, "customer_tax_code"),
+            CustomerTaxCode = ImportCommitJson.ResolveInvoiceCustomerTaxCode(raw),
             InvoiceTemplateCode = ImportCommitJson.GetString(raw, "invoice_template_code"),
             InvoiceSeries = ImportCommitJson.GetString(raw, "invoice_series"),
             InvoiceNo = ImportCommitJson.GetString(raw, "invoice_no"),
@@ -31,10 +36,10 @@ public static class ImportCommitBuilders
             RevenueExclVat = revenue,
             VatAmount = vat,
             TotalAmount = total,
-            OutstandingAmount = total,
+            OutstandingAmount = outstandingAmount,
             Note = ImportCommitJson.GetString(raw, "note"),
-            InvoiceType = "NORMAL",
-            Status = "OPEN",
+            InvoiceType = invoiceType,
+            Status = status,
             SourceBatchId = batchId,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

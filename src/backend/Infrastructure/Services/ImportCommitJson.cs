@@ -63,4 +63,29 @@ public static class ImportCommitJson
         }
         return null;
     }
+
+    public static string GetInvoiceType(JsonElement raw)
+    {
+        var invoiceType = GetString(raw, "invoice_type").Trim();
+        return string.IsNullOrWhiteSpace(invoiceType) ? "NORMAL" : invoiceType;
+    }
+
+    public static bool IsReductionInvoice(JsonElement raw)
+    {
+        return string.Equals(GetInvoiceType(raw), "ADJUSTMENT_REDUCTION", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static string ResolveInvoiceCustomerTaxCode(JsonElement raw)
+    {
+        if (IsReductionInvoice(raw))
+        {
+            var matchingTaxCode = GetString(raw, "customer_tax_code_matching").Trim();
+            if (!string.IsNullOrWhiteSpace(matchingTaxCode))
+            {
+                return matchingTaxCode;
+            }
+        }
+
+        return GetString(raw, "customer_tax_code").Trim();
+    }
 }

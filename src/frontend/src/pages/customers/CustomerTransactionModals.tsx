@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { CustomerAdvance, CustomerInvoice, CustomerReceiptRef } from '../../api/customers'
+import type {
+  CustomerAdvance,
+  CustomerInvoice,
+  CustomerInvoiceRef,
+  CustomerReceiptRef,
+} from '../../api/customers'
 import { ApiError } from '../../api/client'
 import { fetchReceiptAllocations, type ReceiptAllocationDetail } from '../../api/receipts'
 import { formatDate, formatMoney } from '../../utils/format'
@@ -230,6 +235,34 @@ export default function CustomerTransactionModals({
     ],
   )
 
+  const renderInvoiceRefsInline = useCallback(
+    (refs: CustomerInvoiceRef[]) => {
+      if (!refs || refs.length === 0) {
+        return <div className="muted">Chưa có hóa đơn liên quan.</div>
+      }
+
+      return (
+        <div className="stack-section">
+          {refs.map((ref) => {
+            const displayNo = ref.invoiceNo?.trim() ? ref.invoiceNo : shortId(ref.id)
+
+            return (
+              <div className="list-row" key={ref.id}>
+                <div className="stacked-text">
+                  <span className="list-title">
+                    {displayNo} · {formatMoney(ref.amount)}
+                  </span>
+                  <span className="text-caption">Ngày phát hành: {formatDate(ref.issueDate)}</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )
+    },
+    [shortId],
+  )
+
   const invoiceCreatesHeldCredit = Boolean(
     invoiceModal &&
       invoiceModal.mode === 'void' &&
@@ -301,6 +334,18 @@ export default function CustomerTransactionModals({
                     <h4>Phiếu thu liên quan</h4>
                     {renderReceiptRefsInline(invoiceModal.row.receiptRefs)}
                   </div>
+                  {(invoiceModal.row.reductionInvoiceRefs?.length ?? 0) > 0 && (
+                    <div className="section">
+                      <h4>Hóa đơn điều chỉnh giảm liên quan</h4>
+                      {renderInvoiceRefsInline(invoiceModal.row.reductionInvoiceRefs ?? [])}
+                    </div>
+                  )}
+                  {(invoiceModal.row.reducedInvoiceRefs?.length ?? 0) > 0 && (
+                    <div className="section">
+                      <h4>Đã bù trừ vào hóa đơn</h4>
+                      {renderInvoiceRefsInline(invoiceModal.row.reducedInvoiceRefs ?? [])}
+                    </div>
+                  )}
                 </>
               ) : (
                 <>

@@ -28,12 +28,16 @@ vi.mock('../../api/auth', () => ({
   changePassword: (...args: unknown[]) => mocks.changePasswordMock(...args),
 }))
 
-const buildAuthContext = (roles: string[] = ['Admin']): AuthContextValue => ({
+const buildAuthContext = (
+  roles: string[] = ['Admin'],
+  permissions: string[] = [],
+): AuthContextValue => ({
   state: {
     accessToken: 'token',
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'tester',
     roles,
+    permissions,
   },
   isAuthenticated: true,
   isBootstrapping: false,
@@ -101,7 +105,7 @@ describe('AppShell', () => {
     expect(screen.queryByText('Debt Management Console')).not.toBeInTheDocument()
     expect(screen.getAllByText('Admin (Quản trị)').length).toBeGreaterThan(0)
     expect(screen.getByRole('heading', { name: /Trang|Tổng quan/i })).toBeInTheDocument()
-    expect(screen.getByText('Điều hướng theo vai trò')).toBeInTheDocument()
+    expect(screen.getByText('Điều hướng theo quyền truy cập')).toBeInTheDocument()
     expect(screen.getByText('Theo dõi vận hành, phân quyền và rủi ro hệ thống.')).toBeInTheDocument()
     expect(screen.getByText('Risk & Collections')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Cảnh báo rủi ro' })).toBeInTheDocument()
@@ -121,6 +125,17 @@ describe('AppShell', () => {
     expect(advancesLink.compareDocumentPosition(receiptsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(receiptsLink.compareDocumentPosition(customersLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(customersLink.compareDocumentPosition(reportsLink) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('shows permission-based navigation even when user has no role', () => {
+    const authValue = buildAuthContext([], ['import.upload', 'customer.view'])
+
+    renderInShellRoutes(authValue, ['/customers'])
+
+    expect(screen.getByRole('link', { name: 'Nhập liệu HĐ' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Khách hàng' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Người dùng' })).not.toBeInTheDocument()
+    expect(screen.getByText('Điều hướng theo quyền truy cập')).toBeInTheDocument()
   })
 
   it('toggles mobile navigation state', async () => {

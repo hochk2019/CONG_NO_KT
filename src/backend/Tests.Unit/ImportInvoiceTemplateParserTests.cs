@@ -54,6 +54,39 @@ public class ImportInvoiceTemplateParserTests
         Assert.Equal("2025-02-15", ReadRawString(rows[0].RawData, "issue_date"));
     }
 
+    [Fact]
+    public void Negative_Reduction_Adjustment_Row_Is_Accepted_In_Template_Import()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Invoice");
+        WriteFullHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "0102030405";
+        sheet.Cell(2, 2).Value = "0310226744-003";
+        sheet.Cell(2, 3).Value = "Buyer Reduction";
+        sheet.Cell(2, 4).Value = "01GTKT";
+        sheet.Cell(2, 5).Value = "AA/25E";
+        sheet.Cell(2, 6).Value = "ADJ001";
+        sheet.Cell(2, 7).Value = "15/02/2025";
+        sheet.Cell(2, 8).Value = -200m;
+        sheet.Cell(2, 9).Value = -20m;
+        sheet.Cell(2, 10).Value = -220m;
+        sheet.Cell(2, 11).Value = "Hóa đơn điều chỉnh giảm";
+
+        var rows = ImportInvoiceTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid());
+
+        Assert.Single(rows);
+        Assert.Equal("INSERT", rows[0].ActionSuggestion);
+        Assert.NotEqual(ImportStagingHelpers.StatusError, rows[0].ValidationStatus);
+
+        var messages = ReadMessages(rows[0].ValidationMessages);
+        Assert.DoesNotContain("NEGATIVE_AMOUNT", messages);
+
+        Assert.Equal("0310226744-003", ReadRawString(rows[0].RawData, "customer_tax_code"));
+        Assert.Equal("0310226744", ReadRawString(rows[0].RawData, "customer_tax_code_matching"));
+        Assert.Equal("ADJUSTMENT_REDUCTION", ReadRawString(rows[0].RawData, "invoice_type"));
+    }
+
     private static void WriteHeaderMissingIssueDate(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";

@@ -22,26 +22,105 @@ type NavItem = {
   label: string
   to: string
   roles: string[]
+  permissions?: string[]
   kicker?: string
 }
 
 const isRiskCollectionItem = (item: NavItem) => item.to === '/risk' || item.to === '/collections'
 
+const importPermissions = [
+  'import.upload',
+  'import.history',
+  'import.commit.invoice',
+  'import.commit.advance',
+  'import.commit.receipt',
+  'import.rollback',
+]
+
+const customerPermissions = [
+  'customer.view',
+  'customer.edit.all',
+  'customer.edit.owned',
+  'customer.edit.unassigned',
+  'customer.assignment.manage',
+]
+
+const customerManagePermissions = customerPermissions.filter((permission) => permission !== 'customer.view')
+const advancePermissions = ['advance.manage']
+const receiptPermissions = ['receipt.approve']
+const adminPermissions = ['admin.manage']
+
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
-  { label: 'Nhập liệu HĐ', to: '/imports', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Nhập liệu Trả hộ', to: '/advances', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Thu tiền', to: '/receipts', roles: ['Admin', 'Supervisor', 'Accountant'] },
+  {
+    label: 'Nhập liệu HĐ',
+    to: '/imports',
+    roles: ['Admin', 'Supervisor', 'Accountant'],
+    permissions: importPermissions,
+  },
+  {
+    label: 'Nhập liệu Trả hộ',
+    to: '/advances',
+    roles: ['Admin', 'Supervisor', 'Accountant'],
+    permissions: advancePermissions,
+  },
+  {
+    label: 'Thu tiền',
+    to: '/receipts',
+    roles: ['Admin', 'Supervisor', 'Accountant'],
+    permissions: receiptPermissions,
+  },
   { label: 'Cảnh báo rủi ro', to: '/risk', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   { label: 'Thu hồi nợ', to: '/collections', roles: ['Admin', 'Supervisor', 'Accountant'] },
-  { label: 'Khách hàng', to: '/customers', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
+  {
+    label: 'Khách hàng',
+    to: '/customers',
+    roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'],
+    permissions: customerPermissions,
+  },
   { label: 'Báo cáo chi tiết', to: '/reports', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
-  { label: 'Người dùng', to: '/admin/users', roles: ['Admin'], kicker: 'Admin' },
-  { label: 'Khóa kỳ', to: '/admin/period-locks', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
-  { label: 'Nhật ký', to: '/admin/audit', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
-  { label: 'Tình trạng dữ liệu', to: '/admin/health', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
-  { label: 'Tích hợp ERP', to: '/admin/erp-integration', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
-  { label: 'Sao lưu dữ liệu', to: '/admin/backup', roles: ['Admin', 'Supervisor'], kicker: 'Admin' },
+  {
+    label: 'Người dùng',
+    to: '/admin/users',
+    roles: ['Admin'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
+  {
+    label: 'Khóa kỳ',
+    to: '/admin/period-locks',
+    roles: ['Admin', 'Supervisor'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
+  {
+    label: 'Nhật ký',
+    to: '/admin/audit',
+    roles: ['Admin', 'Supervisor'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
+  {
+    label: 'Tình trạng dữ liệu',
+    to: '/admin/health',
+    roles: ['Admin', 'Supervisor'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
+  {
+    label: 'Tích hợp ERP',
+    to: '/admin/erp-integration',
+    roles: ['Admin', 'Supervisor'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
+  {
+    label: 'Sao lưu dữ liệu',
+    to: '/admin/backup',
+    roles: ['Admin', 'Supervisor'],
+    permissions: adminPermissions,
+    kicker: 'Admin',
+  },
 ]
 
 const rolePriority = ['Admin', 'Supervisor', 'Accountant', 'Viewer']
@@ -53,8 +132,21 @@ const roleGuidance: Record<string, string> = {
   Viewer: 'Theo dõi KPI công nợ, cảnh báo quá hạn và biến động theo kỳ.',
 }
 
-const isAllowed = (item: { roles: string[] }, roles: string[]) => {
-  return item.roles.some((role) => roles.includes(role))
+const hasAnyRole = (requiredRoles: string[], roles: string[]) => {
+  return requiredRoles.some((role) => roles.includes(role))
+}
+
+const hasAnyPermission = (requiredPermissions: string[] | undefined, permissions: string[]) => {
+  if (!requiredPermissions || requiredPermissions.length === 0) return false
+  return requiredPermissions.some((permission) => permissions.includes(permission))
+}
+
+const isAllowed = (
+  item: { roles: string[]; permissions?: string[] },
+  roles: string[],
+  permissions: string[],
+) => {
+  return hasAnyRole(item.roles, roles) || hasAnyPermission(item.permissions, permissions)
 }
 
 const extraPageTitles: Record<string, string> = {
@@ -130,7 +222,10 @@ export default function AppShell() {
   const location = useLocation()
   const navigate = useNavigate()
   const token = state.accessToken ?? ''
-  const allowed = useMemo(() => navItems.filter((item) => isAllowed(item, state.roles)), [state.roles])
+  const allowed = useMemo(
+    () => navItems.filter((item) => isAllowed(item, state.roles, state.permissions)),
+    [state.permissions, state.roles],
+  )
   const defaultNavItems = useMemo(() => allowed.filter((item) => !isRiskCollectionItem(item)), [allowed])
   const riskCollectionItems = useMemo(() => allowed.filter(isRiskCollectionItem), [allowed])
   const allowedPaths = useMemo(
@@ -142,8 +237,22 @@ export default function AppShell() {
     () => rolePriority.find((role) => state.roles.includes(role)),
     [state.roles],
   )
+  const permissionRoleGuidance = useMemo(() => {
+    if (hasAnyPermission(adminPermissions, state.permissions)) return roleGuidance.Admin
+    if (
+      hasAnyPermission(importPermissions, state.permissions) ||
+      hasAnyPermission(customerManagePermissions, state.permissions) ||
+      hasAnyPermission(advancePermissions, state.permissions) ||
+      hasAnyPermission(receiptPermissions, state.permissions)
+    ) {
+      return roleGuidance.Accountant
+    }
+    if (hasAnyPermission(['customer.view'], state.permissions)) return roleGuidance.Viewer
+    return null
+  }, [state.permissions])
   const currentRoleGuidance =
     (primaryRole && roleGuidance[primaryRole]) ??
+    permissionRoleGuidance ??
     'Theo dõi tiến độ công việc theo quy trình và ưu tiên các mục quá hạn.'
   const [navOpenPath, setNavOpenPath] = useState<string | null>(null)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
@@ -239,7 +348,7 @@ export default function AppShell() {
 
     const currentPath = location.pathname
     const history = readRouteHistory()
-    const plan = computePrefetchPlan(state.roles)
+    const plan = computePrefetchPlan(state.roles, state.permissions)
     let primaryMax = plan.primary
     let deepMax = plan.deep
     if (connection?.effectiveType === '3g') {
@@ -252,6 +361,7 @@ export default function AppShell() {
 
     const targets = selectPrefetchTargets({
       roles: state.roles,
+      permissions: state.permissions,
       allowedPaths,
       currentPath,
       history,
@@ -262,6 +372,7 @@ export default function AppShell() {
       deepMax > 0
         ? selectPrefetchTargets({
             roles: state.roles,
+            permissions: state.permissions,
             allowedPaths,
             currentPath,
             history,
@@ -295,7 +406,7 @@ export default function AppShell() {
     }
 
     return () => cleanups.forEach((cleanup) => cleanup())
-  }, [allowedPaths, location.pathname, state.roles])
+  }, [allowedPaths, location.pathname, state.permissions, state.roles])
 
   useEffect(() => {
     recordRouteVisit(location.pathname, allowedPaths)
@@ -489,7 +600,7 @@ export default function AppShell() {
           <header className="app-context__summary app-header-card">
             <div className="app-header-toolbar">
               <div className="app-context__copy app-header-copy app-header-toolbar__copy">
-                <p className="app-context__eyebrow">Điều hướng theo vai trò</p>
+                <p className="app-context__eyebrow">Điều hướng theo quyền truy cập</p>
                 <h1 className="app-context__title">{currentPageTitle}</h1>
                 <p className="app-context__description">{currentRoleGuidance}</p>
               </div>

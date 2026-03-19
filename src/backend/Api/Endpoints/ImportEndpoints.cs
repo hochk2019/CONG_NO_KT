@@ -175,7 +175,7 @@ public static class ImportEndpoints
         })
         .WithName("ImportRollback")
         .WithTags("Imports")
-        .RequireAuthorization("ImportCommit")
+        .RequireAuthorization("ImportRollback")
         .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         app.MapPost("/imports/{batchId:guid}/cancel", async (

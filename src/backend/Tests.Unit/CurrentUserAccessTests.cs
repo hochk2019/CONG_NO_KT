@@ -77,17 +77,48 @@ public sealed class CurrentUserAccessTests
         Assert.True(actual);
     }
 
+    [Fact]
+    public void HasAnyPermission_IsCaseInsensitive()
+    {
+        var user = new TestCurrentUser(
+            Guid.NewGuid(),
+            Array.Empty<string>(),
+            new[] { "customer.edit.owned" });
+
+        var actual = user.HasAnyPermission("CUSTOMER.EDIT.OWNED");
+
+        Assert.True(actual);
+    }
+
+    [Fact]
+    public void HasAnyPermission_ReturnsFalse_WhenPermissionMissing()
+    {
+        var user = new TestCurrentUser(
+            Guid.NewGuid(),
+            Array.Empty<string>(),
+            new[] { "customer.edit.owned" });
+
+        var actual = user.HasAnyPermission("customer.edit.unassigned");
+
+        Assert.False(actual);
+    }
+
     private sealed class TestCurrentUser : ICurrentUser
     {
-        public TestCurrentUser(Guid? userId, IReadOnlyList<string> roles)
+        public TestCurrentUser(
+            Guid? userId,
+            IReadOnlyList<string> roles,
+            IReadOnlyList<string>? permissions = null)
         {
             UserId = userId;
             Roles = roles;
+            Permissions = permissions ?? Array.Empty<string>();
         }
 
         public Guid? UserId { get; }
         public string? Username => "tester";
         public IReadOnlyList<string> Roles { get; }
+        public IReadOnlyList<string> Permissions { get; }
         public string? IpAddress => "127.0.0.1";
     }
 }

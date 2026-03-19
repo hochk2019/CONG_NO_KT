@@ -4,6 +4,7 @@ using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 
@@ -30,6 +31,11 @@ public sealed class ImportCommitService : IImportCommitService
             throw new InvalidOperationException("Batch not found.");
         }
 
+        if (!ImportPermissionEvaluator.CanCommitImport(_currentUser, batch.Type))
+        {
+            throw new UnauthorizedAccessException("You do not have permission to commit this import batch.");
+        }
+
         if (batch.Status == ImportBatchStatusCodes.Committed)
         {
             var committedSummary = ParseSummary(batch.SummaryData);
@@ -41,7 +47,6 @@ public sealed class ImportCommitService : IImportCommitService
         {
             throw new InvalidOperationException("Batch status is not eligible for commit.");
         }
-
         var previousStatus = batch.Status;
 
         if (request.IdempotencyKey is not null)
@@ -221,7 +226,14 @@ public sealed class ImportCommitService : IImportCommitService
 
                 _db.Invoices.Add(invoice);
                 insertedInvoices++;
-                await ApplyReceiptCreditsToInvoiceAsync(invoice, now, ct);
+                if (invoice.InvoiceType == "ADJUSTMENT_REDUCTION")
+                {
+                    await ApplyReductionToInvoicesAsync(invoice, now, ct);
+                }
+                else
+                {
+                    await ApplyReceiptCreditsToInvoiceAsync(invoice, now, ct);
+                }
             }
             else if (batch.Type == "ADVANCE")
             {
@@ -447,6 +459,87 @@ public sealed class ImportCommitService : IImportCommitService
         return allocatedTotal;
     }
 
+    private async Task<decimal> ApplyReductionToInvoicesAsync(
+        Invoice adjustmentInvoice,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        if (adjustmentInvoice.InvoiceType != "ADJUSTMENT_REDUCTION")
+        {
+            return 0m;
+        }
+
+        var remainingReduction = Math.Abs(adjustmentInvoice.TotalAmount);
+        if (remainingReduction <= 0m)
+        {
+            return 0m;
+        }
+
+        var openInvoices = await _db.Invoices
+            .Where(i => i.DeletedAt == null)
+            .Where(i => i.SellerTaxCode == adjustmentInvoice.SellerTaxCode && i.CustomerTaxCode == adjustmentInvoice.CustomerTaxCode)
+            .Where(i => i.OutstandingAmount > 0)
+            .Where(i => i.InvoiceType != "ADJUSTMENT_REDUCTION")
+            .OrderBy(i => i.IssueDate)
+            .ThenBy(i => i.CreatedAt)
+            .ToListAsync(ct);
+
+        var uniqueDirectMatch = openInvoices
+            .Where(i => i.OutstandingAmount == remainingReduction)
+            .Take(2)
+            .ToList();
+
+        if (uniqueDirectMatch.Count == 1)
+        {
+            var matchedInvoiceId = uniqueDirectMatch[0].Id;
+            openInvoices = openInvoices
+                .OrderByDescending(i => i.Id == matchedInvoiceId)
+                .ThenBy(i => i.IssueDate)
+                .ThenBy(i => i.CreatedAt)
+                .ToList();
+        }
+
+        var allocatedTotal = 0m;
+        foreach (var openInvoice in openInvoices)
+        {
+            if (remainingReduction <= 0m)
+            {
+                break;
+            }
+
+            var allocated = Math.Min(remainingReduction, openInvoice.OutstandingAmount);
+            if (allocated <= 0m)
+            {
+                continue;
+            }
+
+            openInvoice.OutstandingAmount -= allocated;
+            openInvoice.Status = openInvoice.OutstandingAmount == 0m ? "PAID" : "PARTIAL";
+            openInvoice.UpdatedAt = now;
+            openInvoice.Version += 1;
+
+            _db.InvoiceReductionApplications.Add(new InvoiceReductionApplication
+            {
+                Id = Guid.NewGuid(),
+                ReductionInvoiceId = adjustmentInvoice.Id,
+                AppliedInvoiceId = openInvoice.Id,
+                Amount = allocated,
+                CreatedAt = now
+            });
+
+            remainingReduction -= allocated;
+            allocatedTotal += allocated;
+        }
+
+        if (allocatedTotal > 0m)
+        {
+            adjustmentInvoice.UpdatedAt = now;
+            adjustmentInvoice.Version += 1;
+        }
+
+        return allocatedTotal;
+    }
+
     private async Task<decimal> ApplyReceiptCreditsToAdvanceAsync(
         Advance advance,
         DateTimeOffset now,
@@ -527,7 +620,7 @@ public sealed class ImportCommitService : IImportCommitService
 
         return new InvoiceKey(
             NormalizeKeyPart(ImportCommitJson.GetString(raw, "seller_tax_code")),
-            NormalizeKeyPart(ImportCommitJson.GetString(raw, "customer_tax_code")),
+            NormalizeKeyPart(ImportCommitJson.ResolveInvoiceCustomerTaxCode(raw)),
             NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_series")),
             NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_no")),
             issueDate.Value);

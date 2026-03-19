@@ -16,6 +16,7 @@ const baseAuth: AuthContextValue = {
     expiresAt: null,
     username: 'tester',
     roles: [],
+    permissions: [],
   },
   isAuthenticated: false,
   isBootstrapping: false,
@@ -196,6 +197,8 @@ describe('customers modules', () => {
             sellerTaxCode: '2301098313',
             sellerShortName: 'Hoàng Minh',
             receiptRefs: [],
+            reductionInvoiceRefs: [],
+            reducedInvoiceRefs: [],
           },
         }}
         advanceModal={null}
@@ -232,6 +235,78 @@ describe('customers modules', () => {
     expect(screen.getByText('Phiếu thu liên quan')).toBeInTheDocument()
   })
 
+  it('renders invoice reduction cross-links in invoice modal', () => {
+    render(
+      <CustomerTransactionModals
+        invoiceModal={{
+          mode: 'view',
+          row: {
+            id: 'inv-1',
+            invoiceNo: 'INV-1',
+            issueDate: '2025-01-01',
+            totalAmount: 1000000,
+            outstandingAmount: 500000,
+            status: 'OPEN',
+            version: 1,
+            sellerTaxCode: '2301098313',
+            sellerShortName: 'Hoàng Minh',
+            receiptRefs: [],
+            reductionInvoiceRefs: [
+              {
+                id: 'inv-red-1',
+                invoiceNo: 'DCG-001',
+                issueDate: '2025-01-03',
+                amount: 200000,
+              },
+            ],
+            reducedInvoiceRefs: [
+              {
+                id: 'inv-base-1',
+                invoiceNo: 'HD-GOC-001',
+                issueDate: '2024-12-20',
+                amount: 150000,
+              },
+            ],
+          } as any,
+        }}
+        advanceModal={null}
+        receiptModal={null}
+        token=""
+        invoiceStatusLabels={{ OPEN: 'Chưa thanh toán' }}
+        advanceStatusLabels={{}}
+        allocationTypeLabels={{}}
+        onCloseInvoice={vi.fn()}
+        onCloseAdvance={vi.fn()}
+        onCloseReceipt={vi.fn()}
+        onVoidInvoice={vi.fn()}
+        onVoidAdvance={vi.fn()}
+        shortId={(value) => value.slice(0, 6)}
+        invoiceVoidReason=""
+        onInvoiceVoidReasonChange={vi.fn()}
+        invoiceVoidLoading={false}
+        invoiceVoidError={null}
+        invoiceVoidSuccess={null}
+        advanceVoidReason=""
+        onAdvanceVoidReasonChange={vi.fn()}
+        advanceOverrideLock={false}
+        onAdvanceOverrideLockChange={vi.fn()}
+        advanceOverrideReason=""
+        onAdvanceOverrideReasonChange={vi.fn()}
+        advanceVoidLoading={false}
+        advanceVoidError={null}
+        advanceVoidSuccess={null}
+        receiptAllocations={[]}
+        receiptAllocLoading={false}
+        receiptAllocError={null}
+      />,
+    )
+
+    expect(screen.getByText('Hóa đơn điều chỉnh giảm liên quan')).toBeInTheDocument()
+    expect(screen.getByText('Đã bù trừ vào hóa đơn')).toBeInTheDocument()
+    expect(screen.getByText(/DCG-001/)).toBeInTheDocument()
+    expect(screen.getByText(/HD-GOC-001/)).toBeInTheDocument()
+  })
+
   it('renders held-credit warning for paid invoice void flow', () => {
     render(
       <CustomerTransactionModals
@@ -248,6 +323,8 @@ describe('customers modules', () => {
             sellerTaxCode: '2301098313',
             sellerShortName: 'Hoàng Minh',
             receiptRefs: [],
+            reductionInvoiceRefs: [],
+            reducedInvoiceRefs: [],
           },
         }}
         advanceModal={null}

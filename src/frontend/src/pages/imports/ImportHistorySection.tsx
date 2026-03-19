@@ -416,9 +416,15 @@ export default function ImportHistorySection({
         key: 'summary',
         label: 'Tổng hợp',
         render: (row: {
+          status: string
           summary: { insertedInvoices: number; insertedAdvances: number; insertedReceipts: number }
-        }) =>
-          `I:${row.summary.insertedInvoices} A:${row.summary.insertedAdvances} R:${row.summary.insertedReceipts}`,
+        }) => {
+          if (row.status.toUpperCase() === 'STAGING') {
+            return 'Chưa ghi dữ liệu'
+          }
+
+          return `I:${row.summary.insertedInvoices} A:${row.summary.insertedAdvances} R:${row.summary.insertedReceipts}`
+        },
       },
       {
         key: 'actions',
@@ -440,7 +446,7 @@ export default function ImportHistorySection({
                   disabled={loading}
                   onClick={() => onResumeBatch(row)}
                 >
-                  Tiếp tục
+                  Kiểm tra lô
                 </button>
                 <button
                   className="btn btn-outline-danger"
@@ -490,7 +496,7 @@ export default function ImportHistorySection({
       <div className="card-row">
         <div>
           <h3>Lịch sử nhập liệu</h3>
-          <p className="muted">Xem lại các lô đã tải, ghi dữ liệu hoặc đã hủy.</p>
+          <p className="muted">Xem lại các lô để kiểm tra lỗi, ghi dữ liệu, hoàn tác hoặc hủy.</p>
         </div>
         {loading && <span className="muted">Đang tải...</span>}
       </div>

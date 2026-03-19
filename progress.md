@@ -218,6 +218,10 @@ Update: ran Playwright E2E `npm run test:e2e` → 9 passed, 2 skipped.
 2026-02-03: Chạy full frontend vitest (npm run test -- --run) -> 13 files, 40 tests pass.
 2026-02-03: Chạy Playwright E2E (npm run test:e2e) -> 10 passed, 1 skipped.
 2026-02-03: Lập kế hoạch xử lý lệch trạng thái phân bổ phiếu thu/khách hàng, lưu tại docs/plans/2026-02-03-receipt-allocation-sync.md.
+2026-03-17: Khôi phục context cho bead `cng-huj` từ `task.md`, `task_plan.md`, `findings.md`, `progress.md` và bead tracker sau khi đổi tài khoản làm việc.
+2026-03-17: Bổ sung regression integration cho reduction allocation: ưu tiên `unique direct match` trước FIFO và fallback FIFO khi exact match bị ambiguous.
+2026-03-17: Cập nhật `ImportCommitService.ApplyReductionToInvoicesAsync` để đưa exact outstanding match duy nhất lên trước, còn lại giữ FIFO theo `IssueDate`/`CreatedAt`.
+2026-03-17: Verification phase `cng-huj` pass: integration `ImportCommitInvoiceAutoAllocateTests` (`7/7`), unit `ImportInvoiceParserTests` (`4/4`), frontend `importValidationMessages.test.ts` (`2/2`).
 2026-02-26: Hoàn thiện Collection Task Queue wiring (DI + endpoint mapping) và sửa dedupe/count logic khi generate từ risk list.
 2026-02-26: Bổ sung unit tests CollectionTaskQueueTests (3 case: dedupe, no-duplicate-open-task, status transition).
 2026-02-26: Bổ sung responsive card layout cho Reports tables (data-label + CSS `.table--mobile-cards`) và cập nhật test reports-modules.
@@ -299,3 +303,25 @@ Update: ran Playwright E2E `npm run test:e2e` → 9 passed, 2 skipped.
 2026-02-26: Tiếp tục bead `cng-9y1`; bổ sung style `upload-dropzone--error` trong `src/frontend/src/index.css` để phản hồi trực quan khi file import không hợp lệ.
 2026-02-26: Mở rộng `importBatchSection.dragdrop.test.tsx` với 3 case invalid file (sai định dạng `.txt`, quá `20MB` qua input, quá `20MB` qua drag-drop), xác nhận không gọi `uploadImport`.
 2026-02-26: Verification frontend pass: `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` (`4/4`) và `npm run lint` pass.
+2026-03-17: Mở bead `cng-huj` cho feature import hóa đơn điều chỉnh giảm từ dòng âm; bead đã được chuyển `in_progress`.
+2026-03-17: Đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md` để khóa scope phase 101: `ADJUSTMENT_REDUCTION`, root-MST grouping, FIFO fallback, residual held credit, zero-row skip reasons.
+2026-03-17: Chốt hướng triển khai theo TDD: viết test đỏ trước cho parser/staging/preview, sau đó cho commit + allocation + held-credit flow.
+2026-03-18: Tiếp tục bead `cng-z39`; thêm Playwright E2E `Commit ADVANCE import with new customer shows up in advances workspace`, tạo file ADVANCE tạm từ template và verify dòng import xuất hiện lại ở `/advances`.
+2026-03-18: Rebuild/redeploy `congno-api` từ snapshot `HEAD` sạch bằng `git archive ... HEAD` + `docker compose ... up -d --build api` để tránh mang theo các thay đổi dở dang khác trong worktree.
+2026-03-18: Health check runtime pass: `docker compose ps api` báo `Up`, `/health` => `{"status":"ok"}`, `/health/ready` => `{"status":"ok", ...}`.
+2026-03-18: Verification pass cho `cng-z39`: backend integration import commit set `12/12`, backend unit `ImportCommitFailureMessagesTests` `4/4`, Playwright E2E ADVANCE import `1/1`.
+2026-03-18: Đóng bead `cng-z39` sau khi đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md`.
+2026-03-18: Tiếp tục bead `cng-p9o`; implement `src/frontend/src/pages/imports/importBatchRecovery.ts` để chuẩn hóa trạng thái recovery `loading/blocked/review/ready` cho import batch.
+2026-03-18: Cập nhật `ImportBatchSection`, `ImportHistorySection`, `ImportPreviewModal` để hiển thị guidance tiếng Việt, đổi CTA `Kiểm tra lô` / `Xem lỗi` / `Rà soát cảnh báo`, và chặn commit khi batch còn dòng lỗi.
+2026-03-18: Bổ sung frontend regression tests cho helper/workspace/preview/history import recovery; targeted vitest pass `19/19`.
+2026-03-18: Verification frontend cho `cng-p9o`: `npm run build` pass; `npm run lint` không có lỗi mới, còn `1` warning unrelated tại `src/pages/receipts/ReceiptListSection.tsx:196`.
+2026-03-18: Tạo bead follow-up `cng-0ye` để theo dõi redesign dài hạn `Accountant-first redesign for import recovery workspace`.
+2026-03-18: Đồng bộ `task.md`, `task_plan.md`, `findings.md`, `progress.md` cho Phase 103 (quick fix import recovery UX) và kế hoạch Phase 104 (redesign accountant-first).
+2026-03-18: Đóng bead `cng-p9o` và chạy `bd sync`; giữ `cng-0ye` ở trạng thái open để theo dõi redesign accountant-first tiếp theo.
+2026-03-18: Mở bead regression `cng-z25` sau khi user report file INVOICE dạng template vẫn báo `Số tiền âm không hợp lệ` cho dòng `Hóa đơn điều chỉnh giảm`.
+2026-03-18: Xác nhận root cause: `cng-huj` chỉ sửa `ImportInvoiceParser` (ReportDetail), còn template import vẫn đi qua `ImportInvoiceTemplateParser` và còn rule cứng `NEGATIVE_AMOUNT` cho mọi số âm.
+2026-03-18: Viết test đỏ `Negative_Reduction_Adjustment_Row_Is_Accepted_In_Template_Import` trong `ImportInvoiceTemplateParserTests`; verification đỏ fail đúng kỳ vọng (`expected INSERT`, `actual SKIP`).
+2026-03-18: Cập nhật `ImportInvoiceTemplateParser` để bỏ `NEGATIVE_AMOUNT` cho adjustment reduction hợp lệ, thêm `customer_tax_code_matching` theo root MST và `invoice_type = ADJUSTMENT_REDUCTION`.
+2026-03-18: Verification targeted parser pass: `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests|FullyQualifiedName~ImportInvoiceParserTests"` => `7/7`.
+2026-03-18: Tiếp tục bead `cng-h1d`; phát hiện frontend auth/gating đã có `permissions` nhưng `pageLoaders.ts` và `AppShell.tsx` vẫn suy luận prefetch hoàn toàn theo `roles`, làm permission-only users rơi về generic fallback.
+2026-03-18: Refactor `pageLoaders.ts` để suy ra effective role từ `roles + permissions`, truyền `state.permissions` từ `AppShell`, và thêm regression tests cho permission-only prefetch path; verify `npm --prefix src/frontend run test -- --run src/pages/__tests__/page-loaders.test.ts` => `10/10`, `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx` => `9/9`.

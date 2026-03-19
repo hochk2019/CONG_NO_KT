@@ -45,3 +45,12 @@ public sealed class Advance
     public DateTimeOffset UpdatedAt { get; set; }
     public int Version { get; set; }
 }
+
+public sealed class InvoiceReductionApplication
+{
+    public Guid Id { get; set; }
+    public Guid ReductionInvoiceId { get; set; }
+    public Guid AppliedInvoiceId { get; set; }
+    public decimal Amount { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+}

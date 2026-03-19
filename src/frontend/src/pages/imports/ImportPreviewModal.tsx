@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 
 type ImportPreviewModalProps = {
   isOpen: boolean
@@ -68,6 +68,30 @@ export default function ImportPreviewModal({
   previewStatusLabels,
   actionSuggestionLabels,
 }: ImportPreviewModalProps) {
+  const guidanceAlert = useMemo(() => {
+    if (!preview) {
+      return null
+    }
+
+    if (preview.errorCount > 0) {
+      return {
+        tone: 'warn',
+        title: `Còn ${preview.errorCount} dòng lỗi.`,
+        message: 'Lô này chưa thể ghi dữ liệu. Kế toán cần sửa file nguồn rồi tải lại để xử lý tiếp.',
+      } as const
+    }
+
+    if (preview.warnCount > 0) {
+      return {
+        tone: 'info',
+        title: `Còn ${preview.warnCount} dòng cảnh báo.`,
+        message: 'Lô có thể ghi dữ liệu, nhưng nên rà soát các dòng cảnh báo trước khi chốt.',
+      } as const
+    }
+
+    return null
+  }, [preview])
+
   useEffect(() => {
     if (!isOpen) {
       return
@@ -186,6 +210,11 @@ export default function ImportPreviewModal({
                   <span>Lỗi</span>
                 </div>
               </div>
+              {guidanceAlert && (
+                <div className={`alert alert--${guidanceAlert.tone}`} role="status" aria-live="polite">
+                  <strong>{guidanceAlert.title}</strong> {guidanceAlert.message}
+                </div>
+              )}
               <div className="table-scroll">
                 <table className="table table-preview">
                   <thead className="table-head">

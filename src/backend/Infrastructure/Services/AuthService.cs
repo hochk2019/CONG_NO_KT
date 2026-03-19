@@ -59,7 +59,8 @@ public sealed class AuthService : IAuthService
         ResetLoginFailureState(user);
 
         var roles = await LoadRoles(user.Id, ct);
-        var access = _jwtTokenService.CreateToken(user.Id, user.Username, roles);
+        var permissions = await LoadPermissions(user.Id, ct);
+        var access = _jwtTokenService.CreateToken(user.Id, user.Username, roles, permissions);
         var refresh = CreateRefreshTokenEntity(user.Id, requestContext: requestContext);
         _db.RefreshTokens.Add(refresh.Entity);
         await _db.SaveChangesAsync(ct);
@@ -105,7 +106,8 @@ public sealed class AuthService : IAuthService
         existing.RevokedAt = now;
 
         var roles = await LoadRoles(user.Id, ct);
-        var access = _jwtTokenService.CreateToken(user.Id, user.Username, roles);
+        var permissions = await LoadPermissions(user.Id, ct);
+        var access = _jwtTokenService.CreateToken(user.Id, user.Username, roles, permissions);
         var refreshed = CreateRefreshTokenEntity(
             user.Id,
             now,
@@ -196,6 +198,19 @@ public sealed class AuthService : IAuthService
         return await _db.UserRoles
             .Where(ur => ur.UserId == userId)
             .Join(_db.Roles, ur => ur.RoleId, r => r.Id, (ur, r) => r.Code)
+            .Distinct()
+            .OrderBy(static roleCode => roleCode)
+            .ToListAsync(ct);
+    }
+
+    private async Task<IReadOnlyList<string>> LoadPermissions(Guid userId, CancellationToken ct)
+    {
+        return await _db.UserRoles
+            .Where(ur => ur.UserId == userId)
+            .Join(_db.RolePermissions, ur => ur.RoleId, rp => rp.RoleId, (ur, rp) => rp.PermissionId)
+            .Join(_db.Permissions, permissionId => permissionId, permission => permission.Id, (permissionId, permission) => permission.Code)
+            .Distinct()
+            .OrderBy(static permissionCode => permissionCode)
             .ToListAsync(ct);
     }
 

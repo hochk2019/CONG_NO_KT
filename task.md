@@ -1544,10 +1544,131 @@
 - [x] Thêm regression test cho flow commit `ADVANCE` với customer chưa tồn tại và test metadata xác nhận model đã map đủ foreign key.
 - [x] Kiểm tra thêm luồng import file template cho `INVOICE` và `RECEIPT`: parser đã chặn trường hợp thiếu MST khách hàng ngay ở bước staging, không lặp lại lỗi generic này từ template validation.
 - [x] Bổ sung regression test commit cho `INVOICE` và `RECEIPT` với customer chưa tồn tại, đồng thời bọc `DbUpdateException` để trả thông điệp hướng dẫn rõ cho kế toán khi hệ thống không tạo/liên kết được khách hàng theo MST trên file.
-- [ ] Rebuild/redeploy stack Docker đang vận hành và verify lại import `/imports?tab=batch&type=ADVANCE` trên môi trường LAN.
+- [x] Rebuild/redeploy stack Docker đang vận hành và verify lại import `/imports?tab=batch&type=ADVANCE` trên môi trường LAN.
 
 ### Verification evidence (2026-03-17, phase 100 / cng-z39)
 - [x] Docker production log `api20260317.log` ghi nhận `Npgsql.PostgresException 23503`: vi phạm `advances_customer_tax_code_fkey` khi commit batch `ADVANCE`.
 - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests"` => pass (`4/4`).
-- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests|FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests|FullyQualifiedName~ImportCommitReceiptTests"` => pass (`8/8`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests|FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests|FullyQualifiedName~ImportCommitReceiptTests"` => pass (`12/12`).
 - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportCommitFailureMessagesTests"` => pass (`4/4`).
+
+### Runtime verification (2026-03-18, phase 100 / cng-z39)
+- [x] Rebuild runtime `api` từ snapshot `HEAD` sạch bằng `git archive ... HEAD` + `docker compose -f <temp>/docker-compose.yml --env-file .env up -d --build api` để tránh kéo các thay đổi dở dang khác trong worktree.
+- [x] `docker compose ps api` => `congno-api` `Up` và publish cổng `18080`.
+- [x] `curl.exe -fsS http://127.0.0.1:18080/health` => `{"status":"ok"}`.
+- [x] `curl.exe -fsS http://127.0.0.1:18080/health/ready` => `{"status":"ok", ...}`.
+- [x] `npx playwright test e2e/imports.spec.ts --grep "Commit ADVANCE import with new customer shows up in advances workspace"` => pass (`1/1`).
+
+## Phase 101 - Import invoice reduction adjustments from negative rows (2026-03-17) [bead: cng-huj]
+- [x] Chấp nhận các dòng âm có ghi chú `Hóa đơn điều chỉnh giảm` ở bước staging và phân loại thành `ADJUSTMENT_REDUCTION` thay vì báo lỗi số tiền.
+- [x] Chuẩn hóa match/phân bổ theo root MST khách hàng, nhưng vẫn lưu original branch tax code để truy vết.
+- [x] Mở rộng commit pipeline để ghi nhận chứng từ giảm trừ làm giảm công nợ, doanh thu và VAT mà không tạo `open negative invoice`.
+- [x] Ưu tiên match trực tiếp khi xác định duy nhất invoice nguồn; nếu không đủ chắc chắn thì fallback FIFO trên các khoản phải thu mở của khách hàng đã group theo root MST.
+- [x] Chuyển phần giảm trừ vượt quá công nợ mở thành held/carry-forward credit thay vì để dư âm trên invoice.
+- [x] Hiển thị lý do skip rõ ràng cho các dòng giá trị `0` mang tính thông tin trong preview import.
+- [x] Bổ sung automated tests backend/frontend và đồng bộ bead tracker `cng-huj`.
+
+### Verification evidence (2026-03-17, phase 101 / cng-huj)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --no-restore -p:BuildInParallel=false -m:1 --filter "FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests"` => pass (`7/7`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceParserTests" -v minimal` => pass (`4/4`).
+- [x] `npm --prefix src/frontend run test -- --run src/pages/imports/__tests__/importValidationMessages.test.ts` => pass (`2/2`).
+
+## Phase 102 - Close duplicate stale bead for customer unallocated receipts tab (2026-03-18) [bead: cng-v7q]
+- [x] Rà mô tả bead `cng-v7q` và đối chiếu với Phase 97 / `cng-iz8`.
+- [x] Xác nhận scope đã có sẵn trong UI/API/tests cho tab `Tiền chưa phân bổ`, toggle `Tự phân bổ`, hành động `Áp tay`, và copy `Tiền thừa do hủy HĐ`.
+- [x] Đóng `cng-v7q` như bead trùng/stale, không cần thay đổi code thêm.
+
+### Verification evidence (2026-03-18, phase 102 / cng-v7q)
+- [x] `bd show cng-v7q` => mô tả trùng scope đã hoàn tất ở Phase 97.
+- [x] `rg -n "CustomerUnallocatedReceiptsPanel|CustomerHeldCreditsPanel|Tiền thừa do hủy HĐ|unallocatedReceipts|heldCredits" src/frontend/src/pages/customers/CustomerTransactionsSection.tsx` => tab/panel đã render sẵn.
+- [x] `rg -n "Phiếu thu chưa phân bổ|Tắt tự phân bổ|Bật tự phân bổ|Áp tay|updateReceiptAutoAllocation|allocateApprovedReceipt|unallocatedOnly" src/frontend/src/pages/customers/CustomerUnallocatedReceiptsPanel.tsx src/frontend/src/pages/customers/transactions/unallocatedReceiptColumns.tsx` => flow toggle/manual apply đã tồn tại.
+- [x] `rg -n "held-credits|auto-allocation|allocate-approved|surplus-queue" src/backend/Api/Endpoints/ReceiptHeldCreditEndpoints.cs src/backend/Api/Endpoints/ReceiptEndpoints.cs` => API hỗ trợ đã tồn tại.
+
+## Phase 103 - Improve import error recovery UX for failed staging batches (2026-03-18) [bead: cng-p9o]
+- [x] Reproduce luồng kế toán bị kẹt khi batch `STAGING` còn dòng lỗi nhưng history/workspace vẫn tạo cảm giác có thể tiếp tục ghi dữ liệu.
+- [x] Thêm helper recovery state cho batch import để phân loại `loading/blocked/review/ready` và đổi CTA/copy tiếng Việt theo đúng trạng thái.
+- [x] Chặn `Ghi dữ liệu` khi lô còn dòng lỗi, tự điều hướng người dùng sang preview để xem lỗi, đồng thời bổ sung banner hướng dẫn ngay trong workspace và alert hướng dẫn trong preview.
+- [x] Điều chỉnh history/import workspace theo ngữ cảnh kế toán: `Tiếp tục` -> `Kiểm tra lô`, summary `Chưa ghi dữ liệu`, pill trạng thái và thông điệp hành động rõ ràng hơn.
+- [x] Bổ sung regression tests frontend cho blocked commit behavior, preview guidance, history copy, và helper state; đồng bộ bead tracker `cng-p9o`.
+
+### Verification evidence (2026-03-18, phase 103 / cng-p9o)
+- [x] `npm test -- --run src/pages/imports/__tests__/importBatchRecovery.test.ts src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx src/pages/imports/__tests__/importPreviewModal.shortcuts.test.tsx src/pages/imports/__tests__/importHistorySection.bulk.test.tsx` (cwd `src/frontend`) => pass (`19/19`).
+- [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `npm run lint` (cwd `src/frontend`) => không có lỗi mới; còn `1` warning unrelated tại `src/pages/receipts/ReceiptListSection.tsx:196`.
+
+## Phase 104 - Accountant-first redesign for import recovery workspace (planned 2026-03-18) [bead: cng-0ye]
+- [ ] Mở rộng API/history để trả về validation counts (`ok/warn/error`) hoặc staging sub-status đủ giàu cho UI phân biệt `Có lỗi cần sửa` / `Cần rà soát` / `Sẵn sàng ghi`.
+- [ ] Thiết kế lại history + workspace theo next-best-action cho kế toán, giảm phụ thuộc vào preview modal chỉ để biết phải làm gì tiếp theo.
+- [ ] Ưu tiên recovery action theo trạng thái (`Xem lỗi`, `Tải lại file đã sửa`, `Hủy lô`, `Rà soát cảnh báo`, `Ghi dữ liệu`) thay cho cụm action ngang hàng như hiện tại.
+- [ ] Bổ sung regression/e2e coverage và lộ trình rollout từ quick fix Phase 103 sang redesign hoàn chỉnh.
+
+## Phase 105 - Fix template parser regression for negative adjustment invoices (2026-03-18) [bead: cng-z25]
+- [x] Xác nhận nguyên nhân gốc: logic `ADJUSTMENT_REDUCTION` ở `cng-huj` mới áp dụng cho `ImportInvoiceParser`, còn file INVOICE dạng template vẫn đi qua `ImportInvoiceTemplateParser` và bị gắn `NEGATIVE_AMOUNT`.
+- [x] Bổ sung test đỏ cho template parser để tái hiện dòng âm có ghi chú `Hóa đơn điều chỉnh giảm` đang bị `SKIP`.
+- [x] Cập nhật `ImportInvoiceTemplateParser` để chấp nhận dòng âm điều chỉnh giảm, preserve MST chi nhánh gốc, thêm `customer_tax_code_matching`, và set `invoice_type = ADJUSTMENT_REDUCTION`.
+- [x] Chạy lại targeted backend unit tests cho cả parser `ReportDetail` và parser `template`; đồng bộ bead tracker `cng-z25`.
+
+### Verification evidence (2026-03-18, phase 105 / cng-z25)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests"` => fail đỏ trước fix (`Negative_Reduction_Adjustment_Row_Is_Accepted_In_Template_Import`: expected `INSERT`, actual `SKIP`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests|FullyQualifiedName~ImportInvoiceParserTests"` => pass (`7/7`).
+
+## Phase 106 - Fix generic HTTP 400 on import commit when Docker runtime schema is stale (2026-03-18) [bead: cng-b3y]
+- [x] Reproduce lỗi commit file `ReportDetail.xlsx`: preview báo `414 dòng / 409 hợp lệ / 5 cảnh báo / 0 lỗi` nhưng bước `Ghi dữ liệu` chỉ hiện `Ghi dữ liệu thất bại (HTTP 400)`.
+- [x] Xác nhận root cause ở runtime Docker: schema `congno.invoices.invoice_type` vẫn là `varchar(16)` + constraint cũ chưa cho phép `ADJUSTMENT_REDUCTION`, gây lỗi PostgreSQL `22001` khi commit dòng điều chỉnh giảm.
+- [x] Cập nhật frontend parser lỗi import để đọc được mọi response `*json*` (bao gồm `application/problem+json`) thay vì rơi về message generic `HTTP 400`.
+- [x] Đồng bộ EF model/runtime schema cho `invoice_type`: tăng độ dài, cho phép `ADJUSTMENT_REDUCTION`, và nới constraint âm tương ứng.
+- [x] Bổ sung regression tests cho frontend error parsing và backend schema compatibility; rebuild Docker runtime và replay batch lỗi thành công.
+
+### Verification evidence (2026-03-18, phase 106 / cng-b3y)
+- [x] `npm --prefix src/frontend test -- --run src/api/__tests__/imports-error.test.ts` => pass (`1/1`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~InvoiceSchemaCompatibilityTests"` => pass (`2/2`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests"` => pass (`7/7`).
+- [x] `docker compose up -d --build api web` => rebuild runtime thành công.
+- [x] `Invoke-WebRequest http://localhost:18080/health` => `200 OK`; `Invoke-WebRequest http://localhost:18080/health/ready` => `200 OK`.
+- [x] Replay `POST /imports/dec00293-565b-495e-be65-cf5662d21252/commit` bằng token admin local => `200 OK`, `insertedInvoices=409`, `committedRows=409`.
+
+## Phase 107 - Verify negative allocation flow and branch tax-code workflow with ReportDetail.xlsx (2026-03-18) [bead: cng-ox4]
+- [x] Kiểm thử trực tiếp file `ReportDetail.xlsx` trên runtime Docker đang chạy, tập trung vào các dòng âm `Hóa đơn điều chỉnh giảm`.
+- [x] Xác nhận parser/staging hiện giữ `customer_tax_code` gốc của chi nhánh nhưng dùng `customer_tax_code_matching` để group về root MST khi commit/phân bổ.
+- [x] Xác nhận dòng âm `2233` có MST `0310226744-003` được parse `OK/INSERT` với `invoice_type = ADJUSTMENT_REDUCTION`, còn dòng `2514` của root MST `0310226744` đang bị `WARN/SKIP` vì `DUP_IN_DB`.
+- [x] Kiểm tra batch `dec00293-565b-495e-be65-cf5662d21252` đã từng `COMMIT` rồi `ROLLBACK`, và xác nhận rollback đã soft-delete invoice của batch nhưng không hoàn nguyên số dư của các invoice cũ bị giảm trừ.
+- [x] Ghi nhận lỗi nghiệp vụ nghiêm trọng: reduction adjustment đang làm mutate các invoice cũ của customer root mà rollback hiện tại không restore lại `outstanding_amount`, dẫn tới lệch trạng thái invoice/công nợ sau khi hủy batch.
+
+### Verification evidence (2026-03-18, phase 107 / cng-ox4)
+- [x] Workbook inspection `ReportDetail.xlsx` xác nhận có các dòng âm cần test: `2233` (`0310226744-003`) và `2514` (`0310226744`) với ghi chú `Hóa đơn điều chỉnh giảm`.
+- [x] `select row_no, validation_status, action_suggestion, raw_data->>'invoice_no', raw_data->>'customer_tax_code', raw_data->>'customer_tax_code_matching', raw_data->>'invoice_type', validation_messages from congno.import_staging_rows where batch_id = '437aaf09-4974-4c98-9f2f-0cbf9beb3d33' and raw_data->>'invoice_no' in ('2233','2514')` => `2233 = OK/INSERT, customer_tax_code=0310226744-003, customer_tax_code_matching=0310226744`; `2514 = WARN/SKIP` với `["DUP_IN_DB"]`.
+- [x] `select id, status, committed_at, rolled_back_at from congno.import_batches where id in ('437aaf09-4974-4c98-9f2f-0cbf9beb3d33','dec00293-565b-495e-be65-cf5662d21252')` + audit log `IMPORT_COMMIT/IMPORT_ROLLBACK` => batch `dec00293...` đã commit rồi rollback thật, không phải chỉ mismatch UI.
+- [x] `select invoice_no, customer_tax_code, invoice_type, deleted_at from congno.invoices where source_batch_id = 'dec00293-565b-495e-be65-cf5662d21252' and invoice_no in ('2221','2233','2514')` => các invoice của batch đã bị soft-delete khi rollback.
+- [x] `select invoice_no, total_amount, outstanding_amount, updated_at, source_batch_id from congno.invoices where customer_tax_code = '0310226744' and invoice_type <> 'ADJUSTMENT_REDUCTION' and deleted_at is null and updated_at between '2026-03-18 01:46:00+00' and '2026-03-18 02:03:00+00'` => các invoice cũ `268`, `284`, `307` vẫn còn số dư đã bị giảm sau rollback.
+- [x] `select tax_code, current_balance from congno.customers where tax_code in ('0310226744','0310226744-003')` => customer balance đã được update ở thời điểm rollback, trong khi invoice cũ vẫn giữ trạng thái đã bị reduction, cho thấy workflow rollback hiện chưa nhất quán.
+
+## Phase 108 - Fix rollback reduction adjustment and branch-tax duplicate detection regression (2026-03-18) [bead: cng-kfd]
+- [x] Xác nhận root cause của duplicate detection: staging vẫn build invoice key theo `customer_tax_code` gốc, trong khi commit path normalize theo `customer_tax_code_matching/root MST`, nên re-import hóa đơn âm chi nhánh vẫn bị coi là hợp lệ.
+- [x] Sửa `ImportStagingService` để duplicate detection dùng cùng normalization rule với commit path thông qua `ResolveInvoiceCustomerTaxCode`.
+- [x] Bổ sung ledger `invoice_reduction_applications` để lưu từng allocation từ hóa đơn `ADJUSTMENT_REDUCTION` sang invoice gốc.
+- [x] Sửa `ImportRollbackService` để restore lại `outstanding_amount/status` của invoice gốc và xóa ledger allocation trước khi soft-delete invoice của batch rollback.
+- [x] Thêm test hồi quy cho cả 2 lỗi: duplicate detection khi re-import branch MST và rollback reduction adjustment.
+
+### Verification evidence (2026-03-18, phase 108 / cng-kfd)
+- [x] `ImportStagingDuplicateDetectionTests.StageInvoice_ReductionRow_WithBranchTaxCode_Marks_Duplicate_Against_RootCustomerInvoice` xác nhận re-import dòng `2233` với MST `0310226744-003` nay trả về `WARN/SKIP` với `DUP_IN_DB` thay vì `OK/INSERT`.
+- [x] `ImportCommitRollbackTests.Commit_Then_Rollback_ReductionInvoice_Restores_Reduced_OpenInvoice` xác nhận rollback batch reduction khôi phục lại `outstanding_amount` và `status` của invoice gốc về trạng thái trước commit.
+- [x] `dotnet test src/backend/CongNoGolden.sln --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests|FullyQualifiedName~ImportCommitRollbackTests"` => pass `3/3`.
+- [x] `dotnet test src/backend/CongNoGolden.sln --filter "FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests|FullyQualifiedName~ImportCommitRollbackTests|FullyQualifiedName~ImportStagingDuplicateDetectionTests"` => pass `10/10`.
+
+## Phase 109 - Show invoice reduction cross-links in customer transactions (2026-03-18) [bead: cng-ipb]
+- [x] Thêm regression test backend cho `CustomerService.ListInvoicesAsync` để xác nhận invoice thường thấy được hóa đơn `ADJUSTMENT_REDUCTION` liên quan và chiều ngược lại.
+- [x] Mở rộng DTO/API customer invoices để trả về danh sách chứng từ bù trừ theo cả hai chiều, chỉ phục vụ hiển thị; không ghi thêm vào `Note`.
+- [x] Cập nhật modal chi tiết hóa đơn phía frontend để hiển thị rõ `Hóa đơn điều chỉnh giảm liên quan` và `Đã bù trừ vào hóa đơn`.
+- [x] Đồng bộ mock/test frontend cho kiểu dữ liệu mới và kiểm tra lại các flow customer transactions liên quan.
+- [x] Verify:
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerServiceInvoiceRelationsTests"` => pass `1/1`.
+  - `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-modules.test.tsx` => pass `11/11`.
+  - `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-held-credits-panel.test.tsx` => pass `2/2`.
+
+## Phase 110 - Granular permission system and accountant access alignment (2026-03-18) [bead: cng-h1d]
+- [ ] Rà soát toàn bộ quyền hiện tại của `Accountant` ở backend/frontend, xác nhận các điểm đang hardcode theo `role` và các endpoint cần mở theo business rule mới.
+- [ ] Thiết kế và triển khai permission matrix cấu hình được: schema/backend seed/auth propagation/JWT/current user để thay cho kiểm tra role cứng ở các flow liên quan.
+- [ ] Mở quyền cho `Accountant` được sửa customer do mình phụ trách hoặc customer chưa có owner, nhưng không được đổi owner/manager nếu không có quyền nâng cao.
+- [ ] Mở quyền cho `Accountant` được commit import Excel cho invoice và advance; giữ các loại import khác theo rule chặt hơn nếu chưa được yêu cầu mở.
+- [ ] Cập nhật frontend auth state + gating theo `permissions`, đồng thời bổ sung màn hình admin để xem/sửa permission của role.
+- [ ] Viết/cập nhật test backend và frontend cho permission matrix, customer edit, import commit, và admin permission management; chạy verify phù hợp trước khi đóng bead.

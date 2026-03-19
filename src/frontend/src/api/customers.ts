@@ -105,6 +105,8 @@ export type CustomerInvoice = {
   sellerTaxCode: string
   sellerShortName?: string | null
   receiptRefs: CustomerReceiptRef[]
+  reductionInvoiceRefs: CustomerInvoiceRef[]
+  reducedInvoiceRefs: CustomerInvoiceRef[]
 }
 
 export type CustomerAdvance = {
@@ -138,6 +140,13 @@ export type CustomerReceiptRef = {
   id: string
   receiptNo?: string | null
   receiptDate: string
+  amount: number
+}
+
+export type CustomerInvoiceRef = {
+  id: string
+  invoiceNo: string
+  issueDate: string
   amount: number
 }
 

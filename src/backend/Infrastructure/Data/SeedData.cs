@@ -1,4 +1,5 @@
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 
@@ -14,6 +15,63 @@ public static class SeedData
         ("Viewer", "Viewer")
     ];
 
+    private static readonly (string Code, string Name)[] DefaultPermissions =
+    [
+        (AppPermissions.CustomerView, AppPermissions.CustomerView),
+        (AppPermissions.CustomerEditAll, AppPermissions.CustomerEditAll),
+        (AppPermissions.CustomerEditOwned, AppPermissions.CustomerEditOwned),
+        (AppPermissions.CustomerEditUnassigned, AppPermissions.CustomerEditUnassigned),
+        (AppPermissions.CustomerAssignmentManage, AppPermissions.CustomerAssignmentManage),
+        (AppPermissions.ImportUpload, AppPermissions.ImportUpload),
+        (AppPermissions.ImportHistory, AppPermissions.ImportHistory),
+        (AppPermissions.ImportCommitInvoice, AppPermissions.ImportCommitInvoice),
+        (AppPermissions.ImportCommitAdvance, AppPermissions.ImportCommitAdvance),
+        (AppPermissions.ImportCommitReceipt, AppPermissions.ImportCommitReceipt),
+        (AppPermissions.ImportRollback, AppPermissions.ImportRollback),
+        (AppPermissions.AdvanceManage, AppPermissions.AdvanceManage),
+        (AppPermissions.ReceiptApprove, AppPermissions.ReceiptApprove),
+        (AppPermissions.AdminManage, AppPermissions.AdminManage)
+    ];
+
+    private static readonly IReadOnlyDictionary<string, string[]> DefaultRolePermissions =
+        new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Admin"] =
+            [
+                .. DefaultPermissions.Select(static permission => permission.Code)
+            ],
+            ["Supervisor"] =
+            [
+                AppPermissions.CustomerView,
+                AppPermissions.CustomerEditAll,
+                AppPermissions.CustomerAssignmentManage,
+                AppPermissions.ImportUpload,
+                AppPermissions.ImportHistory,
+                AppPermissions.ImportCommitInvoice,
+                AppPermissions.ImportCommitAdvance,
+                AppPermissions.ImportCommitReceipt,
+                AppPermissions.ImportRollback,
+                AppPermissions.AdvanceManage,
+                AppPermissions.ReceiptApprove
+            ],
+            ["Accountant"] =
+            [
+                AppPermissions.CustomerView,
+                AppPermissions.CustomerEditOwned,
+                AppPermissions.CustomerEditUnassigned,
+                AppPermissions.ImportUpload,
+                AppPermissions.ImportHistory,
+                AppPermissions.ImportCommitInvoice,
+                AppPermissions.ImportCommitAdvance,
+                AppPermissions.AdvanceManage,
+                AppPermissions.ReceiptApprove
+            ],
+            ["Viewer"] =
+            [
+                AppPermissions.CustomerView
+            ]
+        };
+
     public static async Task SeedAsync(ConGNoDbContext db, IConfiguration configuration, CancellationToken ct)
     {
         var adminUsername = configuration["Seed:AdminUsername"];
@@ -27,12 +85,63 @@ public static class SeedData
             return;
         }
 
+        var roleCodes = DefaultRolePermissions.Keys.ToArray();
+        var knownPermissionCodes = DefaultPermissions.Select(static item => item.Code).ToArray();
+
         foreach (var role in DefaultRoles)
         {
             var exists = await db.Roles.AnyAsync(r => r.Code == role.Code, ct);
             if (!exists)
             {
                 db.Roles.Add(new Role { Code = role.Code, Name = role.Name });
+            }
+        }
+
+        foreach (var permission in DefaultPermissions)
+        {
+            var exists = await db.Permissions.AnyAsync(p => p.Code == permission.Code, ct);
+            if (!exists)
+            {
+                db.Permissions.Add(new Permission { Code = permission.Code, Name = permission.Name });
+            }
+        }
+
+        await db.SaveChangesAsync(ct);
+
+        var roleIds = await db.Roles
+            .Where(role => roleCodes.Contains(role.Code))
+            .ToDictionaryAsync(role => role.Code, role => role.Id, ct);
+        var permissionIds = await db.Permissions
+            .Where(permission => knownPermissionCodes.Contains(permission.Code))
+            .ToDictionaryAsync(permission => permission.Code, permission => permission.Id, ct);
+        var existingRolePermissions = await db.RolePermissions
+            .AsNoTracking()
+            .Select(rolePermission => new { rolePermission.RoleId, rolePermission.PermissionId })
+            .ToListAsync(ct);
+        var existingPairs = existingRolePermissions
+            .Select(static rolePermission => (rolePermission.RoleId, rolePermission.PermissionId))
+            .ToHashSet();
+
+        foreach (var (roleCode, permissionCodes) in DefaultRolePermissions)
+        {
+            if (!roleIds.TryGetValue(roleCode, out var roleId))
+            {
+                continue;
+            }
+
+            foreach (var permissionCode in permissionCodes)
+            {
+                if (!permissionIds.TryGetValue(permissionCode, out var permissionId)
+                    || existingPairs.Contains((roleId, permissionId)))
+                {
+                    continue;
+                }
+
+                db.RolePermissions.Add(new RolePermission
+                {
+                    RoleId = roleId,
+                    PermissionId = permissionId
+                });
             }
         }
 

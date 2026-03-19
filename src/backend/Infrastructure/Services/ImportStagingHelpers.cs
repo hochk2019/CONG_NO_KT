@@ -22,7 +22,12 @@ public static class ImportStagingHelpers
             return string.Empty;
         }
 
-        var normalized = input.Trim().ToLowerInvariant().Normalize(NormalizationForm.FormD);
+        var normalized = input
+            .Trim()
+            .Replace('đ', 'd')
+            .Replace('Đ', 'D')
+            .ToLowerInvariant()
+            .Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder();
         foreach (var ch in normalized)
         {
@@ -126,6 +131,40 @@ public static class ImportStagingHelpers
     public static string BuildKey(params string[] parts)
     {
         return string.Join("|", parts.Select(p => p?.Trim() ?? string.Empty));
+    }
+
+    public static string GetRootCustomerTaxCode(string? taxCode)
+    {
+        var trimmed = taxCode?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        var separatorIndex = trimmed.IndexOf('-');
+        return separatorIndex > 0 ? trimmed[..separatorIndex] : trimmed;
+    }
+
+    public static bool IsReductionAdjustmentNote(string? note)
+    {
+        var normalized = Normalize(note ?? string.Empty);
+        return normalized.Contains("hoadondieuchinhgiam", StringComparison.Ordinal);
+    }
+
+    public static string? GetInformationalSkipCode(string? note, decimal revenue, decimal vat)
+    {
+        if (revenue != 0m || vat != 0m)
+        {
+            return null;
+        }
+
+        var normalized = Normalize(note ?? string.Empty);
+        if (normalized.Contains("hoadonbithaythe", StringComparison.Ordinal))
+        {
+            return "INFO_REPLACED_INVOICE";
+        }
+
+        return null;
     }
 
     public static string GetStatus(List<string> messages)

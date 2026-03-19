@@ -218,10 +218,11 @@ Tiếp tục Phase 110 theo hướng permission-first: loại dần các heurist
 - [x] Xác định slice frontend còn lệch: `pageLoaders.ts`/`AppShell.tsx` vẫn prefetch theo `roles` dù gating đã dựa trên `permissions`.
 - [x] Viết regression test cho permission-only users ở prefetch target selection và prefetch plan.
 - [x] Refactor prefetch planner để suy ra effective role từ `roles + permissions`, đồng thời truyền `state.permissions` từ `AppShell`.
-- [ ] Tiếp tục rà các gate còn hardcode role trong customer edit, import commit, và admin permission management.
-- [ ] Chạy broader verification cho các slice tiếp theo rồi mới cập nhật bead/task trạng thái hoàn tất.
+- [x] Tiếp tục rà các gate còn hardcode role trong customer edit, import commit, và admin permission management.
+- [x] Chạy broader verification cho các slice tiếp theo rồi mới cập nhật bead/task trạng thái hoàn tất.
+- [x] Đồng bộ notebook sau verify xanh và chuẩn bị đóng bead `cng-h1d`.
 
 ## Done When (Update 2026-03-18 - cng-h1d)
 - [x] Permission-only accountant-like users không còn rơi về generic prefetch fallback.
 - [x] App shell truyền đủ context `permissions` cho page prefetch planner.
-- [ ] Các flow business chính của Phase 110 đều chạy theo permission matrix thay vì role cứng, có test backend/frontend tương ứng.
+- [x] Các flow business chính của Phase 110 đều chạy theo permission matrix thay vì role cứng, có test backend/frontend tương ứng.

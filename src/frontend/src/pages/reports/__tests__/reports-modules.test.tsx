@@ -16,6 +16,7 @@ const baseAuth: AuthContextValue = {
     expiresAt: null,
     username: 'tester',
     roles: [],
+    permissions: [],
   },
   isAuthenticated: false,
   isBootstrapping: false,

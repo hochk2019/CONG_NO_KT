@@ -13,6 +13,7 @@ import {
 } from '../api/admin'
 import DataTable from '../components/DataTable'
 import { useAuth } from '../context/AuthStore'
+import AdminRolePermissionsDialog from './admin/AdminRolePermissionsDialog'
 import { formatDateTime } from '../utils/format'
 import { validatePasswordPolicy } from '../utils/passwordPolicy'
 import { formatRoleDisplay } from '../utils/roles'
@@ -55,6 +56,7 @@ export default function AdminUsersPage() {
   const [linkingUser, setLinkingUser] = useState<AdminUser | null>(null)
   const [linkingValue, setLinkingValue] = useState('')
   const [linkingError, setLinkingError] = useState<string | null>(null)
+  const [isRolePermissionsDialogOpen, setIsRolePermissionsDialogOpen] = useState(false)
   const [resetPasswordUser, setResetPasswordUser] = useState<AdminUser | null>(null)
   const [resetPasswordValue, setResetPasswordValue] = useState('')
   const [resetPasswordConfirm, setResetPasswordConfirm] = useState('')
@@ -78,7 +80,7 @@ export default function AdminUsersPage() {
   }, [editingUser])
 
   useEffect(() => {
-    if (!linkingUser && !editingUser && !resetPasswordUser) return
+    if (!linkingUser && !editingUser && !resetPasswordUser && !isRolePermissionsDialogOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Escape') return
       if (linkingUser) {
@@ -87,13 +89,15 @@ export default function AdminUsersPage() {
         closeRolesModal()
       } else if (resetPasswordUser) {
         closeResetPasswordModal()
+      } else if (isRolePermissionsDialogOpen) {
+        closeRolePermissionsDialog()
       }
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('keydown', handleKeyDown)
     }
-  }, [linkingUser, editingUser, resetPasswordUser])
+  }, [linkingUser, editingUser, resetPasswordUser, isRolePermissionsDialogOpen])
 
   const [createUsername, setCreateUsername] = useState('')
   const [createPassword, setCreatePassword] = useState('')
@@ -230,6 +234,14 @@ export default function AdminUsersPage() {
   const closeRolesModal = () => {
     setEditingUser(null)
     setSelectedRoles([])
+  }
+
+  const openRolePermissionsDialog = () => {
+    setIsRolePermissionsDialogOpen(true)
+  }
+
+  const closeRolePermissionsDialog = () => {
+    setIsRolePermissionsDialogOpen(false)
   }
 
   const openResetPasswordModal = (user: AdminUser) => {
@@ -579,7 +591,12 @@ export default function AdminUsersPage() {
             <h3>Danh sách người dùng</h3>
             <p className="muted">Tìm theo username, họ tên hoặc email.</p>
           </div>
-          {listLoading && <span className="muted">Đang tải…</span>}
+          <div className="inline-actions inline-actions--tight">
+            {listLoading && <span className="muted">Đang tải…</span>}
+            <button className="btn btn-outline" type="button" onClick={openRolePermissionsDialog}>
+              Quyền theo vai trò
+            </button>
+          </div>
         </div>
         <div className="filters-grid">
           <label className="field">
@@ -613,6 +630,12 @@ export default function AdminUsersPage() {
           }}
         />
       </section>
+
+      <AdminRolePermissionsDialog
+        isOpen={isRolePermissionsDialogOpen}
+        token={token}
+        onClose={closeRolePermissionsDialog}
+      />
 
       {linkingUser && (
         <div className="modal-backdrop">

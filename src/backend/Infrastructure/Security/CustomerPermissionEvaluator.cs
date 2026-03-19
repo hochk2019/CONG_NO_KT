@@ -43,7 +43,9 @@ public static class CustomerPermissionEvaluator
             customer.AccountantOwnerId != requestedOwnerId
             || customer.ManagerUserId != requestedManagerId;
 
-        return !assignmentsChanged || CanManageAssignments(currentUser);
+        return !assignmentsChanged
+            || CanManageAssignments(currentUser)
+            || CanClaimUnassignedCustomer(currentUser, customer, requestedOwnerId, requestedManagerId);
     }
 
     public static bool CanManageAssignments(ICurrentUser currentUser)
@@ -54,4 +56,25 @@ public static class CustomerPermissionEvaluator
             AppPermissions.CustomerEditAll,
             AppPermissions.CustomerAssignmentManage);
     }
+
+    private static bool CanClaimUnassignedCustomer(
+        ICurrentUser currentUser,
+        Customer customer,
+        Guid? requestedOwnerId,
+        Guid? requestedManagerId)
+    {
+        ArgumentNullException.ThrowIfNull(currentUser);
+        ArgumentNullException.ThrowIfNull(customer);
+
+        // Users who can edit unassigned customers may claim the customer for themselves,
+        // but still cannot reassign to someone else or change the manager.
+        if (customer.AccountantOwnerId is not null || currentUser.UserId is null)
+        {
+            return false;
+        }
+
+        return requestedOwnerId == currentUser.UserId
+            && requestedManagerId == customer.ManagerUserId;
+    }
 }
+

@@ -17,20 +17,29 @@ public static class SeedData
 
     private static readonly (string Code, string Name)[] DefaultPermissions =
     [
-        (AppPermissions.CustomerView, AppPermissions.CustomerView),
-        (AppPermissions.CustomerEditAll, AppPermissions.CustomerEditAll),
-        (AppPermissions.CustomerEditOwned, AppPermissions.CustomerEditOwned),
-        (AppPermissions.CustomerEditUnassigned, AppPermissions.CustomerEditUnassigned),
-        (AppPermissions.CustomerAssignmentManage, AppPermissions.CustomerAssignmentManage),
-        (AppPermissions.ImportUpload, AppPermissions.ImportUpload),
-        (AppPermissions.ImportHistory, AppPermissions.ImportHistory),
-        (AppPermissions.ImportCommitInvoice, AppPermissions.ImportCommitInvoice),
-        (AppPermissions.ImportCommitAdvance, AppPermissions.ImportCommitAdvance),
-        (AppPermissions.ImportCommitReceipt, AppPermissions.ImportCommitReceipt),
-        (AppPermissions.ImportRollback, AppPermissions.ImportRollback),
-        (AppPermissions.AdvanceManage, AppPermissions.AdvanceManage),
-        (AppPermissions.ReceiptApprove, AppPermissions.ReceiptApprove),
-        (AppPermissions.AdminManage, AppPermissions.AdminManage)
+        (AppPermissions.CustomerView, "Xem khách hàng"),
+        (AppPermissions.CustomerEditAll, "Sửa mọi khách hàng"),
+        (AppPermissions.CustomerEditOwned, "Sửa khách hàng phụ trách"),
+        (AppPermissions.CustomerEditUnassigned, "Sửa khách hàng chưa phân công"),
+        (AppPermissions.CustomerAssignmentManage, "Quản lý phân công khách hàng"),
+        (AppPermissions.ImportUpload, "Tải tệp nhập liệu"),
+        (AppPermissions.ImportHistory, "Xem lịch sử nhập liệu"),
+        (AppPermissions.ImportCommitInvoice, "Ghi nhận nhập hóa đơn"),
+        (AppPermissions.ImportCommitAdvance, "Ghi nhận nhập trả hộ"),
+        (AppPermissions.ImportCommitReceipt, "Ghi nhận nhập thu tiền"),
+        (AppPermissions.ImportRollback, "Hoàn tác đợt nhập"),
+        (AppPermissions.AdvanceManage, "Quản lý trả hộ"),
+        (AppPermissions.ReceiptApprove, "Duyệt thu tiền"),
+        (AppPermissions.PeriodLockManage, "Quản lý khóa kỳ"),
+        (AppPermissions.ReportsView, "Xem báo cáo"),
+        (AppPermissions.InvoiceManage, "Quản lý hóa đơn"),
+        (AppPermissions.AuditView, "Xem nhật ký hệ thống"),
+        (AppPermissions.AdminHealthView, "Xem sức khỏe hệ thống"),
+        (AppPermissions.RiskView, "Xem cảnh báo rủi ro"),
+        (AppPermissions.RiskManage, "Quản lý cảnh báo rủi ro"),
+        (AppPermissions.BackupManage, "Quản lý sao lưu"),
+        (AppPermissions.BackupRestore, "Khôi phục bản sao lưu"),
+        (AppPermissions.AdminManage, "Quản trị hệ thống")
     ];
 
     private static readonly IReadOnlyDictionary<string, string[]> DefaultRolePermissions =
@@ -52,7 +61,15 @@ public static class SeedData
                 AppPermissions.ImportCommitReceipt,
                 AppPermissions.ImportRollback,
                 AppPermissions.AdvanceManage,
-                AppPermissions.ReceiptApprove
+                AppPermissions.ReceiptApprove,
+                AppPermissions.PeriodLockManage,
+                AppPermissions.ReportsView,
+                AppPermissions.InvoiceManage,
+                AppPermissions.AuditView,
+                AppPermissions.AdminHealthView,
+                AppPermissions.RiskView,
+                AppPermissions.RiskManage,
+                AppPermissions.BackupManage
             ],
             ["Accountant"] =
             [
@@ -64,11 +81,15 @@ public static class SeedData
                 AppPermissions.ImportCommitInvoice,
                 AppPermissions.ImportCommitAdvance,
                 AppPermissions.AdvanceManage,
-                AppPermissions.ReceiptApprove
+                AppPermissions.ReceiptApprove,
+                AppPermissions.ReportsView,
+                AppPermissions.RiskView
             ],
             ["Viewer"] =
             [
-                AppPermissions.CustomerView
+                AppPermissions.CustomerView,
+                AppPermissions.ReportsView,
+                AppPermissions.RiskView
             ]
         };
 
@@ -99,10 +120,16 @@ public static class SeedData
 
         foreach (var permission in DefaultPermissions)
         {
-            var exists = await db.Permissions.AnyAsync(p => p.Code == permission.Code, ct);
-            if (!exists)
+            var existingPermission = await db.Permissions.FirstOrDefaultAsync(p => p.Code == permission.Code, ct);
+            if (existingPermission is null)
             {
                 db.Permissions.Add(new Permission { Code = permission.Code, Name = permission.Name });
+                continue;
+            }
+
+            if (!string.Equals(existingPermission.Name, permission.Name, StringComparison.Ordinal))
+            {
+                existingPermission.Name = permission.Name;
             }
         }
 
@@ -219,3 +246,4 @@ public static class SeedData
         await db.SaveChangesAsync(ct);
     }
 }
+

@@ -92,6 +92,42 @@ describe('ImportsPage deep-link type', () => {
     expect(latestCall?.canCommit).toBe(true)
   })
 
+  it('does not grant batch staging from accountant role without import permissions', async () => {
+    renderPage('/imports?tab=batch&type=ADVANCE', {
+      roles: ['Accountant'],
+      permissions: [],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('ADVANCE')
+    expect(latestCall?.canStage).toBe(false)
+    expect(latestCall?.canCommit).toBe(false)
+  })
+
+  it('does not grant commit from supervisor role without explicit commit permission', async () => {
+    renderPage('/imports?tab=batch&type=INVOICE', {
+      roles: ['Supervisor'],
+      permissions: ['import.upload'],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('INVOICE')
+    expect(latestCall?.canStage).toBe(true)
+    expect(latestCall?.canCommit).toBe(false)
+  })
+
   it('blocks invoice commit when user lacks invoice permission', async () => {
     renderPage('/imports?tab=batch&type=INVOICE', {
       permissions: ['import.upload', 'import.commit.advance'],

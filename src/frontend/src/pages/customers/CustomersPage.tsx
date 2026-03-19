@@ -8,6 +8,13 @@ import CustomerTransactionsSection from './CustomerTransactionsSection'
 
 type CustomerTab = 'invoices' | 'advances' | 'receipts' | 'unallocatedReceipts' | 'heldCredits'
 
+const CUSTOMER_MANAGE_PERMISSIONS = [
+  'customer.edit.all',
+  'customer.edit.owned',
+  'customer.edit.unassigned',
+  'customer.assignment.manage',
+] as const
+
 const parseTaxCode = (value: string | null) => {
   const normalized = value?.trim() ?? ''
   return normalized.length > 0 ? normalized : null
@@ -35,17 +42,9 @@ export default function CustomersPage() {
   const { state } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const token = state.accessToken ?? ''
-  const canManageCustomers =
-    state.roles.includes('Admin') ||
-    state.roles.includes('Supervisor') ||
-    state.permissions.some((permission) =>
-      [
-        'customer.edit.all',
-        'customer.edit.owned',
-        'customer.edit.unassigned',
-        'customer.assignment.manage',
-      ].includes(permission),
-    )
+  const canManageCustomers = state.permissions.some((permission) =>
+    CUSTOMER_MANAGE_PERMISSIONS.includes(permission as (typeof CUSTOMER_MANAGE_PERMISSIONS)[number]),
+  )
 
   const queryTaxCode = useMemo(() => parseTaxCode(searchParams.get('taxCode')), [searchParams])
   const queryTab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams])

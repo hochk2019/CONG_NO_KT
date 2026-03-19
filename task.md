@@ -1666,9 +1666,26 @@
   - `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-held-credits-panel.test.tsx` => pass `2/2`.
 
 ## Phase 110 - Granular permission system and accountant access alignment (2026-03-18) [bead: cng-h1d]
-- [ ] Rà soát toàn bộ quyền hiện tại của `Accountant` ở backend/frontend, xác nhận các điểm đang hardcode theo `role` và các endpoint cần mở theo business rule mới.
-- [ ] Thiết kế và triển khai permission matrix cấu hình được: schema/backend seed/auth propagation/JWT/current user để thay cho kiểm tra role cứng ở các flow liên quan.
-- [ ] Mở quyền cho `Accountant` được sửa customer do mình phụ trách hoặc customer chưa có owner, nhưng không được đổi owner/manager nếu không có quyền nâng cao.
-- [ ] Mở quyền cho `Accountant` được commit import Excel cho invoice và advance; giữ các loại import khác theo rule chặt hơn nếu chưa được yêu cầu mở.
-- [ ] Cập nhật frontend auth state + gating theo `permissions`, đồng thời bổ sung màn hình admin để xem/sửa permission của role.
-- [ ] Viết/cập nhật test backend và frontend cho permission matrix, customer edit, import commit, và admin permission management; chạy verify phù hợp trước khi đóng bead.
+- [x] Rà soát toàn bộ quyền hiện tại của `Accountant` ở backend/frontend, xác nhận các điểm đang hardcode theo `role` và các endpoint cần mở theo business rule mới.
+- [x] Thiết kế và triển khai permission matrix cấu hình được: schema/backend seed/auth propagation/JWT/current user để thay cho kiểm tra role cứng ở các flow liên quan.
+- [x] Mở quyền cho `Accountant` được sửa customer do mình phụ trách hoặc customer chưa có owner, nhưng không được đổi owner/manager nếu không có quyền nâng cao.
+- [x] Mở quyền cho `Accountant` được commit import Excel cho invoice và advance; giữ các loại import khác theo rule chặt hơn nếu chưa được yêu cầu mở.
+- [x] Cập nhật frontend auth state + gating theo `permissions`, đồng thời bổ sung màn hình admin để xem/sửa permission của role.
+- [x] Viết/cập nhật test backend và frontend cho permission matrix, customer edit, import commit, và admin permission management; chạy verify phù hợp trước khi đóng bead.
+
+## Phase 111 - Admin users role permissions dialog (2026-03-19)
+- [x] Di chuyển khối `Quyền theo vai trò` khỏi render inline ở `AdminUsersPage` để tránh chiếm chiều cao lớn trên trang `/admin/users`.
+- [x] Thêm nút `Quyền theo vai trò` ở header `Danh sách người dùng` và mở giao diện cấu hình bằng popup modal.
+- [x] Tách `RolePermissionsManager` hỗ trợ chế độ `embedded` để tái sử dụng trong dialog mà không lặp card/header.
+- [x] Bổ sung/cập nhật test frontend cho dialog mới, luồng mở/đóng bằng `Esc`, và render embedded.
+- [x] Verify:
+  - `npm --prefix src/frontend run test -- --run src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/admin/__tests__/admin-role-permissions-dialog.test.tsx src/pages/admin/__tests__/admin-users-page.test.tsx` => pass `9/9`.
+  - Playwright smoke: đăng nhập `localhost:5173`, mở `/admin/users`, mở popup `Quyền theo vai trò`, chụp `src/frontend/e2e-output/admin-users-role-permissions-dialog.png`, đóng popup bằng `Esc` => pass.
+
+## Phase 112 - Allow accountant self-assign on unassigned customer edit (2026-03-19)
+- [x] Xác nhận root cause: backend hiện coi mọi thay đổi `owner/manager` là đổi phân công độc lập với sửa thông tin customer và yêu cầu `CustomerAssignmentManage`.
+- [x] Nới rule hẹp cho phép người có quyền sửa customer chưa phân công được nhận customer đó về chính mình ngay trong lúc lưu form chỉnh sửa.
+- [x] Giữ nguyên guardrail cũ: không mở quyền gán sang người khác hoặc đồng thời đổi `manager` nếu không có quyền phân công nâng cao.
+- [x] Verify:
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerPermissionEvaluatorTests" -v minimal` => pass `11/11`.
+

@@ -32,8 +32,6 @@ const resolveImportType = (value: string | null): ImportType | null => {
 export default function ImportsPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
-  const hasImportRoleAccess = state.roles.some((role) => ['Admin', 'Supervisor', 'Accountant'].includes(role))
-  const hasCommitRoleAccess = state.roles.includes('Admin') || state.roles.includes('Supervisor')
   const hasPermission = (permission: string) => state.permissions.includes(permission)
 
   const location = useLocation()
@@ -43,11 +41,11 @@ export default function ImportsPage() {
   const queryTabParam = useMemo(() => searchParams.get('tab'), [searchParams])
   const fixedType = useMemo(() => resolveImportType(searchParams.get('type')), [searchParams])
   const activeTab = useMemo(() => resolveTab(queryTabParam ?? storedTab), [queryTabParam, storedTab])
-  const canStage = hasImportRoleAccess || hasPermission('import.upload')
+  const canStage = hasPermission('import.upload')
   const canCommitByType = {
-    INVOICE: hasCommitRoleAccess || hasPermission('import.commit.invoice'),
-    ADVANCE: hasCommitRoleAccess || hasPermission('import.commit.advance'),
-    RECEIPT: hasCommitRoleAccess || hasPermission('import.commit.receipt'),
+    INVOICE: hasPermission('import.commit.invoice'),
+    ADVANCE: hasPermission('import.commit.advance'),
+    RECEIPT: hasPermission('import.commit.receipt'),
   } satisfies Record<ImportType, boolean>
   const batchCanCommit = fixedType
     ? canCommitByType[fixedType]

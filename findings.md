@@ -266,3 +266,17 @@
 - Residual gap:
   - đây mới là alignment cho prefetch/navigation heuristics;
   - Phase 110 vẫn còn các slice lớn hơn về backend permission matrix, customer edit/import commit permissions, và admin permission management.
+
+## 2026-03-19 - cng-h1d permission matrix closure
+- Current state confirmed:
+  - customer manage gating và import commit gating ở frontend đã chuyển sang permission-first, không còn fallback role cứng cho các flow accountant cần dùng;
+  - admin UI đã có [RolePermissionsManager](E:/GPT/CONG_NO_KT/src/frontend/src/pages/admin/RolePermissionsManager.tsx) và được gắn vào [AdminUsersPage.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/AdminUsersPage.tsx);
+  - backend đã đăng ký các route permission management (`/admin/permissions`, `/admin/roles/{roleId:int}/permissions`) và có route test tương ứng.
+- Fix hoàn tất trong lượt này:
+  - loại import React trùng trong [CustomersPage.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/customers/CustomersPage.tsx) để tránh lỗi build/lint;
+  - cập nhật regression test [role-permissions-manager.test.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/admin/__tests__/role-permissions-manager.test.tsx) để chọn đúng `select` option theo `role.id`, khớp contract thực của component.
+- Verification:
+  - `npm --prefix src/frontend run test -- --run src/context/__tests__/auth-guards.test.tsx src/pages/customers/__tests__/customers-page.permissions.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/admin/__tests__/admin-users-page.test.tsx` => `16/16`;
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~AdminEndpointsRouteTests" -v minimal` => `1/1`.
+- Status:
+  - checklist Phase 110 đã đủ bằng chứng để đóng bead `cng-h1d`.

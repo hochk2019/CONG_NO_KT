@@ -7,6 +7,8 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Maintenance;
 using CongNoGolden.Application.Risk;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Api.Endpoints;
@@ -19,7 +21,7 @@ public static class AdminEndpoints
             string? search,
             int? page,
             int? pageSize,
-            ConGNoDbContext db,
+            [FromServices] ConGNoDbContext db,
             CancellationToken ct) =>
         {
             var pageValue = page.GetValueOrDefault(1);
@@ -86,22 +88,58 @@ public static class AdminEndpoints
         .WithTags("Admin")
         .RequireAuthorization("AdminManage");
 
-        app.MapGet("/admin/roles", async (ConGNoDbContext db, CancellationToken ct) =>
+        app.MapGet("/admin/roles", async ([FromServices] ConGNoDbContext db, CancellationToken ct) =>
         {
             var roles = await db.Roles
                 .AsNoTracking()
                 .OrderBy(r => r.Code)
-                .Select(r => new AdminRoleItem(r.Id, r.Code, r.Name))
+                .Select(r => new { r.Id, r.Code, r.Name })
                 .ToListAsync(ct);
-            return Results.Ok(roles);
+
+            var roleIds = roles.Select(r => r.Id).ToList();
+            var permissionRows = await db.RolePermissions
+                .AsNoTracking()
+                .Where(rp => roleIds.Contains(rp.RoleId))
+                .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => new { rp.RoleId, p.Code })
+                .ToListAsync(ct);
+
+            var permissionLookup = permissionRows
+                .GroupBy(r => r.RoleId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (IReadOnlyList<string>)g.Select(x => x.Code).OrderBy(x => x).ToList());
+
+            var items = roles.Select(r => new AdminRoleItem(
+                r.Id,
+                r.Code,
+                r.Name,
+                permissionLookup.TryGetValue(r.Id, out var permissions) ? permissions : Array.Empty<string>()))
+                .ToList();
+
+            return Results.Ok(items);
         })
         .WithName("AdminRoleList")
         .WithTags("Admin")
         .RequireAuthorization("AdminManage");
 
+        app.MapGet("/admin/permissions", async ([FromServices] ConGNoDbContext db, CancellationToken ct) =>
+        {
+            var permissions = await db.Permissions
+                .AsNoTracking()
+                .OrderBy(p => p.Name)
+                .ThenBy(p => p.Code)
+                .Select(p => new AdminPermissionItem(p.Code, p.Name))
+                .ToListAsync(ct);
+
+            return Results.Ok(permissions);
+        })
+        .WithName("AdminPermissionList")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminManage");
+
         app.MapGet("/admin/health", async (
-            ConGNoDbContext db,
-            ICustomerBalanceReconcileService balanceReconcileService,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] ICustomerBalanceReconcileService balanceReconcileService,
             CancellationToken ct) =>
         {
             var serverTimeUtc = DateTimeOffset.UtcNow;
@@ -174,8 +212,8 @@ public static class AdminEndpoints
 
         app.MapPost("/admin/health/reconcile-balances", async (
             AdminBalanceReconcileRequest? request,
-            ICustomerBalanceReconcileService balanceReconcileService,
-            IAuditService auditService,
+            [FromServices] ICustomerBalanceReconcileService balanceReconcileService,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var applyChanges = request?.ApplyChanges ?? false;
@@ -224,8 +262,8 @@ public static class AdminEndpoints
         .RequireAuthorization("AdminHealthView");
 
         app.MapPost("/admin/health/run-retention", async (
-            IDataRetentionService dataRetentionService,
-            IAuditService auditService,
+            [FromServices] IDataRetentionService dataRetentionService,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var result = await dataRetentionService.RunAsync(ct);
@@ -257,7 +295,7 @@ public static class AdminEndpoints
         app.MapGet("/admin/risk-ml/models", async (
             string? modelKey,
             int? take,
-            IRiskAiModelService riskAiModelService,
+            [FromServices] IRiskAiModelService riskAiModelService,
             CancellationToken ct) =>
         {
             var items = await riskAiModelService.ListModelsAsync(modelKey, take ?? 20, ct);
@@ -270,7 +308,7 @@ public static class AdminEndpoints
         app.MapGet("/admin/risk-ml/runs", async (
             string? modelKey,
             int? take,
-            IRiskAiModelService riskAiModelService,
+            [FromServices] IRiskAiModelService riskAiModelService,
             CancellationToken ct) =>
         {
             var items = await riskAiModelService.ListTrainingRunsAsync(modelKey, take ?? 20, ct);
@@ -282,7 +320,7 @@ public static class AdminEndpoints
 
         app.MapGet("/admin/risk-ml/active", async (
             string? modelKey,
-            IRiskAiModelService riskAiModelService,
+            [FromServices] IRiskAiModelService riskAiModelService,
             CancellationToken ct) =>
         {
             var active = await riskAiModelService.GetActiveModelAsync(modelKey, ct);
@@ -294,8 +332,8 @@ public static class AdminEndpoints
 
         app.MapPost("/admin/risk-ml/train", async (
             RiskMlTrainRequest? request,
-            IRiskAiModelService riskAiModelService,
-            IAuditService auditService,
+            [FromServices] IRiskAiModelService riskAiModelService,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var normalizedRequest = request ?? new RiskMlTrainRequest(
@@ -321,8 +359,8 @@ public static class AdminEndpoints
 
         app.MapPost("/admin/risk-ml/models/{id:guid}/activate", async (
             Guid id,
-            IRiskAiModelService riskAiModelService,
-            IAuditService auditService,
+            [FromServices] IRiskAiModelService riskAiModelService,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var activated = await riskAiModelService.ActivateModelAsync(id, ct);
@@ -342,8 +380,8 @@ public static class AdminEndpoints
 
         app.MapPost("/admin/users", async (
             AdminUserCreateRequest request,
-            ConGNoDbContext db,
-            IAuditService auditService,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var username = (request.Username ?? string.Empty).Trim();
@@ -440,8 +478,8 @@ public static class AdminEndpoints
         app.MapPut("/admin/users/{id:guid}/roles", async (
             Guid id,
             AdminUserRolesRequest request,
-            ConGNoDbContext db,
-            IAuditService auditService,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -509,11 +547,107 @@ public static class AdminEndpoints
         .RequireAuthorization("AdminManage")
         .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
+        app.MapPut("/admin/roles/{roleId:int}/permissions", async (
+            int roleId,
+            AdminRolePermissionsRequest request,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var role = await db.Roles.FirstOrDefaultAsync(r => r.Id == roleId, ct);
+            if (role is null)
+            {
+                return ApiErrors.NotFound("Role not found.");
+            }
+
+            var requested = (request.Permissions ?? Array.Empty<string>())
+                .Where(p => !string.IsNullOrWhiteSpace(p))
+                .Select(p => p.Trim())
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var requestedNormalized = requested
+                .Select(p => p.ToUpperInvariant())
+                .ToHashSet();
+
+            var permissions = await db.Permissions
+                .Where(p => requestedNormalized.Contains(p.Code.ToUpper()))
+                .ToListAsync(ct);
+
+            if (permissions.Count != requested.Count)
+            {
+                return ApiErrors.InvalidRequest("Invalid permission list.");
+            }
+
+            var existingMappings = await db.RolePermissions
+                .Where(rp => rp.RoleId == roleId)
+                .Join(db.Permissions, rp => rp.PermissionId, p => p.Id, (rp, p) => new { RolePermission = rp, p.Code })
+                .ToListAsync(ct);
+
+            var existingPermissionCodes = existingMappings
+                .Select(x => x.Code)
+                .OrderBy(x => x)
+                .ToList();
+
+            var existingPermissionIds = existingMappings
+                .Select(x => x.RolePermission.PermissionId)
+                .ToHashSet();
+
+            var requestedPermissionIds = permissions
+                .Select(p => p.Id)
+                .ToHashSet();
+
+            var toRemove = existingMappings
+                .Where(x => !requestedPermissionIds.Contains(x.RolePermission.PermissionId))
+                .Select(x => x.RolePermission)
+                .ToList();
+
+            if (toRemove.Count > 0)
+            {
+                db.RolePermissions.RemoveRange(toRemove);
+            }
+
+            var toAdd = permissions
+                .Where(p => !existingPermissionIds.Contains(p.Id))
+                .Select(p => new RolePermission
+                {
+                    RoleId = roleId,
+                    PermissionId = p.Id
+                })
+                .ToList();
+
+            if (toAdd.Count > 0)
+            {
+                await db.RolePermissions.AddRangeAsync(toAdd, ct);
+            }
+
+            await db.SaveChangesAsync(ct);
+
+            var requestedPermissionCodes = permissions
+                .Select(p => p.Code)
+                .OrderBy(x => x)
+                .ToList();
+
+            await auditService.LogAsync(
+                "ROLE_PERMISSIONS_UPDATE",
+                "Role",
+                roleId.ToString(),
+                new { permissions = existingPermissionCodes },
+                new { permissions = requestedPermissionCodes },
+                ct);
+
+            return Results.NoContent();
+        })
+        .WithName("AdminRolePermissionsUpdate")
+        .WithTags("Admin")
+        .RequireAuthorization("AdminManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
         app.MapPut("/admin/users/{id:guid}/status", async (
             Guid id,
             AdminUserStatusRequest request,
-            ConGNoDbContext db,
-            IAuditService auditService,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -545,8 +679,8 @@ public static class AdminEndpoints
         app.MapPut("/admin/users/{id:guid}/password", async (
             Guid id,
             AdminUserResetPasswordRequest request,
-            IAuthService authService,
-            IAuditService auditService,
+            [FromServices] IAuthService authService,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             try
@@ -580,8 +714,8 @@ public static class AdminEndpoints
         app.MapPut("/admin/users/{id:guid}/zalo", async (
             Guid id,
             AdminUserZaloRequest request,
-            ConGNoDbContext db,
-            IAuditService auditService,
+            [FromServices] ConGNoDbContext db,
+            [FromServices] IAuditService auditService,
             CancellationToken ct) =>
         {
             var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
@@ -635,7 +769,7 @@ public static class AdminEndpoints
             DateTimeOffset? to,
             int? page,
             int? pageSize,
-            ConGNoDbContext db,
+            [FromServices] ConGNoDbContext db,
             CancellationToken ct) =>
         {
             var pageValue = page.GetValueOrDefault(1);
@@ -744,6 +878,11 @@ public sealed record AdminUserListItem(
 public sealed record AdminRoleItem(
     int Id,
     string Code,
+    string Name,
+    IReadOnlyList<string> Permissions);
+
+public sealed record AdminPermissionItem(
+    string Code,
     string Name);
 
 public sealed record AdminUserCreateRequest(
@@ -758,6 +897,8 @@ public sealed record AdminUserCreateRequest(
 public sealed record AdminUserCreateResponse(Guid Id);
 
 public sealed record AdminUserRolesRequest(IReadOnlyList<string> Roles);
+
+public sealed record AdminRolePermissionsRequest(IReadOnlyList<string>? Permissions);
 
 public sealed record AdminUserStatusRequest(bool IsActive);
 

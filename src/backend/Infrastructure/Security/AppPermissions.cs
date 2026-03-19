@@ -17,5 +17,15 @@ public static class AppPermissions
 
     public const string AdvanceManage = "advance.manage";
     public const string ReceiptApprove = "receipt.approve";
+    public const string PeriodLockManage = "period.lock.manage";
+    public const string ReportsView = "reports.view";
+    public const string InvoiceManage = "invoice.manage";
+    public const string AuditView = "audit.view";
+    public const string AdminHealthView = "admin.health.view";
+    public const string RiskView = "risk.view";
+    public const string RiskManage = "risk.manage";
+    public const string BackupManage = "backup.manage";
+    public const string BackupRestore = "backup.restore";
     public const string AdminManage = "admin.manage";
 }
+

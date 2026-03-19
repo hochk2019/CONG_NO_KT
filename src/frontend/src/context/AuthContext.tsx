@@ -294,3 +294,21 @@ export const RequireRole = ({
 
   return <>{children ?? <Outlet />}</>
 }
+
+export const RequirePermission = ({
+  permissions,
+  children,
+}: {
+  permissions: string[]
+  children?: React.ReactNode
+}) => {
+  const { state } = useAuth()
+  const allowed =
+    permissions.length === 0 || permissions.some((permission) => state.permissions.includes(permission))
+
+  if (!allowed) {
+    return <Navigate to="/403" replace />
+  }
+
+  return <>{children ?? <Outlet />}</>
+}

@@ -73,6 +73,7 @@ const buildAuthContext = (roles: string[] = ['Admin']): AuthContextValue => ({
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'tester',
     roles,
+    permissions: [],
   },
   isAuthenticated: true,
   isBootstrapping: false,

@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
-import { RequireAuth, RequireRole } from './context/AuthContext'
+import { RequireAuth, RequirePermission, RequireRole } from './context/AuthContext'
 import { NotificationCenterProvider } from './context/NotificationCenterContext'
 import AppShell from './layouts/AppShell'
 import {
@@ -66,33 +66,33 @@ export default function App() {
             <Route
               path="/admin/period-locks"
               element={
-                <RequireRole roles={['Admin', 'Supervisor']}>
+                <RequirePermission permissions={['period.lock.manage']}>
                   <AdminPeriodLocksPage />
-                </RequireRole>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/users"
               element={
-                <RequireRole roles={['Admin']}>
+                <RequirePermission permissions={['admin.manage']}>
                   <AdminUsersPage />
-                </RequireRole>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/audit"
               element={
-                <RequireRole roles={['Admin', 'Supervisor']}>
+                <RequirePermission permissions={['audit.view']}>
                   <AdminAuditPage />
-                </RequireRole>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/health"
               element={
-                <RequireRole roles={['Admin', 'Supervisor']}>
+                <RequirePermission permissions={['admin.health.view']}>
                   <AdminHealthPage />
-                </RequireRole>
+                </RequirePermission>
               }
             />
             <Route
@@ -106,9 +106,9 @@ export default function App() {
             <Route
               path="/admin/backup"
               element={
-                <RequireRole roles={['Admin', 'Supervisor']}>
+                <RequirePermission permissions={['backup.manage']}>
                   <AdminBackupPage />
-                </RequireRole>
+                </RequirePermission>
               }
             />
           </Route>

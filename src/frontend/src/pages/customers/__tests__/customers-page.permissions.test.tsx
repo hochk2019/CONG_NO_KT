@@ -82,6 +82,21 @@ describe('CustomersPage permission gating', () => {
     expect(transactionsCall?.canManageCustomers).toBe(false)
   })
 
+  it('does not grant manage actions from supervisor role without explicit customer permissions', () => {
+    renderPage({ roles: ['Supervisor'] })
+
+    expect(screen.getByTestId('customer-list-section')).toBeInTheDocument()
+    expect(screen.getByTestId('customer-transactions-section')).toBeInTheDocument()
+
+    const listCall = mocks.customerListSectionMock.mock.calls.at(-1)?.[0] as { canManageCustomers?: boolean }
+    const transactionsCall = mocks.customerTransactionsSectionMock.mock.calls.at(-1)?.[0] as {
+      canManageCustomers?: boolean
+    }
+
+    expect(listCall?.canManageCustomers).toBe(false)
+    expect(transactionsCall?.canManageCustomers).toBe(false)
+  })
+
   it('enables manage actions when any customer edit or assignment permission exists', () => {
     renderPage({ permissions: ['customer.edit.owned'] })
 

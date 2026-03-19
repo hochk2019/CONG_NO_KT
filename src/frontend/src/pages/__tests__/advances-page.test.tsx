@@ -22,6 +22,7 @@ const buildAuthContext = (): AuthContextValue => ({
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'accountant',
     roles: ['Accountant'],
+    permissions: [],
   },
   isAuthenticated: true,
   isBootstrapping: false,

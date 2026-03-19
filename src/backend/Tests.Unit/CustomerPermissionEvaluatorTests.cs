@@ -117,6 +117,30 @@ public sealed class CustomerPermissionEvaluatorTests
     }
 
     [Fact]
+    public void CanUpdateCustomer_ReturnsTrue_WhenUnassignedCustomerIsClaimedByCurrentUser()
+    {
+        var userId = Guid.NewGuid();
+        var user = new TestCurrentUser(
+            userId,
+            permissions: [AppPermissions.CustomerEditUnassigned]);
+        var customer = new Customer
+        {
+            TaxCode = "0101234571",
+            Name = "Unassigned customer",
+            AccountantOwnerId = null,
+            ManagerUserId = null
+        };
+
+        var actual = CustomerPermissionEvaluator.CanUpdateCustomer(
+            user,
+            customer,
+            userId,
+            customer.ManagerUserId);
+
+        Assert.True(actual);
+    }
+
+    [Fact]
     public void CanUpdateCustomer_ReturnsFalse_WhenAssignmentsChangeWithoutAssignmentPermission()
     {
         var ownerId = Guid.NewGuid();
@@ -125,7 +149,7 @@ public sealed class CustomerPermissionEvaluatorTests
             permissions: [AppPermissions.CustomerEditOwned]);
         var customer = new Customer
         {
-            TaxCode = "0101234571",
+            TaxCode = "0101234572",
             Name = "Protected customer",
             AccountantOwnerId = ownerId,
             ManagerUserId = Guid.NewGuid()
@@ -136,6 +160,54 @@ public sealed class CustomerPermissionEvaluatorTests
             customer,
             Guid.NewGuid(),
             customer.ManagerUserId);
+
+        Assert.False(actual);
+    }
+
+    [Fact]
+    public void CanUpdateCustomer_ReturnsFalse_WhenUnassignedCustomerIsAssignedToAnotherUserWithoutAssignmentPermission()
+    {
+        var userId = Guid.NewGuid();
+        var user = new TestCurrentUser(
+            userId,
+            permissions: [AppPermissions.CustomerEditUnassigned]);
+        var customer = new Customer
+        {
+            TaxCode = "0101234573",
+            Name = "Unassigned customer",
+            AccountantOwnerId = null,
+            ManagerUserId = null
+        };
+
+        var actual = CustomerPermissionEvaluator.CanUpdateCustomer(
+            user,
+            customer,
+            Guid.NewGuid(),
+            customer.ManagerUserId);
+
+        Assert.False(actual);
+    }
+
+    [Fact]
+    public void CanUpdateCustomer_ReturnsFalse_WhenClaimingUnassignedCustomerAlsoChangesManagerWithoutAssignmentPermission()
+    {
+        var userId = Guid.NewGuid();
+        var user = new TestCurrentUser(
+            userId,
+            permissions: [AppPermissions.CustomerEditUnassigned]);
+        var customer = new Customer
+        {
+            TaxCode = "0101234574",
+            Name = "Unassigned customer",
+            AccountantOwnerId = null,
+            ManagerUserId = null
+        };
+
+        var actual = CustomerPermissionEvaluator.CanUpdateCustomer(
+            user,
+            customer,
+            userId,
+            Guid.NewGuid());
 
         Assert.False(actual);
     }
@@ -153,7 +225,7 @@ public sealed class CustomerPermissionEvaluatorTests
             ]);
         var customer = new Customer
         {
-            TaxCode = "0101234572",
+            TaxCode = "0101234575",
             Name = "Assignable customer",
             AccountantOwnerId = ownerId,
             ManagerUserId = Guid.NewGuid()
@@ -183,3 +255,4 @@ public sealed class CustomerPermissionEvaluatorTests
         public string? IpAddress => "127.0.0.1";
     }
 }
+

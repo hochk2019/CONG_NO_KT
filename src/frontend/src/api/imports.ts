@@ -89,6 +89,7 @@ export type ImportBatchHistoryItem = {
   cancelledBy?: string | null
   cancelReason?: string | null
   summary: ImportCommitResult
+  stagingSummary?: ImportStagingResult | null
 }
 
 export const uploadImport = async (params: {

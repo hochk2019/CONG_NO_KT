@@ -1596,11 +1596,15 @@
 - [x] `npm run build` (cwd `src/frontend`) => pass.
 - [x] `npm run lint` (cwd `src/frontend`) => không có lỗi mới; còn `1` warning unrelated tại `src/pages/receipts/ReceiptListSection.tsx:196`.
 
-## Phase 104 - Accountant-first redesign for import recovery workspace (planned 2026-03-18) [bead: cng-0ye]
-- [ ] Mở rộng API/history để trả về validation counts (`ok/warn/error`) hoặc staging sub-status đủ giàu cho UI phân biệt `Có lỗi cần sửa` / `Cần rà soát` / `Sẵn sàng ghi`.
-- [ ] Thiết kế lại history + workspace theo next-best-action cho kế toán, giảm phụ thuộc vào preview modal chỉ để biết phải làm gì tiếp theo.
-- [ ] Ưu tiên recovery action theo trạng thái (`Xem lỗi`, `Tải lại file đã sửa`, `Hủy lô`, `Rà soát cảnh báo`, `Ghi dữ liệu`) thay cho cụm action ngang hàng như hiện tại.
-- [ ] Bổ sung regression/e2e coverage và lộ trình rollout từ quick fix Phase 103 sang redesign hoàn chỉnh.
+## Phase 104 - Accountant-first redesign for import recovery workspace (2026-03-19) [bead: cng-0ye]
+- [x] Mở rộng API/history để trả về `stagingSummary` (`ok/warn/error`) cho từng batch `STAGING`, đủ giàu để UI phân biệt `Có lỗi cần sửa` / `Cần rà soát` / `Sẵn sàng ghi`.
+- [x] Thiết kế lại history + workspace theo next-best-action cho kế toán: summary/action trong history phản ánh đúng blocked/review/ready, workspace đổi copy/nút theo trạng thái thay vì buộc mở preview chỉ để hiểu bước kế tiếp.
+- [x] Ưu tiên recovery action theo trạng thái (`Xem lỗi`, `Rà soát cảnh báo`, `Mở để ghi`, `Xem trước lần cuối`) và chỉ giữ CTA commit ở trạng thái sẵn sàng.
+- [x] Bổ sung regression coverage frontend + backend cho history summary/action và API list batch; cập nhật `task.md` để chốt scope rollout từ quick fix Phase 103 sang redesign hoàn chỉnh.
+
+### Verification evidence (2026-03-19, phase 104 / cng-0ye)
+- [x] `npm --prefix src/frontend run test -- --run src/pages/imports/__tests__/importHistorySection.bulk.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` => pass (`10/10`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportBatchListTests" -v minimal` => pass (`2/2`).
 
 ## Phase 105 - Fix template parser regression for negative adjustment invoices (2026-03-18) [bead: cng-z25]
 - [x] Xác nhận nguyên nhân gốc: logic `ADJUSTMENT_REDUCTION` ở `cng-huj` mới áp dụng cho `ImportInvoiceParser`, còn file INVOICE dạng template vẫn đi qua `ImportInvoiceTemplateParser` và bị gắn `NEGATIVE_AMOUNT`.
@@ -1688,4 +1692,26 @@
 - [x] Giữ nguyên guardrail cũ: không mở quyền gán sang người khác hoặc đồng thời đổi `manager` nếu không có quyền phân công nâng cao.
 - [x] Verify:
   - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerPermissionEvaluatorTests" -v minimal` => pass `11/11`.
+
+## Phase 113 - Expose advance approval permission in role manager (2026-03-20) [bead: cng-834]
+- [x] Xác nhận root cause: trang `/advances` vẫn hardcode quyền duyệt theo `role` (`Admin`/`Supervisor`) thay vì đọc permission matrix mới.
+- [x] Đổi gating frontend sang permission `advance.manage` để tài khoản có quyền này có thể bật/tắt duyệt khoản trả hộ qua màn hình quản lý quyền.
+- [x] Chuẩn hóa nhãn permission `advance.manage` thành `Duyệt và quản lý trả hộ` ở seed backend và màn hình admin để người vận hành hiểu đúng chức năng.
+- [x] Cập nhật copy trên workspace nhập liệu trả hộ để hướng dẫn theo permission thay vì role cứng.
+- [x] Bổ sung regression tests cho `/advances` và `RolePermissionsManager`.
+- [x] Verify:
+  - `npm --prefix src/frontend run test -- --run src/pages/__tests__/advances-page.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx` => pass `8/8`.
+
+## Phase 114 - Remove advances workspace summary hero (2026-03-20) [bead: cng-acm]
+- [x] Bỏ khối workspace summary hero ở đầu trang `/advances` để giao diện gọn hơn.
+- [x] Giữ nguyên phần nhập liệu khoản trả hộ ngay bên dưới sau khi bỏ hero.
+- [x] Verify:
+  - `npm --prefix src/frontend run test -- --run src/pages/__tests__/advances-page.test.tsx` => pass `4/4`.
+
+## Phase 115 - Restore import CTA inside manual advances header (2026-03-20) [bead: cng-bnv]
+- [x] Đưa lại nút `Import từ template` vào section `Tạo khoản trả hộ KH`, đặt ở góc trên bên phải của header để giữ thao tác nhanh mà không mang hero cũ trở lại.
+- [x] Đi dây lại callback từ `/advances` sang route import tập trung `/imports?tab=batch&type=ADVANCE`.
+- [x] Bổ sung regression tests cho page và `ManualAdvancesSection`.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend run test -- --run src/pages/__tests__/advances-page.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
 

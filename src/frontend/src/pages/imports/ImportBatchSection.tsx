@@ -163,6 +163,21 @@ export default function ImportBatchSection({
       }),
     [batchId, currentQualitySummary, previewLoading],
   )
+  const uploadButtonLabel = useMemo(() => {
+    if (recoveryState.status === 'blocked') {
+      return 'Tải lại file đã sửa'
+    }
+
+    if (batchId) {
+      return 'Tải file khác'
+    }
+
+    return 'Tải file'
+  }, [batchId, recoveryState.status])
+  const previewButtonClassName =
+    recoveryState.status === 'review' ? 'btn btn-primary' : 'btn btn-outline'
+  const commitButtonClassName =
+    recoveryState.status === 'review' ? 'btn btn-outline' : 'btn btn-primary'
 
   const previewTotalPages = preview
     ? Math.max(1, Math.ceil(preview.totalRows / preview.pageSize))
@@ -617,10 +632,10 @@ export default function ImportBatchSection({
         </details>
         <div className="inline-actions">
           <button className="btn btn-primary" onClick={handleUpload} disabled={uploading}>
-            {uploading ? 'Đang tải...' : 'Tải file'}
+            {uploading ? 'Đang tải...' : uploadButtonLabel}
           </button>
           <button
-            className="btn btn-outline"
+            className={previewButtonClassName}
             type="button"
             onClick={handlePreview}
             disabled={!batchId || uploading || cancelLoading}
@@ -718,7 +733,7 @@ export default function ImportBatchSection({
         </details>
         <div className="inline-actions">
           <button
-            className="btn btn-primary"
+            className={commitButtonClassName}
             onClick={handleCommit}
             disabled={commitLoading || !canCommit || !batchId || recoveryState.hasBlockingErrors}
           >

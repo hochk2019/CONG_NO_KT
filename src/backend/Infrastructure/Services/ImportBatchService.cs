@@ -141,6 +141,26 @@ public sealed class ImportBatchService : IImportBatchService
                     u => string.IsNullOrWhiteSpace(u.FullName) ? u.Username : u.FullName,
                     ct);
 
+        var batchIds = batches.Select(b => b.Id).ToList();
+        var stagingSummaryLookup = batchIds.Count == 0
+            ? new Dictionary<Guid, ImportBatchStagingSummary>()
+            : await _db.ImportStagingRows
+                .AsNoTracking()
+                .Where(r => batchIds.Contains(r.BatchId))
+                .GroupBy(r => r.BatchId)
+                .Select(g => new
+                {
+                    BatchId = g.Key,
+                    TotalRows = g.Count(),
+                    OkCount = g.Count(r => r.ValidationStatus == ImportStagingHelpers.StatusOk),
+                    WarnCount = g.Count(r => r.ValidationStatus == ImportStagingHelpers.StatusWarn),
+                    ErrorCount = g.Count(r => r.ValidationStatus == ImportStagingHelpers.StatusError)
+                })
+                .ToDictionaryAsync(
+                    s => s.BatchId,
+                    s => new ImportBatchStagingSummary(s.TotalRows, s.OkCount, s.WarnCount, s.ErrorCount),
+                    ct);
+
         var items = batches.Select(b => new ImportBatchListItem(
                 b.Id,
                 b.Type,
@@ -156,7 +176,8 @@ public sealed class ImportBatchService : IImportBatchService
                 b.CancelledBy.HasValue && userLookup.TryGetValue(b.CancelledBy.Value, out var cancelledName)
                     ? cancelledName
                     : null,
-                b.CancelReason))
+                b.CancelReason,
+                stagingSummaryLookup.GetValueOrDefault(b.Id)))
             .ToList();
 
         return new PagedResult<ImportBatchListItem>(items, page, pageSize, total);

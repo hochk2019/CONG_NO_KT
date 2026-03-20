@@ -61,6 +61,7 @@ const DEFAULT_SOURCE_FILTER = ''
 type ManualAdvancesSectionProps = {
   token: string
   canApprove: boolean
+  onImportTemplate?: () => void
 }
 
 type ManualAdvanceConfirmAction = 'approve' | 'void' | 'unvoid'
@@ -70,7 +71,11 @@ type ManualAdvanceConfirmState = {
   row: AdvanceListItem
 }
 
-export default function ManualAdvancesSection({ token, canApprove }: ManualAdvancesSectionProps) {
+export default function ManualAdvancesSection({
+  token,
+  canApprove,
+  onImportTemplate,
+}: ManualAdvancesSectionProps) {
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -507,7 +512,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
   const hasSelectedRows = selectedAdvanceIds.length > 0
   const quickCreateModeLabel = canApprove
     ? 'Hồ sơ đủ thông tin có thể tạo và phê duyệt ngay trên cùng một nhịp thao tác.'
-    : 'Tài khoản hiện tại chỉ tạo nháp; bước phê duyệt sẽ do Admin hoặc Supervisor xử lý.'
+    : 'Tài khoản hiện tại chỉ tạo nháp; cần bật quyền Duyệt và quản lý trả hộ để phê duyệt ngay.'
 
   const handleBulkAction = (action: ManualAdvanceConfirmAction) => {
     if (action === 'approve' && selectedApproveCount === 0) return
@@ -663,13 +668,22 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
       <section className="card">
         <div className="advances-create-shell">
           <div className="advances-create-main">
-            <div className="advances-section-header">
-              <span className="advances-section-kicker">Tạo nhanh</span>
-              <h3>Tạo khoản trả hộ KH</h3>
-              <p className="muted advances-section-lead">
-                Ưu tiên hoàn thành MST bên bán, MST bên mua, ngày trả hộ và số tiền trước. Số chứng từ
-                và ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
-              </p>
+            <div className="advances-section-header advances-section-header--split">
+              <div className="advances-section-header__copy">
+                <span className="advances-section-kicker">Tạo nhanh</span>
+                <h3>Tạo khoản trả hộ KH</h3>
+                <p className="muted advances-section-lead">
+                  Ưu tiên hoàn thành MST bên bán, MST bên mua, ngày trả hộ và số tiền trước. Số chứng
+                  từ và ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
+                </p>
+              </div>
+              {onImportTemplate ? (
+                <div className="advances-section-header__actions">
+                  <button className="btn btn-ghost" type="button" onClick={onImportTemplate}>
+                    Import từ template
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="advances-create-toolbar" aria-label="Trạng thái tạo nhanh">
@@ -790,7 +804,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
 
             <div className="advances-submit-row">
               <div className="advances-submit-row__copy">
-                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp để chuyển người duyệt.'}</strong>
+                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp khi chưa bật quyền duyệt.'}</strong>
                 <span className="muted">{quickCreateModeLabel}</span>
               </div>
               <div className="advances-submit-row__buttons">

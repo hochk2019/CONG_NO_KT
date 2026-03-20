@@ -28,7 +28,7 @@ public static class SeedData
         (AppPermissions.ImportCommitAdvance, "Ghi nhận nhập trả hộ"),
         (AppPermissions.ImportCommitReceipt, "Ghi nhận nhập thu tiền"),
         (AppPermissions.ImportRollback, "Hoàn tác đợt nhập"),
-        (AppPermissions.AdvanceManage, "Quản lý trả hộ"),
+        (AppPermissions.AdvanceManage, "Duyệt và quản lý trả hộ"),
         (AppPermissions.ReceiptApprove, "Duyệt thu tiền"),
         (AppPermissions.PeriodLockManage, "Quản lý khóa kỳ"),
         (AppPermissions.ReportsView, "Xem báo cáo"),

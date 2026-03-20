@@ -34,6 +34,7 @@ describe('RolePermissionsManager', () => {
     ])
     mocks.fetchAdminPermissions.mockResolvedValue([
       { code: 'admin.manage', name: 'Quản trị hệ thống' },
+      { code: 'advance.manage', name: 'Duyệt và quản lý trả hộ' },
       { code: 'audit.view', name: 'Xem nhật ký' },
       { code: 'customer.view', name: 'Xem khách hàng' },
     ])
@@ -74,9 +75,13 @@ describe('RolePermissionsManager', () => {
     render(<RolePermissionsManager token="token" />)
 
     const adminGroup = await screen.findByRole('region', { name: 'Nhóm quyền Quản trị' })
+    const advanceGroup = screen.getByRole('region', { name: 'Nhóm quyền Trả hộ' })
     const customerGroup = screen.getByRole('region', { name: 'Nhóm quyền Khách hàng' })
 
     expect(within(adminGroup).getByText('admin.manage (Quản trị hệ thống)')).toBeInTheDocument()
+    expect(
+      within(advanceGroup).getByText('advance.manage (Duyệt và quản lý trả hộ)'),
+    ).toBeInTheDocument()
     expect(within(customerGroup).getByText('customer.view (Xem khách hàng)')).toBeInTheDocument()
 
     await user.click(within(customerGroup).getByRole('button', { name: 'Thu gọn Khách hàng' }))

@@ -95,7 +95,7 @@ export const getImportBatchRecoveryState = ({
 
   return {
     status: 'ready',
-    previewButtonLabel: 'Xem trước',
+    previewButtonLabel: 'Xem trước lần cuối',
     hasBlockingErrors: false,
     errorCount: 0,
     warnCount: 0,

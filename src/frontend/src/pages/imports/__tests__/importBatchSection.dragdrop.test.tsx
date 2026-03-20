@@ -192,8 +192,61 @@ describe('ImportBatchSection drag and drop', () => {
       expect(screen.getByText('Lô này còn 1 dòng lỗi nên chưa thể ghi dữ liệu.')).toBeInTheDocument()
     })
 
+    expect(screen.getByRole('button', { name: 'Tải lại file đã sửa' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Xem lỗi' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toBeDisabled()
     expect(commitImportMock).not.toHaveBeenCalled()
+  })
+
+  it('keeps review as the primary action when staged batch only has warnings', async () => {
+    const user = userEvent.setup()
+    const file = new File(['demo'], 'invoice-review.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    uploadImportMock.mockResolvedValue({
+      batch: { batchId: 'batch-review-01', status: 'STAGING' },
+      staging: { totalRows: 5, okCount: 3, warnCount: 2, errorCount: 0 },
+    })
+
+    render(<ImportBatchSection token="token-1" canStage canCommit />)
+
+    fireEvent.drop(screen.getByTestId('import-dropzone'), createDropPayload(file))
+    await user.click(screen.getByRole('button', { name: 'Tải file' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Lô không còn lỗi chặn ghi, nhưng còn 2 dòng cảnh báo.')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: 'Tải file khác' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Rà soát cảnh báo' })).toHaveClass('btn-primary')
+    expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toHaveClass('btn-outline')
+  })
+
+  it('promotes commit as the primary action when staged batch is ready', async () => {
+    const user = userEvent.setup()
+    const file = new File(['demo'], 'invoice-ready.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+
+    uploadImportMock.mockResolvedValue({
+      batch: { batchId: 'batch-ready-01', status: 'STAGING' },
+      staging: { totalRows: 6, okCount: 6, warnCount: 0, errorCount: 0 },
+    })
+
+    render(<ImportBatchSection token="token-1" canStage canCommit />)
+
+    fireEvent.drop(screen.getByTestId('import-dropzone'), createDropPayload(file))
+    await user.click(screen.getByRole('button', { name: 'Tải file' }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Lô đã sẵn sàng để ghi dữ liệu.')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: 'Tải file khác' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Xem trước lần cuối' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Ghi dữ liệu' })).toHaveClass('btn-primary')
   })
 })

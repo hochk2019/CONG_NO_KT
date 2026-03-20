@@ -12,17 +12,29 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../imports/ManualAdvancesSection', () => ({
   default: (props: unknown) => {
     mocks.manualAdvancesSectionMock(props)
-    return <div data-testid="manual-advances-section" />
+    const typedProps = props as { onImportTemplate?: () => void }
+    return (
+      <div data-testid="manual-advances-section">
+        {typeof typedProps.onImportTemplate === 'function' ? (
+          <button type="button" onClick={typedProps.onImportTemplate}>
+            Import từ template
+          </button>
+        ) : null}
+      </div>
+    )
   },
 }))
 
-const buildAuthContext = (): AuthContextValue => ({
+const buildAuthContext = (
+  stateOverrides: Partial<AuthContextValue['state']> = {},
+): AuthContextValue => ({
   state: {
     accessToken: 'token',
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'accountant',
     roles: ['Accountant'],
     permissions: [],
+    ...stateOverrides,
   },
   isAuthenticated: true,
   isBootstrapping: false,
@@ -35,8 +47,11 @@ function LocationProbe() {
   return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>
 }
 
-function renderPage(initialEntry: string) {
-  const authValue = buildAuthContext()
+function renderPage(
+  initialEntry: string,
+  stateOverrides: Partial<AuthContextValue['state']> = {},
+) {
+  const authValue = buildAuthContext(stateOverrides)
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <AuthContext.Provider value={authValue}>
@@ -52,35 +67,35 @@ describe('AdvancesPage', () => {
     mocks.manualAdvancesSectionMock.mockReset()
   })
 
-  it('renders the redesigned hero and manual advances section without legacy tabs', async () => {
+  it('renders the manual advances section without the workspace summary hero', async () => {
     renderPage('/advances')
 
+    expect(await screen.findByTestId('manual-advances-section')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', {
+      screen.queryByRole('heading', {
         level: 2,
         name: 'Workspace nhập liệu và xử lý khoản trả hộ KH',
       }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('Khoản trả hộ KH')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Xem danh sách' })).toHaveAttribute(
-      'href',
-      '#advances-worklist',
-    )
-
-    expect(await screen.findByTestId('manual-advances-section')).toBeInTheDocument()
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Khoản trả hộ KH')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Xem danh sách' })).not.toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.getByTestId('location-probe').textContent).toBe('/advances')
   })
 
-  it('navigates to centralized import page with ADVANCE type', async () => {
+  it('routes the import template CTA from the manual advances header', async () => {
     const user = userEvent.setup()
     renderPage('/advances')
 
-    await user.click(screen.getByRole('button', { name: 'Import từ template' }))
+    const importButton = await screen.findByRole('button', { name: 'Import từ template' })
+    await user.click(importButton)
 
-    await waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
-    })
+    expect(mocks.manualAdvancesSectionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        onImportTemplate: expect.any(Function),
+      }),
+    )
+    expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
   })
 
   it('redirects legacy advances import tab query to centralized imports page', async () => {
@@ -89,5 +104,29 @@ describe('AdvancesPage', () => {
     await waitFor(() => {
       expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
     })
+  })
+
+  it('allows manual approval when advance.manage is granted', async () => {
+    renderPage('/advances', { permissions: ['advance.manage'] })
+
+    expect(await screen.findByTestId('manual-advances-section')).toBeInTheDocument()
+    expect(mocks.manualAdvancesSectionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        token: 'token',
+        canApprove: true,
+      }),
+    )
+  })
+
+  it('keeps manual approval disabled without advance.manage even if role is supervisor', async () => {
+    renderPage('/advances', { roles: ['Supervisor'], permissions: [] })
+
+    expect(await screen.findByTestId('manual-advances-section')).toBeInTheDocument()
+    expect(mocks.manualAdvancesSectionMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        token: 'token',
+        canApprove: false,
+      }),
+    )
   })
 })

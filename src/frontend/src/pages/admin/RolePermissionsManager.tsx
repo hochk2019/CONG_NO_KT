@@ -36,7 +36,7 @@ const PERMISSION_GROUP_LABELS: Record<string, string> = {
 const PERMISSION_DESCRIPTIONS: Record<string, string> = {
   'admin.health.view': 'Xem sức khỏe hệ thống',
   'admin.manage': 'Quản trị hệ thống',
-  'advance.manage': 'Quản lý trả hộ',
+  'advance.manage': 'Duyệt và quản lý trả hộ',
   'audit.view': 'Xem nhật ký hệ thống',
   'backup.manage': 'Quản lý sao lưu',
   'backup.restore': 'Khôi phục bản sao lưu',

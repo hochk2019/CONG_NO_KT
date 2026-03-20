@@ -28,12 +28,20 @@ internal static class ImportCommitFailureMessages
         if (constraintName is not (
             "invoices_customer_tax_code_fkey" or
             "advances_customer_tax_code_fkey" or
-            "receipts_customer_tax_code_fkey"))
+            "receipts_customer_tax_code_fkey" or
+            "uq_invoices_dedup" or
+            "uq_advances_dedup" or
+            "uq_receipts_dedup"))
         {
             return null;
         }
 
         var documentLabel = GetDocumentLabel(batchType);
+        if (constraintName is "uq_invoices_dedup" or "uq_advances_dedup" or "uq_receipts_dedup")
+        {
+            return $"Không thể ghi dữ liệu import {documentLabel} vì số chứng từ đã tồn tại trên hệ thống. Kế toán cần đối chiếu lại số chứng từ trong file và loại bỏ dòng trùng trước khi import lại.";
+        }
+
         return $"Không thể ghi dữ liệu import {documentLabel} vì hệ thống chưa tạo hoặc liên kết được khách hàng theo MST khách hàng trên file. Kế toán cần kiểm tra MST khách hàng, tên khách hàng; nếu khách hàng chưa có trong danh mục thì tạo/cập nhật khách hàng rồi import lại.";
     }
 

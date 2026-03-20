@@ -22,6 +22,23 @@ public sealed class ImportCommitFailureMessagesTests
         Assert.Contains("tạo/cập nhật khách hàng", message!);
     }
 
+    [Theory]
+    [InlineData("INVOICE", "uq_invoices_dedup", "hóa đơn")]
+    [InlineData("ADVANCE", "uq_advances_dedup", "khoản trả hộ")]
+    [InlineData("RECEIPT", "uq_receipts_dedup", "phiếu thu")]
+    public void TryBuildConstraintMessage_ReturnsGuidance_ForDuplicateDocumentConstraint(
+        string batchType,
+        string constraintName,
+        string expectedDocumentLabel)
+    {
+        var message = ImportCommitFailureMessages.TryBuildConstraintMessage(constraintName, batchType);
+
+        Assert.NotNull(message);
+        Assert.Contains(expectedDocumentLabel, message!);
+        Assert.Contains("số chứng từ", message!);
+        Assert.Contains("loại bỏ dòng trùng", message!);
+    }
+
     [Fact]
     public void TryBuildConstraintMessage_ReturnsNull_ForUnknownConstraint()
     {

@@ -38,6 +38,37 @@
 - [x] `npm --prefix src/frontend run test:e2e -- e2e/css-regression-matrix.spec.ts e2e/customers-actions.spec.ts e2e/imports.spec.ts` => pass (`6` passed, `1` skipped).
 - [x] `npm --prefix src/frontend run lint` => pass (`0` error, `1` warning unrelated tại `src/pages/receipts/ReceiptListSection.tsx`).
 
+## Phase 93 - Import duplicate guard + template refresh (2026-03-20)
+- [x] `cng-huh` Thêm duplicate guard cho `ADVANCE` và `RECEIPT` ở cả staging lẫn commit, đồng thời chuẩn hóa dedup trong file theo `advance_no` / `receipt_no`.
+- [x] Thêm unique partial index cho `advances` / `receipts`, đồng bộ mapping trong `ConGNoDbContext` để schema test `EnsureCreated()` phản ánh đúng rule chống trùng.
+- [x] Bổ sung và cập nhật test unit/integration cho parser, staging duplicate detection, commit duplicate skip, đồng thời sửa test commit import sang permission thật (`import.commit.*`).
+- [x] Chuẩn hóa lại template `invoice_template.xlsx`, `advance_template.xlsx`, `receipt_template.xlsx` theo hướng sheet `Data` + `HuongDan`; thêm script sinh template và cập nhật docs/UI/E2E theo bộ cột mới.
+
+### Verification evidence (2026-03-20, phase 93 / cng-huh)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportTemplateParserTests|FullyQualifiedName~ImportCommitFailureMessagesTests"` => pass (`17/17`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests|FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests|FullyQualifiedName~ImportCommitReceiptTests|FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests"` => pass (`17/17`).
+- [x] `node_modules/.bin/eslint.cmd src/pages/imports/ImportBatchSection.tsx e2e/imports.spec.ts src/pages/imports/importValidationMessages.ts` (chạy trong `src/frontend`) => pass.
+- [x] `npm --prefix src/frontend run test:e2e -- e2e/imports.spec.ts` => pass (`4/4`).
+
+## Phase 94 - Manual document duplicate hardening (2026-03-20)
+- [x] `cng-331` Thêm guard duplicate cho `advance/receipt` ở luồng nhập tay để chặn trùng số chứng từ ngay tại service thay vì để vỡ unique index ở DB.
+- [x] Thêm helper dùng chung `DocumentDuplicateGuard` để pre-check bản ghi active trùng số và translate race-condition từ `uq_advances_dedup` / `uq_receipts_dedup` thành lỗi nghiệp vụ ổn định.
+- [x] Bổ sung regression test cho `manual create duplicate`, `receipt draft update duplicate`, và `unvoid` sau khi số chứng từ đã bị tái sử dụng.
+
+### Verification evidence (2026-03-20, phase 94 / cng-331)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCreateValidationTests|FullyQualifiedName~ReceiptDraftAndBulkApproveTests|FullyQualifiedName~VoidReversalTests"` => pass (`14/14`).
+
+## Phase 95 - Backup Docker path UX clarification (2026-03-20)
+- [x] `cng-cns` Làm rõ `/admin/backup` theo runtime Docker: phân biệt `host path` và `container path` để tránh hiểu nhầm rằng browser có thể chọn trực tiếp thư mục Windows cho backup tự động.
+- [x] Mở rộng contract backend `BackupSettingsDto` để trả metadata `usesContainerPaths`, `hostBackupPath`, `hostBackupPathConfigKey`, `canEdit*`; đồng thời truyền `Backup__HostPathHint` từ `docker-compose`.
+- [x] Cập nhật UI `/admin/backup` để hiển thị rõ `Thư mục lưu trên máy chủ`, `Thư mục lưu trong container`, `pg_dump/pg_restore trong container`, và hướng dẫn đổi `BACKUP_HOST_PATH` + restart Docker Compose.
+- [x] Bổ sung test unit/frontend và cập nhật `BACKUP_RESTORE_GUIDE.md` cho semantics mới của Docker backup path.
+
+### Verification evidence (2026-03-20, phase 95 / cng-cns)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~BackupServiceRuntimeNormalizationTests|FullyQualifiedName~BackupEndpointAntiforgeryTests"` => pass (`3/3`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/admin/__tests__/admin-backup-page.test.tsx` => pass (`5/5`).
+- [x] `node_modules/.bin/eslint.cmd src/pages/AdminBackupPage.tsx src/pages/admin/__tests__/admin-backup-page.test.tsx src/api/backup.ts` (chạy trong `src/frontend`) => pass.
+
 ## Phase 0 - Spec alignment (done)
 - [x] Quy ước ADJUST lưu số âm + constraint DB.
 - [x] Import RECEIPT included in scope (staging/preview/commit).
@@ -1714,4 +1745,30 @@
 - [x] Bổ sung regression tests cho page và `ManualAdvancesSection`.
 - [x] Verify:
   - [x] `npm --prefix src/frontend run test -- --run src/pages/__tests__/advances-page.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+
+## Phase 116 - Audit duplicate import handling across document types (2026-03-20) [bead: cng-1rf]
+- [x] Rà soát luồng import hiện tại cho `INVOICE`, `ADVANCE`, `RECEIPT` để xác định hệ thống xử lý thế nào khi số chứng từ đã tồn tại.
+- [x] Đối chiếu các lớp bảo vệ đang có ở parser, staging, commit, schema/index DB và UI preview để phân biệt chống trùng trong file với chống trùng so với dữ liệu đã có trên hệ thống.
+- [x] Tổng hợp nhận định và khuyến nghị vận hành/kỹ thuật dựa trên code thực tế, không suy đoán.
+- [x] Verification:
+  - [x] Static review: `src/backend/Infrastructure/Services/ImportStagingService.cs`, `src/backend/Infrastructure/Services/ImportCommitService.cs`, `src/backend/Infrastructure/Services/ImportTemplateParser.cs`, `src/backend/Infrastructure/Services/ImportInvoiceParser.cs`, `src/backend/Infrastructure/Services/ImportInvoiceTemplateParser.cs`, `src/backend/Infrastructure/Services/ImportCommitBuilders.cs`, `src/backend/Infrastructure/Data/ConGNoDbContext.cs`, `scripts/db/migrations/001_init.sql`, `scripts/db/migrations/012_customer_txn_refactor.sql`, `src/backend/Tests.Integration/ImportStagingDuplicateDetectionTests.cs`, `src/backend/Tests.Unit/ImportInvoiceParserTests.cs`, `src/frontend/src/pages/imports/importValidationMessages.ts`, `src/frontend/src/pages/imports/ImportBatchSection.tsx`.
+
+## Phase 117 - Sync manual document number requirements for advances and receipts (2026-03-20) [bead: cng-kev]
+- [x] Đồng bộ rule manual `ADVANCE` và `RECEIPT` với import file: bắt buộc nhập số chứng từ ở cả frontend form và backend service/request.
+- [x] Cập nhật type API frontend để `advanceNo`/`receiptNo` không còn nullable trong các payload create/update draft tương ứng.
+- [x] Bổ sung regression tests cho manual advances form, receipt form và backend integration path khi thiếu số chứng từ.
+- [x] Verification:
+  - [x] `npm --prefix src/frontend run test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/receipts/__tests__/receipt-form-section.validation.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx` => pass (`13/13`).
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCreateValidationTests.CreateAsync_Rejects_EmptyAdvanceNo|FullyQualifiedName~ReceiptDraftAndBulkApproveTests.CreateAsync_RejectsEmptyReceiptNo|FullyQualifiedName~ReceiptDraftAndBulkApproveTests.UpdateDraftAsync_RejectsEmptyReceiptNo" -v minimal` => pass (`3/3`).
+  - [x] `src/frontend/node_modules/.bin/eslint.cmd src/pages/imports/ManualAdvancesSection.tsx src/pages/receipts/ReceiptFormSection.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/receipts/__tests__/receipt-form-section.validation.test.tsx` => pass.
+  - [x] Lưu ý verify mở rộng theo class `ReceiptDraftAndBulkApproveTests` hiện còn 2 test cũ fail ở `ck_invoice_type` seed invoice; không thuộc phạm vi thay đổi số chứng từ và chưa được chỉnh trong phase này.
+
+## Phase 118 - Refresh outdated invoice fixtures and defaults (2026-03-20) [bead: cng-3ez]
+- [x] Chuẩn hóa default của entity `Invoice` để khớp schema runtime hiện tại: `InvoiceType = NORMAL`, `Status = OPEN`, tránh tiếp tục seed giá trị rỗng làm DB default không còn cơ hội áp dụng.
+- [x] Dọn toàn bộ fixture/test backend còn dùng enum invoice cũ như `SALE`, `GTGT`, `VAT`, đồng thời thay các invoice status legacy `APPROVED` bằng trạng thái invoice hợp lệ theo schema mới.
+- [x] Bổ sung regression test xác nhận default của entity `Invoice` luôn đồng bộ với schema runtime để ngăn tái phát.
+- [x] Verify:
+  - [x] Static search `src/backend/**/*.cs`: không còn `InvoiceType = "SALE"`, `InvoiceType = "GTGT"`, `InvoiceType = "VAT"`; không còn invoice fixture giữ `Status = "APPROVED"`.
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~InvoiceSchemaCompatibilityTests|FullyQualifiedName~CustomerBalanceReconcileServiceTests|FullyQualifiedName~CustomerService360Tests|FullyQualifiedName~GlobalSearchServiceTests" -v minimal` => pass (`10/10`).
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptDraftAndBulkApproveTests|FullyQualifiedName~ReminderRunTests|FullyQualifiedName~DashboardOverdueGroupTests|FullyQualifiedName~DashboardOverviewTests|FullyQualifiedName~GlobalSearchServiceIntegrationTests|FullyQualifiedName~InvoiceHeldCreditFlowTests|FullyQualifiedName~ReceiptAutomationServiceTests|FullyQualifiedName~ReceiptLifecycleRbacTests|FullyQualifiedName~ReceiptSurplusQueueTests|FullyQualifiedName~ReminderEscalationPolicyTests|FullyQualifiedName~ReportAgingTests|FullyQualifiedName~ReportPagedTests|FullyQualifiedName~RiskDeltaAlertsTests|FullyQualifiedName~RiskRulesTests" -v minimal` => pass (`42/42`).
 

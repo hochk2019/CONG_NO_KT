@@ -82,7 +82,7 @@ public sealed class GlobalSearchServiceTests
             VatAmount = 100_000,
             TotalAmount = 1_100_000,
             OutstandingAmount = 900_000,
-            InvoiceType = "VAT",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

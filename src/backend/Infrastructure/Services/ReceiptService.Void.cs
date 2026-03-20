@@ -205,6 +205,21 @@ public sealed partial class ReceiptService
             throw new InvalidOperationException("Receipt has allocations and cannot be unvoided.");
         }
 
+        var receiptNo = receipt.ReceiptNo?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(receiptNo))
+        {
+            throw new InvalidOperationException("Receipt number is required.");
+        }
+
+        receipt.ReceiptNo = receiptNo;
+        await DocumentDuplicateGuard.EnsureReceiptNumberAvailableAsync(
+            _db,
+            receipt.SellerTaxCode,
+            receipt.CustomerTaxCode,
+            receiptNo,
+            receipt.Id,
+            ct);
+
         var previousStatus = receipt.Status;
         var hasSelectedTargets = DeserializeTargets(receipt.AllocationTargets)?.Count > 0;
 
@@ -219,7 +234,7 @@ public sealed partial class ReceiptService
         receipt.UpdatedAt = DateTimeOffset.UtcNow;
         receipt.Version += 1;
 
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveReceiptChangesAsync(_db, ct);
 
         if (overrideApplied)
         {

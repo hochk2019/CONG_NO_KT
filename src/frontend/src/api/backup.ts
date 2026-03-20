@@ -10,6 +10,11 @@ export type BackupSettings = {
   timezone: string
   pgBinPath: string
   lastRunAt?: string | null
+  usesContainerPaths?: boolean
+  hostBackupPath?: string | null
+  hostBackupPathConfigKey?: string | null
+  canEditBackupPath?: boolean
+  canEditPgBinPath?: boolean
 }
 
 export type BackupJobListItem = {

@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -29,7 +30,9 @@ public class ImportCommitInvoiceAutoAllocateTests
         var receipt = await SeedOverpaidReceiptAsync(db);
         var batch = await SeedInvoiceBatchAsync(db);
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -61,7 +64,9 @@ public class ImportCommitInvoiceAutoAllocateTests
         var receipt = await SeedOverpaidReceiptAsync(db, autoAllocateEnabled: false);
         var batch = await SeedInvoiceBatchAsync(db);
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -94,7 +99,9 @@ public class ImportCommitInvoiceAutoAllocateTests
             customerTaxCode: "CUSTNEW",
             customerName: "Customer New");
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -139,7 +146,9 @@ public class ImportCommitInvoiceAutoAllocateTests
                 ["invoice_type"] = "ADJUSTMENT_REDUCTION"
             });
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -198,7 +207,9 @@ public class ImportCommitInvoiceAutoAllocateTests
                 ["invoice_type"] = "ADJUSTMENT_REDUCTION"
             });
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -259,7 +270,9 @@ public class ImportCommitInvoiceAutoAllocateTests
                 ["invoice_type"] = "ADJUSTMENT_REDUCTION"
             });
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -312,7 +325,9 @@ public class ImportCommitInvoiceAutoAllocateTests
                 ["invoice_type"] = "ADJUSTMENT_REDUCTION"
             });
 
-        var user = new TestCurrentUser(new[] { "Accountant" });
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -522,14 +537,16 @@ public class ImportCommitInvoiceAutoAllocateTests
 
     private sealed class TestCurrentUser : ICurrentUser
     {
-        public TestCurrentUser(IReadOnlyList<string> roles)
+        public TestCurrentUser(IReadOnlyList<string> roles, IReadOnlyList<string> permissions)
         {
             Roles = roles;
+            Permissions = permissions;
         }
 
         public Guid? UserId => Guid.Parse("55555555-5555-5555-5555-555555555555");
         public string? Username => "tester";
         public IReadOnlyList<string> Roles { get; }
+        public IReadOnlyList<string> Permissions { get; }
         public string? IpAddress => "127.0.0.1";
     }
 }

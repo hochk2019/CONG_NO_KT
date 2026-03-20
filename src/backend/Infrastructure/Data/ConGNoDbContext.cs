@@ -143,6 +143,10 @@ public sealed class ConGNoDbContext : DbContext
                     "invoice_type NOT IN ('ADJUST','ADJUSTMENT_REDUCTION') OR (revenue_excl_vat <= 0 AND vat_amount <= 0 AND total_amount <= 0)");
             });
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.InvoiceSeries, x.InvoiceNo, x.IssueDate })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL")
+                .HasDatabaseName("uq_invoices_dedup");
             entity.Property(x => x.InvoiceType).HasMaxLength(32).HasDefaultValue("NORMAL");
             entity.Property(x => x.Status).HasMaxLength(16).HasDefaultValue("OPEN");
             entity.HasOne<Customer>()
@@ -175,6 +179,10 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("advances");
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.AdvanceNo })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL AND advance_no IS NOT NULL")
+                .HasDatabaseName("uq_advances_dedup");
             entity.HasOne<Customer>()
                 .WithMany()
                 .HasForeignKey(x => x.CustomerTaxCode)
@@ -189,6 +197,10 @@ public sealed class ConGNoDbContext : DbContext
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AllocationTargets).HasColumnType("jsonb");
             entity.Property(x => x.AutoAllocateEnabled).HasDefaultValue(true);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.ReceiptNo })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL AND receipt_no IS NOT NULL")
+                .HasDatabaseName("uq_receipts_dedup");
             entity.HasOne<Customer>()
                 .WithMany()
                 .HasForeignKey(x => x.CustomerTaxCode)

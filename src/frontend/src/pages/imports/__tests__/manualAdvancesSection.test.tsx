@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ManualAdvancesSection from '../ManualAdvancesSection'
@@ -65,5 +65,21 @@ describe('ManualAdvancesSection', () => {
 
     await user.click(importButton)
     expect(onImportTemplate).toHaveBeenCalledTimes(1)
+  })
+
+  it('requires advance number before creating a draft', async () => {
+    const user = userEvent.setup()
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    fireEvent.change(screen.getByLabelText('MST bên bán'), { target: { value: 'SELLER01' } })
+    fireEvent.change(screen.getByLabelText('MST bên mua'), { target: { value: 'CUST01' } })
+    fireEvent.change(screen.getByLabelText('Ngày trả hộ'), { target: { value: '2026-03-20' } })
+    fireEvent.change(screen.getByLabelText('Số tiền'), { target: { value: '100000' } })
+
+    await user.click(screen.getByRole('button', { name: 'Tạo nháp' }))
+
+    expect(mocks.createAdvanceMock).not.toHaveBeenCalled()
+    expect(await screen.findByText('Vui lòng nhập số chứng từ.')).toBeInTheDocument()
   })
 })

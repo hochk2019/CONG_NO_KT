@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
-import { fetchBackupJobs, restoreBackup } from '../../../api/backup'
+import { fetchBackupJobs, fetchBackupSettings, restoreBackup } from '../../../api/backup'
 import { ApiError } from '../../../api/client'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
 import AdminBackupPage from '../../AdminBackupPage'
@@ -11,6 +11,11 @@ vi.mock('../../../api/backup', () => ({
   fetchBackupSettings: vi.fn(async () => ({
     enabled: false,
     backupPath: 'C:\\\\apps\\\\congno\\\\backup\\\\dumps',
+    usesContainerPaths: false,
+    hostBackupPath: 'C:\\\\apps\\\\congno\\\\backup\\\\dumps',
+    hostBackupPathConfigKey: null,
+    canEditBackupPath: true,
+    canEditPgBinPath: true,
     retentionCount: 10,
     scheduleDayOfWeek: 1,
     scheduleTime: '02:00',
@@ -181,5 +186,40 @@ describe('admin backup page', () => {
     await waitFor(() => {
       expect(screen.getByText('Bỏ qua')).toBeInTheDocument()
     })
+  })
+
+  it('shows host path guidance when backup runs inside docker', async () => {
+    vi.mocked(fetchBackupSettings).mockResolvedValueOnce({
+      enabled: true,
+      backupPath: '/var/lib/congno/backups/dumps',
+      usesContainerPaths: true,
+      hostBackupPath: 'C:/Backup/CongNo',
+      hostBackupPathConfigKey: 'BACKUP_HOST_PATH',
+      canEditBackupPath: false,
+      canEditPgBinPath: false,
+      retentionCount: 10,
+      scheduleDayOfWeek: 1,
+      scheduleTime: '02:00',
+      timezone: 'UTC',
+      pgBinPath: '/usr/bin',
+      lastRunAt: null,
+    })
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={baseAuth}>
+          <AdminBackupPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => {
+      expect(screen.getByText(/Hệ thống đang chạy trong Docker/i)).toBeInTheDocument()
+    })
+
+    expect(screen.getByDisplayValue('C:/Backup/CongNo')).toHaveAttribute('readonly')
+    expect(screen.getByDisplayValue('/var/lib/congno/backups/dumps')).toHaveAttribute('readonly')
+    expect(screen.getByDisplayValue('/usr/bin')).toHaveAttribute('readonly')
+    expect(screen.getAllByText(/BACKUP_HOST_PATH/)).toHaveLength(2)
   })
 })

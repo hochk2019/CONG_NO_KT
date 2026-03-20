@@ -15,8 +15,9 @@ public class ImportTemplateParserTests
         WriteReceiptHeader(sheet);
 
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = 0;
+        sheet.Cell(2, 3).Value = "PT-001";
         sheet.Cell(2, 4).Value = new DateTime(2025, 1, 10);
+        sheet.Cell(2, 6).Value = 0;
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
 
@@ -38,9 +39,10 @@ public class ImportTemplateParserTests
 
         sheet.Cell(2, 1).Value = "2301098313";
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = new DateTime(2025, 1, 10);
-        sheet.Cell(2, 4).Value = new DateTime(2025, 1, 1);
-        sheet.Cell(2, 5).Value = "BANK";
+        sheet.Cell(2, 3).Value = "PT-001";
+        sheet.Cell(2, 4).Value = new DateTime(2025, 1, 10);
+        sheet.Cell(2, 5).Value = new DateTime(2025, 1, 1);
+        sheet.Cell(2, 6).Value = "BANK";
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
 
@@ -62,10 +64,11 @@ public class ImportTemplateParserTests
 
         sheet.Cell(2, 1).Value = "SELLER01";
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = 100;
+        sheet.Cell(2, 3).Value = "PT-001";
         sheet.Cell(2, 4).Value = new DateTime(2025, 1, 10);
         sheet.Cell(2, 5).Value = new DateTime(2025, 1, 15);
-        sheet.Cell(2, 6).Value = "INVALID";
+        sheet.Cell(2, 6).Value = 100;
+        sheet.Cell(2, 7).Value = "INVALID";
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
 
@@ -86,10 +89,11 @@ public class ImportTemplateParserTests
 
         sheet.Cell(2, 1).Value = "SELLER01";
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = 1000;
+        sheet.Cell(2, 3).Value = "PT-001";
         sheet.Cell(2, 4).Value = "31/12/2025";
         sheet.Cell(2, 5).Value = "01/12/2025";
-        sheet.Cell(2, 6).Value = "BANK";
+        sheet.Cell(2, 6).Value = 1000;
+        sheet.Cell(2, 7).Value = "BANK";
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
 
@@ -101,6 +105,57 @@ public class ImportTemplateParserTests
     }
 
     [Fact]
+    public void Receipt_Missing_DocumentNo_Returns_Error()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Receipt");
+        WriteReceiptHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "SELLER01";
+        sheet.Cell(2, 2).Value = "CUST01";
+        sheet.Cell(2, 4).Value = new DateTime(2025, 12, 31);
+        sheet.Cell(2, 5).Value = new DateTime(2025, 12, 1);
+        sheet.Cell(2, 6).Value = 1000;
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusError, rows[0].ValidationStatus);
+        Assert.Contains("RECEIPT_NO_REQUIRED", ReadMessages(rows[0].ValidationMessages));
+    }
+
+    [Fact]
+    public void Receipt_Duplicate_DocumentNo_InFile_Returns_Warn_And_Skip()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Receipt");
+        WriteReceiptHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "SELLER01";
+        sheet.Cell(2, 2).Value = "CUST01";
+        sheet.Cell(2, 3).Value = "PT-DUP";
+        sheet.Cell(2, 4).Value = new DateTime(2025, 12, 31);
+        sheet.Cell(2, 5).Value = new DateTime(2025, 12, 1);
+        sheet.Cell(2, 6).Value = 1000;
+        sheet.Cell(2, 7).Value = "BANK";
+
+        sheet.Cell(3, 1).Value = "SELLER01";
+        sheet.Cell(3, 2).Value = "CUST01";
+        sheet.Cell(3, 3).Value = "PT-DUP";
+        sheet.Cell(3, 4).Value = new DateTime(2026, 1, 5);
+        sheet.Cell(3, 5).Value = new DateTime(2026, 1, 1);
+        sheet.Cell(3, 6).Value = 2000;
+        sheet.Cell(3, 7).Value = "CASH";
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(ImportStagingHelpers.StatusWarn, rows[1].ValidationStatus);
+        Assert.Equal("SKIP", rows[1].ActionSuggestion);
+        Assert.Contains("DUP_IN_FILE", ReadMessages(rows[1].ValidationMessages));
+    }
+
+    [Fact]
     public void Advance_Date_String_DdDashMmDashYyyy_Is_Parsed()
     {
         using var workbook = new XLWorkbook();
@@ -109,8 +164,9 @@ public class ImportTemplateParserTests
 
         sheet.Cell(2, 1).Value = "SELLER01";
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = 150;
+        sheet.Cell(2, 3).Value = "ADV-001";
         sheet.Cell(2, 4).Value = "05-02-2025";
+        sheet.Cell(2, 5).Value = 150;
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Advance);
 
@@ -129,7 +185,8 @@ public class ImportTemplateParserTests
 
         sheet.Cell(2, 1).Value = "SELLER01";
         sheet.Cell(2, 2).Value = "CUST01";
-        sheet.Cell(2, 3).Value = 150;
+        sheet.Cell(2, 3).Value = "ADV-001";
+        sheet.Cell(2, 5).Value = 150;
 
         var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Advance);
 
@@ -140,34 +197,83 @@ public class ImportTemplateParserTests
         Assert.Contains("ADVANCE_DATE_REQUIRED", messages);
     }
 
+    [Fact]
+    public void Advance_Missing_DocumentNo_Returns_Error()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Advance");
+        WriteAdvanceHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "SELLER01";
+        sheet.Cell(2, 2).Value = "CUST01";
+        sheet.Cell(2, 4).Value = new DateTime(2025, 2, 5);
+        sheet.Cell(2, 5).Value = 150;
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Advance);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusError, rows[0].ValidationStatus);
+        Assert.Contains("ADVANCE_NO_REQUIRED", ReadMessages(rows[0].ValidationMessages));
+    }
+
+    [Fact]
+    public void Advance_Duplicate_DocumentNo_InFile_Returns_Warn_And_Skip()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Advance");
+        WriteAdvanceHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "SELLER01";
+        sheet.Cell(2, 2).Value = "CUST01";
+        sheet.Cell(2, 3).Value = "ADV-DUP";
+        sheet.Cell(2, 4).Value = new DateTime(2025, 2, 5);
+        sheet.Cell(2, 5).Value = 150;
+
+        sheet.Cell(3, 1).Value = "SELLER01";
+        sheet.Cell(3, 2).Value = "CUST01";
+        sheet.Cell(3, 3).Value = "ADV-DUP";
+        sheet.Cell(3, 4).Value = new DateTime(2025, 2, 8);
+        sheet.Cell(3, 5).Value = 250;
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Advance);
+
+        Assert.Equal(2, rows.Count);
+        Assert.Equal(ImportStagingHelpers.StatusWarn, rows[1].ValidationStatus);
+        Assert.Equal("SKIP", rows[1].ActionSuggestion);
+        Assert.Contains("DUP_IN_FILE", ReadMessages(rows[1].ValidationMessages));
+    }
+
     private static void WriteReceiptHeader(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";
         sheet.Cell(1, 2).Value = "CustomerTaxCode";
-        sheet.Cell(1, 3).Value = "Amount";
+        sheet.Cell(1, 3).Value = "ReceiptNo";
         sheet.Cell(1, 4).Value = "ReceiptDate";
         sheet.Cell(1, 5).Value = "AppliedPeriodStart";
-        sheet.Cell(1, 6).Value = "Method";
-        sheet.Cell(1, 7).Value = "Description";
+        sheet.Cell(1, 6).Value = "Amount";
+        sheet.Cell(1, 7).Value = "Method";
+        sheet.Cell(1, 8).Value = "Description";
     }
 
     private static void WriteReceiptHeaderMissingAmount(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";
         sheet.Cell(1, 2).Value = "CustomerTaxCode";
-        sheet.Cell(1, 3).Value = "ReceiptDate";
-        sheet.Cell(1, 4).Value = "AppliedPeriodStart";
-        sheet.Cell(1, 5).Value = "Method";
-        sheet.Cell(1, 6).Value = "Description";
+        sheet.Cell(1, 3).Value = "ReceiptNo";
+        sheet.Cell(1, 4).Value = "ReceiptDate";
+        sheet.Cell(1, 5).Value = "AppliedPeriodStart";
+        sheet.Cell(1, 6).Value = "Method";
+        sheet.Cell(1, 7).Value = "Description";
     }
 
     private static void WriteAdvanceHeader(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";
         sheet.Cell(1, 2).Value = "CustomerTaxCode";
-        sheet.Cell(1, 3).Value = "Amount";
+        sheet.Cell(1, 3).Value = "AdvanceNo";
         sheet.Cell(1, 4).Value = "AdvanceDate";
-        sheet.Cell(1, 5).Value = "Description";
+        sheet.Cell(1, 5).Value = "Amount";
+        sheet.Cell(1, 6).Value = "Description";
     }
 
     private static IReadOnlyList<string> ReadMessages(string? raw)

@@ -36,7 +36,7 @@ export type ReceiptDto = {
 export type ReceiptCreateRequest = {
   sellerTaxCode: string
   customerTaxCode: string
-  receiptNo?: string | null
+  receiptNo: string
   receiptDate: string
   amount: number
   allocationMode: string
@@ -48,7 +48,7 @@ export type ReceiptCreateRequest = {
 }
 
 export type ReceiptDraftUpdateRequest = {
-  receiptNo?: string | null
+  receiptNo: string
   receiptDate: string
   amount: number
   allocationMode: string

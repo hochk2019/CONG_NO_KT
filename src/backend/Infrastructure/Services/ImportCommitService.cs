@@ -107,22 +107,9 @@ public sealed class ImportCommitService : IImportCommitService
             return emptySummary;
         }
 
-        var commitRows = eligible;
-        HashSet<InvoiceKey>? existingInvoiceKeys = null;
-        if (batch.Type == "INVOICE")
-        {
-            existingInvoiceKeys = await LoadExistingInvoiceKeysAsync(eligible, ct);
-            if (existingInvoiceKeys.Count > 0)
-            {
-                commitRows = eligible
-                    .Select(row => new { row, key = TryBuildInvoiceKey(row.RawData) })
-                    .Where(item => item.key is not null && !existingInvoiceKeys.Contains(item.key.Value))
-                    .Select(item => item.row)
-                    .ToList();
-            }
-        }
-
-        var skippedRows = Math.Max(0, eligible.Count - commitRows.Count);
+        var deduplication = await ImportDuplicateGuard.FilterCommitRowsAsync(_db, batch.Type, eligible, ct);
+        var commitRows = deduplication.Rows.ToList();
+        var skippedRows = deduplication.SkippedRows;
         progressSteps.Add(new ImportCommitProgressStep(
             "DEDUPE",
             30,
@@ -195,7 +182,6 @@ public sealed class ImportCommitService : IImportCommitService
         var totalCommitRows = commitRows.Count;
         var progressCheckpoint = Math.Max(1, totalCommitRows / 4);
 
-        var seenInvoiceKeys = existingInvoiceKeys ?? new HashSet<InvoiceKey>();
         foreach (var row in commitRows)
         {
             using var doc = JsonDocument.Parse(row.RawData);
@@ -203,20 +189,6 @@ public sealed class ImportCommitService : IImportCommitService
 
             if (batch.Type == "INVOICE")
             {
-                if (seenInvoiceKeys.Count > 0 || existingInvoiceKeys is not null)
-                {
-                    var key = TryBuildInvoiceKey(raw);
-                    if (key is null)
-                    {
-                        continue;
-                    }
-                    if (seenInvoiceKeys.Contains(key.Value))
-                    {
-                        continue;
-                    }
-                    seenInvoiceKeys.Add(key.Value);
-                }
-
                 var invoice = ImportCommitBuilders.BuildInvoice(raw, batch.Id, sellerSet);
                 var customer = await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
                 if (customer is not null)
@@ -381,12 +353,6 @@ public sealed class ImportCommitService : IImportCommitService
         });
 
         await _db.SaveChangesAsync(ct);
-    }
-
-    private static InvoiceKey? TryBuildInvoiceKey(string rawData)
-    {
-        using var doc = JsonDocument.Parse(rawData);
-        return TryBuildInvoiceKey(doc.RootElement);
     }
 
     private async Task<decimal> ApplyReceiptCreditsToInvoiceAsync(
@@ -609,87 +575,6 @@ public sealed class ImportCommitService : IImportCommitService
 
         return allocatedTotal;
     }
-
-    private static InvoiceKey? TryBuildInvoiceKey(JsonElement raw)
-    {
-        var issueDate = ImportCommitJson.GetDate(raw, "issue_date");
-        if (issueDate is null)
-        {
-            return null;
-        }
-
-        return new InvoiceKey(
-            NormalizeKeyPart(ImportCommitJson.GetString(raw, "seller_tax_code")),
-            NormalizeKeyPart(ImportCommitJson.ResolveInvoiceCustomerTaxCode(raw)),
-            NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_series")),
-            NormalizeKeyPart(ImportCommitJson.GetString(raw, "invoice_no")),
-            issueDate.Value);
-    }
-
-    private async Task<HashSet<InvoiceKey>> LoadExistingInvoiceKeysAsync(
-        IReadOnlyList<ImportStagingRow> eligible,
-        CancellationToken ct)
-    {
-        var keys = new List<InvoiceKey>();
-        foreach (var row in eligible)
-        {
-            var key = TryBuildInvoiceKey(row.RawData);
-            if (key is not null)
-            {
-                keys.Add(key.Value);
-            }
-        }
-
-        if (keys.Count == 0)
-        {
-            return new HashSet<InvoiceKey>();
-        }
-
-        var sellerCodes = keys.Select(k => k.SellerTaxCode).Distinct().ToList();
-        var customerCodes = keys.Select(k => k.CustomerTaxCode).Distinct().ToList();
-        var invoiceNos = keys.Select(k => k.InvoiceNo).Distinct().ToList();
-        var issueDates = keys.Select(k => k.IssueDate).Distinct().ToList();
-        var seriesList = keys.Select(k => k.InvoiceSeries).Distinct().ToList();
-
-        var existing = await _db.Invoices
-            .AsNoTracking()
-            .Where(i => i.DeletedAt == null)
-            .Where(i =>
-                sellerCodes.Contains(i.SellerTaxCode) &&
-                customerCodes.Contains(i.CustomerTaxCode) &&
-                invoiceNos.Contains(i.InvoiceNo) &&
-                issueDates.Contains(i.IssueDate) &&
-                seriesList.Contains(i.InvoiceSeries ?? string.Empty))
-            .Select(i => new
-            {
-                i.SellerTaxCode,
-                i.CustomerTaxCode,
-                i.InvoiceSeries,
-                i.InvoiceNo,
-                i.IssueDate
-            })
-            .ToListAsync(ct);
-
-        return new HashSet<InvoiceKey>(existing.Select(i => new InvoiceKey(
-            NormalizeKeyPart(i.SellerTaxCode),
-            NormalizeKeyPart(i.CustomerTaxCode),
-            NormalizeKeyPart(i.InvoiceSeries ?? string.Empty),
-            NormalizeKeyPart(i.InvoiceNo),
-            i.IssueDate)));
-    }
-
-    private static string NormalizeKeyPart(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
-    }
-
-    private readonly record struct InvoiceKey(
-        string SellerTaxCode,
-        string CustomerTaxCode,
-        string InvoiceSeries,
-        string InvoiceNo,
-        DateOnly IssueDate);
-
     private static ImportCommitResult ParseSummary(string? summary)
     {
         if (string.IsNullOrWhiteSpace(summary))

@@ -89,7 +89,7 @@ public class RiskRulesTests
             VatAmount = 0m,
             TotalAmount = 100m,
             OutstandingAmount = 100m,
-            InvoiceType = "GTGT",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

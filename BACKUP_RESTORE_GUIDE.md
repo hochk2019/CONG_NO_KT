@@ -3,6 +3,10 @@
 ## Deployment mode
 - Default runtime: Docker Compose.
 - Legacy fallback: direct PostgreSQL on Windows host.
+- Trên UI `/admin/backup`, nếu hệ thống chạy trong Docker thì:
+  - `Thư mục lưu trên máy chủ` = `BACKUP_HOST_PATH`
+  - `Thư mục trong container` = `BACKUP_CONTAINER_PATH`
+  - đường dẫn này không đổi trực tiếp từ browser; cần cập nhật `.env` rồi khởi động lại `docker compose`.
 
 ## Backup (Docker, recommended)
 1) Ensure backup host folder exists (from `.env`): `BACKUP_HOST_PATH` (default `./data/backup/dumps`).

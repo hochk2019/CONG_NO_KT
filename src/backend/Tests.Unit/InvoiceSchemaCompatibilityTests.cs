@@ -23,6 +23,15 @@ public sealed class InvoiceSchemaCompatibilityTests
     }
 
     [Fact]
+    public void InvoiceEntity_Defaults_Align_With_RuntimeSchema()
+    {
+        var invoice = new Invoice();
+
+        Assert.Equal("NORMAL", invoice.InvoiceType);
+        Assert.Equal("OPEN", invoice.Status);
+    }
+
+    [Fact]
     public void RuntimeMigration_Updates_InvoiceType_For_AdjustmentReduction()
     {
         var migrationPath = FindRepoFile("scripts", "db", "migrations", "034_invoice_adjustment_reduction.sql");

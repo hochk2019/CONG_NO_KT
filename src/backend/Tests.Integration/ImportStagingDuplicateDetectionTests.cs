@@ -54,6 +54,78 @@ public class ImportStagingDuplicateDetectionTests
         Assert.Contains("DUP_IN_DB", messages);
     }
 
+    [Fact]
+    public async Task StageAdvance_Marks_Duplicate_Against_ExistingAdvanceNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "SELLER01");
+        await SeedCustomerAsync(db, "CUST01", "Customer 01");
+        await SeedExistingAdvanceAsync(db, "SELLER01", "CUST01", "ADV-001");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "ADVANCE",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        await using var stream = BuildAdvanceWorkbook("SELLER01", "CUST01", "ADV-001");
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "ADVANCE", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.Equal("SKIP", row.ActionSuggestion);
+        Assert.Equal(ImportStagingHelpers.StatusWarn, row.ValidationStatus);
+        Assert.Contains("DUP_IN_DB", messages);
+    }
+
+    [Fact]
+    public async Task StageReceipt_Marks_Duplicate_Against_ExistingReceiptNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "SELLER01");
+        await SeedCustomerAsync(db, "CUST01", "Customer 01");
+        await SeedExistingReceiptAsync(db, "SELLER01", "CUST01", "PT-001");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "RECEIPT",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        await using var stream = BuildReceiptWorkbook("SELLER01", "CUST01", "PT-001");
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "RECEIPT", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.Equal("SKIP", row.ActionSuggestion);
+        Assert.Equal(ImportStagingHelpers.StatusWarn, row.ValidationStatus);
+        Assert.Contains("DUP_IN_DB", messages);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -85,19 +157,29 @@ public class ImportStagingDuplicateDetectionTests
         await db.SaveChangesAsync();
     }
 
-    private static async Task SeedExistingReductionInvoiceAsync(ConGNoDbContext db)
+    private static async Task SeedCustomerAsync(ConGNoDbContext db, string taxCode, string name)
     {
         db.Customers.Add(new Customer
         {
-            TaxCode = "0310226744",
-            Name = "CHI NHÁNH CÔNG TY TNHH LX PANTOS VIỆT NAM TẠI HẢI PHÒNG",
+            TaxCode = taxCode,
+            Name = name,
             Status = "ACTIVE",
-            CurrentBalance = -2_268_000m,
+            CurrentBalance = 0m,
             PaymentTermsDays = 30,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0
         });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedExistingReductionInvoiceAsync(ConGNoDbContext db)
+    {
+        await SeedCustomerAsync(
+            db,
+            "0310226744",
+            "CHI NHÁNH CÔNG TY TNHH LX PANTOS VIỆT NAM TẠI HẢI PHÒNG");
 
         db.Invoices.Add(new Invoice
         {
@@ -115,6 +197,60 @@ public class ImportStagingDuplicateDetectionTests
             Note = "Hóa đơn điều chỉnh giảm",
             InvoiceType = "ADJUSTMENT_REDUCTION",
             Status = "PAID",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedExistingAdvanceAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        string advanceNo)
+    {
+        db.Advances.Add(new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            AdvanceNo = advanceNo,
+            AdvanceDate = new DateOnly(2026, 1, 1),
+            Amount = 100_000m,
+            OutstandingAmount = 100_000m,
+            Description = "Existing advance",
+            Status = "APPROVED",
+            ApprovedAt = DateTimeOffset.UtcNow,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedExistingReceiptAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        string receiptNo)
+    {
+        db.Receipts.Add(new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            ReceiptNo = receiptNo,
+            ReceiptDate = new DateOnly(2026, 1, 5),
+            AppliedPeriodStart = new DateOnly(2026, 1, 1),
+            Amount = 100_000m,
+            Method = "BANK",
+            Description = "Existing receipt",
+            AllocationMode = "FIFO",
+            UnallocatedAmount = 0m,
+            Status = "DRAFT",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0
@@ -142,6 +278,64 @@ public class ImportStagingDuplicateDetectionTests
             sheet.Cell(2, 9).Value = -168_000m;
             sheet.Cell(2, 10).Value = -2_268_000m;
             sheet.Cell(2, 11).Value = "Hóa đơn điều chỉnh giảm";
+
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream BuildAdvanceWorkbook(string sellerTaxCode, string customerTaxCode, string advanceNo)
+    {
+        var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Data");
+            sheet.Cell(1, 1).Value = "SellerTaxCode";
+            sheet.Cell(1, 2).Value = "CustomerTaxCode";
+            sheet.Cell(1, 3).Value = "AdvanceNo";
+            sheet.Cell(1, 4).Value = "AdvanceDate";
+            sheet.Cell(1, 5).Value = "Amount";
+            sheet.Cell(1, 6).Value = "Description";
+
+            sheet.Cell(2, 1).Value = sellerTaxCode;
+            sheet.Cell(2, 2).Value = customerTaxCode;
+            sheet.Cell(2, 3).Value = advanceNo;
+            sheet.Cell(2, 4).Value = "2026-01-01";
+            sheet.Cell(2, 5).Value = 100_000m;
+            sheet.Cell(2, 6).Value = "Import advance";
+
+            workbook.SaveAs(stream);
+        }
+
+        stream.Position = 0;
+        return stream;
+    }
+
+    private static MemoryStream BuildReceiptWorkbook(string sellerTaxCode, string customerTaxCode, string receiptNo)
+    {
+        var stream = new MemoryStream();
+        using (var workbook = new XLWorkbook())
+        {
+            var sheet = workbook.AddWorksheet("Data");
+            sheet.Cell(1, 1).Value = "SellerTaxCode";
+            sheet.Cell(1, 2).Value = "CustomerTaxCode";
+            sheet.Cell(1, 3).Value = "ReceiptNo";
+            sheet.Cell(1, 4).Value = "ReceiptDate";
+            sheet.Cell(1, 5).Value = "AppliedPeriodStart";
+            sheet.Cell(1, 6).Value = "Amount";
+            sheet.Cell(1, 7).Value = "Method";
+            sheet.Cell(1, 8).Value = "Description";
+
+            sheet.Cell(2, 1).Value = sellerTaxCode;
+            sheet.Cell(2, 2).Value = customerTaxCode;
+            sheet.Cell(2, 3).Value = receiptNo;
+            sheet.Cell(2, 4).Value = "2026-01-05";
+            sheet.Cell(2, 5).Value = "2026-01-01";
+            sheet.Cell(2, 6).Value = 100_000m;
+            sheet.Cell(2, 7).Value = "BANK";
+            sheet.Cell(2, 8).Value = "Import receipt";
 
             workbook.SaveAs(stream);
         }

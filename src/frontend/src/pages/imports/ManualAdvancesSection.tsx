@@ -294,6 +294,10 @@ export default function ManualAdvancesSection({
       setFieldError('advanceDate', 'Vui lòng chọn ngày trả hộ.')
       hasError = true
     }
+    if (!advanceNo.trim()) {
+      setFieldError('advanceNo', 'Vui lòng nhập số chứng từ.')
+      hasError = true
+    }
     const amountValue = Number(amount)
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setFieldError('amount', 'Số tiền không hợp lệ.')
@@ -307,7 +311,7 @@ export default function ManualAdvancesSection({
     return {
       sellerTaxCode: sellerTaxCode.trim(),
       customerTaxCode: customerTaxCode.trim(),
-      advanceNo: advanceNo.trim() || null,
+      advanceNo: advanceNo.trim(),
       advanceDate: advanceDate.trim(),
       amount: amountValue,
       description: description.trim() || undefined,
@@ -673,8 +677,8 @@ export default function ManualAdvancesSection({
                 <span className="advances-section-kicker">Tạo nhanh</span>
                 <h3>Tạo khoản trả hộ KH</h3>
                 <p className="muted advances-section-lead">
-                  Ưu tiên hoàn thành MST bên bán, MST bên mua, ngày trả hộ và số tiền trước. Số chứng
-                  từ và ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
+                  Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền
+                  trước. Ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
                 </p>
               </div>
               {onImportTemplate ? (
@@ -694,7 +698,7 @@ export default function ManualAdvancesSection({
                 <span className="muted">{quickCreateModeLabel}</span>
               </div>
               <p className="muted advances-create-tip">
-                Điền 4 trường bắt buộc trước, trường phụ chỉ bổ sung khi cần đối chiếu hoặc truy vết.
+                Điền đủ các trường bắt buộc trước, trường phụ chỉ bổ sung khi cần đối chiếu hoặc truy vết.
               </p>
             </div>
 
@@ -782,13 +786,30 @@ export default function ManualAdvancesSection({
                 />
                 {fieldErrors.amount && <span className="field-error">{fieldErrors.amount}</span>}
               </label>
-              <label className="field advances-field-secondary">
+              <label
+                className={
+                  fieldErrors.advanceNo
+                    ? 'field field--error advances-field-secondary'
+                    : 'field advances-field-secondary'
+                }
+              >
                 <span>Số chứng từ</span>
                 <input
                   value={advanceNo}
-                  onChange={(event) => setAdvanceNo(event.target.value)}
+                  onChange={(event) => {
+                    setAdvanceNo(event.target.value)
+                    if (event.target.value.trim()) {
+                      setFieldError('advanceNo')
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!advanceNo.trim()) {
+                      setFieldError('advanceNo', 'Vui lòng nhập số chứng từ.')
+                    }
+                  }}
                   placeholder="VD: CT-001"
                 />
+                {fieldErrors.advanceNo && <span className="field-error">{fieldErrors.advanceNo}</span>}
               </label>
               <label className="field field-span-full advances-field-secondary advances-field-notes">
                 <span>Ghi chú</span>

@@ -497,7 +497,7 @@ public class ReceiptLifecycleRbacTests
             VatAmount = 0,
             TotalAmount = amount,
             OutstandingAmount = amount,
-            InvoiceType = "SALE",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

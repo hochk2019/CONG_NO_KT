@@ -164,7 +164,7 @@ public sealed class GlobalSearchServiceIntegrationTests
             VatAmount = 100_000m,
             TotalAmount = 1_100_000m,
             OutstandingAmount = 1_100_000m,
-            InvoiceType = "GTGT",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             DeletedAt = deletedAt,
             CreatedAt = now,

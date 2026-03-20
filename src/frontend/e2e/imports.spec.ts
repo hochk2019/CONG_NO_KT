@@ -1,5 +1,5 @@
 import fs from 'node:fs/promises'
-import { test, expect, type TestInfo } from '@playwright/test'
+import { test, expect, type Page, type TestInfo } from '@playwright/test'
 import path from 'path'
 import { read, utils, write } from 'xlsx'
 import { loginAsDefaultUser } from './support/auth'
@@ -8,6 +8,11 @@ const buildUniqueCustomerTaxCode = () => {
   const suffix = `${Date.now()}${Math.floor(Math.random() * 1000)}`
   return `9${suffix.slice(-9)}`
 }
+
+const normalizeHeader = (value: string | number | null | undefined) =>
+  String(value ?? '')
+    .trim()
+    .toLowerCase()
 
 const extractBatchId = (text: string | null) => {
   const match = text?.match(/Mã lô:\s*([0-9a-f-]+)/i)
@@ -31,13 +36,27 @@ const createAdvanceImportFile = async (
     raw: true,
   }) as (string | number | null)[][]
 
-  if (rows.length < 2 || rows[1].length < 5) {
+  if (rows.length < 2) {
     throw new Error(`Template ADVANCE không đúng định dạng: ${templatePath}`)
   }
 
+  const headerMap = new Map(rows[0].map((value, index) => [normalizeHeader(value), index]))
+  const customerTaxCodeIndex = headerMap.get('customer_tax_code')
+  const advanceNoIndex = headerMap.get('advance_no')
+  const descriptionIndex = headerMap.get('description')
+
+  if (
+    customerTaxCodeIndex === undefined ||
+    advanceNoIndex === undefined ||
+    descriptionIndex === undefined
+  ) {
+    throw new Error(`Không tìm thấy đủ cột bắt buộc trong template ADVANCE: ${templatePath}`)
+  }
+
   rows[1] = [...rows[1]]
-  rows[1][1] = customerTaxCode
-  rows[1][4] = description
+  rows[1][customerTaxCodeIndex] = customerTaxCode
+  rows[1][advanceNoIndex] = `TH-E2E-${customerTaxCode}`
+  rows[1][descriptionIndex] = description
   workbook.Sheets[sheetName] = utils.aoa_to_sheet(rows)
 
   await fs.writeFile(outputPath, write(workbook, { type: 'buffer', bookType: 'xlsx' }))
@@ -45,6 +64,11 @@ const createAdvanceImportFile = async (
 }
 
 test.describe('Imports page', () => {
+  const expectAdvancesWorkspaceVisible = async (page: Page) => {
+    await expect(page.getByRole('heading', { name: 'Tạo khoản trả hộ KH', level: 3 })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Worklist khoản trả hộ KH', level: 3 })).toBeVisible()
+  }
+
   test('Upload template and see batch id', async ({ page }) => {
     await loginAsDefaultUser(page)
     await page.getByRole('link', { name: 'Nhập liệu HĐ' }).first().click()
@@ -64,9 +88,7 @@ test.describe('Imports page', () => {
     await loginAsDefaultUser(page)
     await page.goto('/advances')
 
-    await expect(
-      page.getByRole('heading', { name: 'Workspace nhập liệu và xử lý khoản trả hộ KH', level: 2 }),
-    ).toBeVisible()
+    await expectAdvancesWorkspaceVisible(page)
 
     await page.getByRole('button', { name: 'Bộ lọc nâng cao' }).click()
     const advancedFilters = page.locator('.filters-grid--compact')
@@ -122,9 +144,7 @@ test.describe('Imports page', () => {
     await expect(commitAlert).toContainText('1 khoản trả hộ KH', { timeout: 30_000 })
 
     await page.goto('/advances')
-    await expect(
-      page.getByRole('heading', { name: 'Workspace nhập liệu và xử lý khoản trả hộ KH', level: 2 }),
-    ).toBeVisible()
+    await expectAdvancesWorkspaceVisible(page)
 
     await page.getByLabel('Lọc MST bên mua').fill(customerTaxCode)
     await page.getByRole('button', { name: 'Bộ lọc nâng cao' }).click()

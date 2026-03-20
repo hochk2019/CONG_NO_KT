@@ -276,9 +276,12 @@ public sealed partial class ReceiptService : IReceiptService
             throw new InvalidOperationException("Seller and customer tax code are required.");
         }
 
-        var receiptNo = string.IsNullOrWhiteSpace(request.ReceiptNo)
-            ? null
-            : request.ReceiptNo.Trim();
+        if (string.IsNullOrWhiteSpace(request.ReceiptNo))
+        {
+            throw new InvalidOperationException("Receipt number is required.");
+        }
+
+        var receiptNo = request.ReceiptNo.Trim();
 
         var sellerExists = await _db.Sellers.AnyAsync(s => s.SellerTaxCode == seller, ct);
         if (!sellerExists)
@@ -293,6 +296,13 @@ public sealed partial class ReceiptService : IReceiptService
         }
 
         await EnsureCanManageCustomer(customer, ct);
+        await DocumentDuplicateGuard.EnsureReceiptNumberAvailableAsync(
+            _db,
+            seller,
+            customer,
+            receiptNo,
+            excludeReceiptId: null,
+            ct);
 
         var allocationMode = NormalizeAllocationMode(request.AllocationMode);
         var allocationPriority = NormalizeAllocationPriority(request.AllocationPriority);
@@ -356,7 +366,7 @@ public sealed partial class ReceiptService : IReceiptService
         };
 
         _db.Receipts.Add(receipt);
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveReceiptChangesAsync(_db, ct);
 
         await _auditService.LogAsync(
             "RECEIPT_CREATE",

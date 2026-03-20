@@ -518,7 +518,9 @@ export default function ImportBatchSection({
         <p className="eyebrow">Bước 1</p>
         <h3>Chuẩn bị template</h3>
         <p className="muted">
-          Không đổi tên cột trong template. Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy.
+          Giữ nguyên header ở sheet Data. Dòng 1 là header cố định, dòng 2 là dòng mẫu tham chiếu.
+          Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy. Với khoản trả hộ KH và phiếu thu,
+          số chứng từ là bắt buộc để hệ thống kiểm tra trùng.
         </p>
         <div className="inline-actions">
           <span className="muted">Tải template:</span>
@@ -539,7 +541,9 @@ export default function ImportBatchSection({
           )}
         </div>
         <p className="muted">
-          Hóa đơn hỗ trợ cả template đơn giản và ReportDetail.xlsx (sheet ExportData).
+          Hóa đơn hỗ trợ cả template chuẩn và ReportDetail.xlsx (sheet ExportData). Mỗi workbook
+          đều có thêm sheet Hướng dẫn để đối soát cột, định dạng và quy tắc chống trùng trước khi
+          import.
         </p>
       </section>
 

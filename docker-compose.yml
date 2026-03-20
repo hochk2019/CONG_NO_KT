@@ -69,6 +69,7 @@ services:
       Zalo__AccessToken: ${ZALO_ACCESS_TOKEN:-}
       Zalo__WebhookToken: ${ZALO_WEBHOOK_TOKEN:-}
       Backup__DefaultPath: ${BACKUP_CONTAINER_PATH:-/var/lib/congno/backups/dumps}
+      Backup__HostPathHint: ${BACKUP_HOST_PATH:-./data/backup/dumps}
       Backup__DefaultPgBinPath: ${BACKUP_PG_BIN_PATH:-/usr/bin}
       Observability__ServiceName: ${OBSERVABILITY_SERVICE_NAME:-congno-api}
       Observability__EnablePrometheusExporter: ${OBSERVABILITY_PROMETHEUS_ENABLED:-true}

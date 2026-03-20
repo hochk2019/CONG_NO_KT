@@ -14,8 +14,8 @@ public sealed class Invoice
     public decimal TotalAmount { get; set; }
     public decimal OutstandingAmount { get; set; }
     public string? Note { get; set; }
-    public string InvoiceType { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+    public string InvoiceType { get; set; } = "NORMAL";
+    public string Status { get; set; } = "OPEN";
     public Guid? SourceBatchId { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

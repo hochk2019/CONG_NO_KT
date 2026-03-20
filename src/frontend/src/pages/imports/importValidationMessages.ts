@@ -1,5 +1,5 @@
 export const validationMessageLabels: Record<string, string> = {
-  DUP_IN_DB: 'Trùng hóa đơn đã có trong hệ thống',
+  DUP_IN_DB: 'Trùng số chứng từ đã có trong hệ thống',
   DUP_IN_FILE: 'Trùng trong file',
   BUYER_TAX_REQUIRED: 'Thiếu MST người mua',
   BUYER_NAME_REQUIRED: 'Thiếu tên người mua',
@@ -7,7 +7,9 @@ export const validationMessageLabels: Record<string, string> = {
   ISSUE_DATE_REQUIRED: 'Thiếu ngày phát hành',
   SELLER_TAX_REQUIRED: 'Thiếu MST người bán',
   CUSTOMER_TAX_REQUIRED: 'Thiếu MST khách hàng',
+  ADVANCE_NO_REQUIRED: 'Thiếu số chứng từ khoản trả hộ',
   ADVANCE_DATE_REQUIRED: 'Thiếu ngày trả hộ',
+  RECEIPT_NO_REQUIRED: 'Thiếu số chứng từ phiếu thu',
   RECEIPT_DATE_REQUIRED: 'Thiếu ngày thu',
   APPLIED_PERIOD_REQUIRED: 'Thiếu kỳ áp dụng',
   APPLIED_PERIOD_NOT_FIRST_DAY: 'Kỳ áp dụng phải là ngày đầu tháng',

@@ -385,7 +385,7 @@ public class ReceiptSurplusQueueTests
             VatAmount = 0m,
             TotalAmount = amount,
             OutstandingAmount = amount,
-            InvoiceType = "SALE",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

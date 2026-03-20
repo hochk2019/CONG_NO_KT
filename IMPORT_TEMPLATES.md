@@ -1,34 +1,83 @@
 # IMPORT_TEMPLATES
 
-## INVOICE (hỗ trợ 2 định dạng)
-- Hệ thống tự nhận `ExportData` nếu file có sheet này; nếu không sẽ đọc sheet đầu tiên.
-- Tự nhận cả template đơn giản và file ReportDetail.xlsx xuất từ phần mềm hóa đơn.
-- Thứ tự cột không quan trọng, miễn đúng tên cột theo template/report.
+Ba template do UI cung cap deu theo mot chuan chung:
 
-Template đơn giản (sheet: `ImportInvoice`):
-- Dòng 1: `MaSoThue` + MST người bán.
-- Header dòng 5: `STT`, `BuyerName`, `TaxCode`, `RevenueExcludingVAT`, `VatAmount`, `Note`.
-- Header dòng 6: `KyHieuMau`, `SoHieuHoaDon`, `SoHoaDon`, `NgayThangNamPhatHanh`.
-- Ngày theo định dạng `yyyy-MM-dd`.
-Template file (UI download):
-- `src/frontend/public/templates/invoice_template.xlsx`.
+- Sheet dau tien la `Data` va duoc he thong dung de staging import.
+- Dong 1 la header co dinh, dong 2 la du lieu mau de tham chieu.
+- Sheet thu hai la `HuongDan` de mo ta cot, quy tac nhap lieu va quy tac chong trung.
+- Khong doi ten header. Co the sap xep lai thu tu cot, nhung khuyen nghi giu nguyen de doi soat noi bo.
+- Ngay ho tro: `yyyy-MM-dd`, `dd/MM/yyyy`, `dd-MM-yyyy`.
 
-## ADVANCE (mẫu đơn giản)
-Header (không phân biệt thứ tự, không phân biệt hoa thường):
+## INVOICE
+
+He thong ho tro 2 nguon:
+
+1. Template chuan tai `src/frontend/public/templates/invoice_template.xlsx`
+2. `ReportDetail.xlsx` neu file co sheet `ExportData`
+
+Header chuan cua template:
+
 - `seller_tax_code`
 - `customer_tax_code`
-- `advance_date` (yyyy-MM-dd)
-- `amount`
-- `description` (tùy chọn)
-Template: `src/frontend/public/templates/advance_template.xlsx`.
+- `customer_name`
+- `invoice_template_code`
+- `invoice_series`
+- `invoice_no`
+- `issue_date`
+- `revenue_excl_vat`
+- `vat_amount`
+- `total_amount`
+- `note`
 
-## RECEIPT (mẫu đơn giản)
-Header (không phân biệt thứ tự, không phân biệt hoa thường):
+Quy tac chong trung voi du lieu da co tren he thong:
+
+- `seller_tax_code + customer_tax_code + invoice_series + invoice_no + issue_date`
+
+Ghi chu:
+
+- `total_amount` co the de `0`; he thong se tu tinh `revenue_excl_vat + vat_amount`.
+- Hoa don dieu chinh giam van duoc ho tro nhu truoc thong qua `note` va parser hien hanh.
+
+## ADVANCE
+
+Template chuan: `src/frontend/public/templates/advance_template.xlsx`
+
+Header chuan:
+
 - `seller_tax_code`
 - `customer_tax_code`
-- `receipt_date` (yyyy-MM-dd)
-- `applied_period_start` (yyyy-MM-dd, ngày đầu tháng)
+- `advance_no`
+- `advance_date`
 - `amount`
-- `method` (BANK/CASH/OTHER, tùy chọn)
-- `description` (tùy chọn)
-Template: `src/frontend/public/templates/receipt_template.xlsx`.
+- `description`
+
+Quy tac nghiep vu:
+
+- `advance_no` la bat buoc.
+- He thong chong trung voi du lieu da co theo:
+  - `seller_tax_code + customer_tax_code + advance_no`
+- Trong chinh file import, he thong cung dedup theo `advance_no`; dong trung se bi canh bao va `SKIP`.
+
+## RECEIPT
+
+Template chuan: `src/frontend/public/templates/receipt_template.xlsx`
+
+Header chuan:
+
+- `seller_tax_code`
+- `customer_tax_code`
+- `receipt_no`
+- `receipt_date`
+- `applied_period_start`
+- `amount`
+- `method`
+- `description`
+
+Quy tac nghiep vu:
+
+- `receipt_no` la bat buoc.
+- `applied_period_start` nen la ngay dau thang cua ky doi soat.
+- `method` ho tro `BANK`, `CASH`, `OTHER`.
+- He thong chong trung voi du lieu da co theo:
+  - `seller_tax_code + customer_tax_code + receipt_no`
+- Trong chinh file import, he thong cung dedup theo `receipt_no`; dong trung se bi canh bao va `SKIP`.

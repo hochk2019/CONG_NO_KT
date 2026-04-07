@@ -84,7 +84,7 @@ describe('getImportBatchRecoveryState', () => {
       }),
     ).toMatchObject({
       status: 'ready',
-      previewButtonLabel: 'Xem trước',
+      previewButtonLabel: 'Xem trước lần cuối',
       hasBlockingErrors: false,
     })
   })

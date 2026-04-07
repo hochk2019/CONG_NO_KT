@@ -11,6 +11,14 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 120 - Merge deployed data branch back into main (2026-04-07) [bead: cng-akc]
+- [x] Merge `fix/table-scroll-hint-20260307` vào `main` bằng merge commit để giữ lại cả lịch sử nhánh fix lẫn commit dữ liệu cục bộ `9347540` trên `main`.
+- [x] Đồng bộ regression test sau merge: sửa assertion frontend cũ đang mong đợi nhãn `Xem trước` trong khi copy hiện hành là `Xem trước lần cuối`.
+- [x] Verify:
+  - [x] `git log --oneline --decorate --graph --max-count=12` => `main` ở merge commit `8e71b66`, vẫn giữ commit `9347540` và toàn bộ commit riêng của `fix/table-scroll-hint-20260307`.
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerPermissionEvaluatorTests|FullyQualifiedName~ImportPermissionEvaluatorTests|FullyQualifiedName~CurrentUserServiceTests|FullyQualifiedName~JwtTokenServiceTests" -v minimal` => pass (`20/20`).
+  - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-page.permissions.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/imports/__tests__/importValidationMessages.test.ts src/pages/imports/__tests__/importBatchRecovery.test.ts` => pass (`13/13`).
+
 ## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
 - [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
 - [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.

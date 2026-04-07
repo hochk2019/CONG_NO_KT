@@ -1,5 +1,16 @@
 # Findings - 2026-02-23
 
+## Branch Sync Merge (2026-04-07)
+- `main` trước khi merge chỉ lệch `fix/table-scroll-hint-20260307` ở một commit dữ liệu cục bộ: `9347540`.
+- `fix/table-scroll-hint-20260307` chứa toàn bộ chuỗi commit đang gần với runtime Docker, nên cách an toàn là merge ngược vào `main` thay vì reset/cherry-pick.
+- Merge commit tạo ra là `8e71b66`, giữ nguyên cả `9347540` lẫn toàn bộ commit riêng của nhánh fix.
+- Regression duy nhất sau merge không phải lỗi logic mà là test frontend cũ:
+  - `src/frontend/src/pages/imports/__tests__/importBatchRecovery.test.ts`
+  - trạng thái `ready` hiện trả `previewButtonLabel = 'Xem trước lần cuối'`, không còn là `'Xem trước'`.
+- Verification đã có:
+  - backend targeted unit pass `20/20`;
+  - frontend targeted vitest pass `13/13`.
+
 ## Customer Assignment Import (2026-04-06)
 - Nguồn dữ liệu: `người phụ trách.xlsx`, `376` dòng hữu hiệu, không có MST trùng trong file.
 - Mapping tài khoản phụ trách trong DB hợp lệ cho toàn bộ phạm vi import:

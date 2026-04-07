@@ -1840,3 +1840,16 @@
 - [x] `dotnet test src\backend\Tests.Integration\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitNotificationTests|FullyQualifiedName~ImportCommitPeriodLockTests" -v minimal` => pass `3/3`.
 - [x] `dotnet test src\backend\CongNoGolden.sln -v minimal` => pass `304/304` (`Tests.Unit 205/205`, `CongNoGolden.Tests.Integration 99/99`).
 
+## Phase 125 - Refresh docker stack after backend fix and resync persisted DB credentials (2026-04-07) [bead: cng-fo6]
+- [x] Rebuild lại Docker stack bằng `docker compose up -d --build` để `web`, `api`, `db` dùng image mới nhất sau khi backend fix đã được commit/push.
+- [x] Điều tra root cause `api` container restart loop sau rebuild: volume Postgres cũ vẫn giữ password role `congno_app` khác với `.env`, khiến kết nối nội bộ từ `api -> db` fail theo rule `scram-sha-256`.
+- [x] Đồng bộ lại password role `congno_app` trong database hiện hữu để khớp `.env`, tránh phải reset volume hay mất dữ liệu môi trường local/staging.
+- [x] Xác nhận lại trạng thái runtime sau resync: `db` healthy, `api` up, `web` up, probe `http://localhost:18080/metrics` trả `200`.
+
+### Verification
+- [x] `docker compose up -d --build` => rebuild xong `congno-api:latest`, `congno-web:latest` và recreate stack.
+- [x] `docker run --rm --network congno_congno_net -e PGPASSWORD=ChangeMe_Db_2026! postgres:16-alpine psql -h db -U congno_app -d congno_golden -Atqc "select current_user;"` => pass `congno_app`.
+- [x] `docker compose ps` => `congno-db` healthy, `congno-api` up, `congno-web` up.
+- [x] `curl.exe -s -o NUL -w "%{http_code}" http://localhost:18080/metrics` => `200`.
+- [x] `Invoke-WebRequest http://localhost:18081 -UseBasicParsing | Select-Object -ExpandProperty StatusCode` => `200`.
+

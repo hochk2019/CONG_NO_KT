@@ -14,6 +14,7 @@ public static class CustomerEndpoints
         app.MapGet("/customers", async (
             string? search,
             Guid? ownerId,
+            bool? unassignedOnly,
             string? status,
             string? sort,
             int? page,
@@ -25,6 +26,7 @@ public static class CustomerEndpoints
                 new CustomerListRequest(
                     search,
                     ownerId,
+                    unassignedOnly == true,
                     status,
                     sort,
                     page.GetValueOrDefault(1),

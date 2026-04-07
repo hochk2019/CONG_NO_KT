@@ -171,6 +171,7 @@ export const fetchCustomers = async (params: {
   token: string
   search?: string
   ownerId?: string
+  unassignedOnly?: boolean
   status?: string
   sort?: string
   page: number
@@ -182,6 +183,7 @@ export const fetchCustomers = async (params: {
   })
   if (params.search) query.append('search', params.search)
   if (params.ownerId) query.append('ownerId', params.ownerId)
+  if (params.unassignedOnly) query.append('unassignedOnly', 'true')
   if (params.status) query.append('status', params.status)
   if (params.sort) query.append('sort', params.sort)
 

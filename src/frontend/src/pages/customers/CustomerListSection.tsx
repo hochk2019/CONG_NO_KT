@@ -39,6 +39,8 @@ const customerDebtSortLabels: Record<string, string> = {
   debt_oldest: 'Nợ lâu nhất',
   debt_newest: 'Nợ mới nhất',
 }
+const UNASSIGNED_OWNER_VALUE = '__unassigned__'
+const UNASSIGNED_OWNER_LABEL = 'Chưa phân công'
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 const CUSTOMER_STATUS_KEY = 'pref.customers.status'
@@ -118,6 +120,7 @@ export default function CustomerListSection({
   const [editSuccess, setEditSuccess] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
+  const isUnassignedOwnerFilter = ownerId === UNASSIGNED_OWNER_VALUE
 
   useEffect(() => {
     if (!token) return
@@ -131,7 +134,8 @@ export default function CustomerListSection({
         const result = await fetchCustomers({
           token,
           search: debouncedSearch.trim() || undefined,
-          ownerId: ownerId || undefined,
+          ownerId: isUnassignedOwnerFilter ? undefined : ownerId || undefined,
+          unassignedOnly: isUnassignedOwnerFilter || undefined,
           status: status || undefined,
           sort: sort || undefined,
           page,
@@ -164,7 +168,7 @@ export default function CustomerListSection({
     return () => {
       isActive = false
     }
-  }, [token, debouncedSearch, status, ownerId, sort, page, pageSize, listReload])
+  }, [token, debouncedSearch, status, ownerId, isUnassignedOwnerFilter, sort, page, pageSize, listReload])
   useEffect(() => {
     if (!token) return
     let isActive = true
@@ -287,6 +291,9 @@ export default function CustomerListSection({
   }, [detail, isEditOpen])
 
   const hasFilters = Boolean(search.trim() || status || ownerId || sort)
+  const selectedOwnerLabel = isUnassignedOwnerFilter
+    ? UNASSIGNED_OWNER_LABEL
+    : ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId
 
   const handleClearFilters = useCallback(() => {
     setSearch('')
@@ -682,6 +689,7 @@ export default function CustomerListSection({
               }}
             >
               <option value="">Tất cả</option>
+              <option value={UNASSIGNED_OWNER_VALUE}>{UNASSIGNED_OWNER_LABEL}</option>
               {ownerOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -718,7 +726,7 @@ export default function CustomerListSection({
               )}
               {ownerId && (
                 <span className="filter-chip">
-                  Phụ trách: {ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId}
+                  Phụ trách: {selectedOwnerLabel}
                 </span>
               )}
               {sort && (

@@ -143,6 +143,7 @@ public sealed class CustomerServiceListTests
             new CustomerListRequest(
                 Search: null,
                 OwnerId: null,
+                UnassignedOnly: false,
                 Status: null,
                 Sort: sort,
                 Page: 1,
@@ -150,6 +151,72 @@ public sealed class CustomerServiceListTests
             CancellationToken.None);
 
         Assert.Equal(expectedOrder, result.Items.Select(item => item.TaxCode).ToArray());
+    }
+
+    [Fact]
+    public async Task ListAsync_FiltersUnassignedOwners_WhenRequested()
+    {
+        await using var db = CreateDbContext(nameof(ListAsync_FiltersUnassignedOwners_WhenRequested));
+        var now = new DateTimeOffset(2026, 4, 7, 9, 0, 0, TimeSpan.Zero);
+        var assignedOwnerId = Guid.NewGuid();
+
+        db.Customers.AddRange(
+            new Customer
+            {
+                TaxCode = "CUST-UNASSIGNED-1",
+                Name = "Unassigned One",
+                Status = "ACTIVE",
+                AccountantOwnerId = null,
+                CurrentBalance = 100m,
+                PaymentTermsDays = 30,
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 0
+            },
+            new Customer
+            {
+                TaxCode = "CUST-ASSIGNED",
+                Name = "Assigned Customer",
+                Status = "ACTIVE",
+                AccountantOwnerId = assignedOwnerId,
+                CurrentBalance = 200m,
+                PaymentTermsDays = 30,
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 0
+            },
+            new Customer
+            {
+                TaxCode = "CUST-UNASSIGNED-2",
+                Name = "Unassigned Two",
+                Status = "ACTIVE",
+                AccountantOwnerId = null,
+                CurrentBalance = 300m,
+                PaymentTermsDays = 30,
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 0
+            });
+
+        await db.SaveChangesAsync();
+
+        var service = new CustomerService(db);
+        var result = await service.ListAsync(
+            new CustomerListRequest(
+                Search: null,
+                OwnerId: null,
+                UnassignedOnly: true,
+                Status: null,
+                Sort: null,
+                Page: 1,
+                PageSize: 10),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.Total);
+        Assert.Equal(
+            new[] { "CUST-UNASSIGNED-1", "CUST-UNASSIGNED-2" },
+            result.Items.Select(item => item.TaxCode).ToArray());
+        Assert.All(result.Items, item => Assert.Null(item.OwnerName));
     }
 
     private static ConGNoDbContext CreateDbContext(string name)

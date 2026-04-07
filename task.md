@@ -1853,3 +1853,11 @@
 - [x] `curl.exe -s -o NUL -w "%{http_code}" http://localhost:18080/metrics` => `200`.
 - [x] `Invoke-WebRequest http://localhost:18081 -UseBasicParsing | Select-Object -ExpandProperty StatusCode` => `200`.
 
+
+## Phase 126 - Add unassigned owner filter on customers page (2026-04-07) [bead: cng-c52]
+- [x] Bổ sung lựa chọn lọc `Chưa phân công` trong dropdown `Phụ trách` tại `/customers` để tìm nhanh khách hàng chưa có nhân viên phụ trách.
+- [x] Đồng bộ logic filter frontend/backend (nếu API đã lọc server-side) để trạng thái chưa gán được xử lý rõ ràng, không phụ thuộc hiển thị `-` ở bảng.
+- [x] Bổ sung/cập nhật regression tests cho luồng lọc khách hàng theo phụ trách, bao gồm case chưa phân công.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CustomerServiceListTests`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.unassigned-filter.test.tsx`

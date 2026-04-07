@@ -136,6 +136,10 @@ public sealed class CustomerService : ICustomerService
         {
             query = query.Where(c => c.AccountantOwnerId == request.OwnerId);
         }
+        else if (request.UnassignedOnly)
+        {
+            query = query.Where(c => c.AccountantOwnerId == null);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {

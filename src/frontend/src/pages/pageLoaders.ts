@@ -55,6 +55,25 @@ const MAX_RECENT = 8
 const MAX_COUNTS = 20
 
 const rolePriority = ['Admin', 'Supervisor', 'Accountant', 'Viewer']
+const accountantPermissions = [
+  'import.upload',
+  'import.history',
+  'import.commit.invoice',
+  'import.commit.advance',
+  'import.commit.receipt',
+  'import.rollback',
+  'customer.edit.all',
+  'customer.edit.owned',
+  'customer.edit.unassigned',
+  'customer.assignment.manage',
+  'advance.manage',
+  'receipt.approve',
+]
+const rolePermissionSignals: Partial<Record<(typeof rolePriority)[number], string[]>> = {
+  Admin: ['admin.manage'],
+  Accountant: accountantPermissions,
+  Viewer: ['customer.view'],
+}
 
 const rolePrefetchPlan: Record<string, { primary: number; deep: number }> = {
   Admin: { primary: 3, deep: 2 },
@@ -162,18 +181,25 @@ const routeAffinity: Record<string, string[]> = {
   '/admin/backup': ['/admin/audit', '/admin/users'],
 }
 
-const resolvePrimaryRole = (roles: string[]) => {
-  return rolePriority.find((role) => roles.includes(role))
+const hasAnyPermission = (requiredPermissions: string[] | undefined, permissions: string[]) => {
+  if (!requiredPermissions || requiredPermissions.length === 0) return false
+  return requiredPermissions.some((permission) => permissions.includes(permission))
 }
 
-export const computePrefetchBudget = (roles: string[]) => {
-  const primaryRole = resolvePrimaryRole(roles)
+const resolvePrimaryRole = (roles: string[], permissions: string[] = []) => {
+  return rolePriority.find(
+    (role) => roles.includes(role) || hasAnyPermission(rolePermissionSignals[role], permissions),
+  )
+}
+
+export const computePrefetchBudget = (roles: string[], permissions: string[] = []) => {
+  const primaryRole = resolvePrimaryRole(roles, permissions)
   if (!primaryRole) return 1
   return rolePrefetchPlan[primaryRole]?.primary ?? 1
 }
 
-export const computePrefetchPlan = (roles: string[]) => {
-  const primaryRole = resolvePrimaryRole(roles)
+export const computePrefetchPlan = (roles: string[], permissions: string[] = []) => {
+  const primaryRole = resolvePrimaryRole(roles, permissions)
   if (!primaryRole) return { primary: 1, deep: 0 }
   return rolePrefetchPlan[primaryRole] ?? { primary: 1, deep: 0 }
 }
@@ -222,6 +248,7 @@ export const recordRouteVisit = (path: string, allowedPaths: string[]) => {
 
 export const selectPrefetchTargets = ({
   roles,
+  permissions = [],
   allowedPaths,
   currentPath,
   history,
@@ -229,6 +256,7 @@ export const selectPrefetchTargets = ({
   tier = 'primary',
 }: {
   roles: string[]
+  permissions?: string[]
   allowedPaths: string[]
   currentPath: string
   history?: RouteHistory
@@ -247,7 +275,7 @@ export const selectPrefetchTargets = ({
         .sort((a, b) => b[1] - a[1])
         .map(([path]) => path)
     : []
-  const primaryRole = resolvePrimaryRole(roles)
+  const primaryRole = resolvePrimaryRole(roles, permissions)
   const preferred = primaryRole ? rolePreferredRoutes[primaryRole] ?? [] : []
   const secondary = primaryRole ? roleSecondaryRoutes[primaryRole] ?? [] : []
   const adminRoutes = primaryRole ? roleAdminRoutes[primaryRole] ?? [] : []

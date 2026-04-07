@@ -491,7 +491,7 @@ public sealed class ReminderEscalationPolicyTests
             VatAmount = 0m,
             TotalAmount = 100m,
             OutstandingAmount = 100m,
-            InvoiceType = "GTGT",
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = now,
             UpdatedAt = now,

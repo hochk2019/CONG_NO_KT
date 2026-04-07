@@ -5,7 +5,7 @@ import type { PagedResult } from './types'
 const parseErrorMessage = async (response: Response, fallback: string) => {
   try {
     const contentType = response.headers.get('content-type') ?? ''
-    if (contentType.includes('application/json')) {
+    if (contentType.includes('json')) {
       const payload = await response.json()
       return formatApiErrorMessage(payload, fallback)
     }
@@ -89,6 +89,7 @@ export type ImportBatchHistoryItem = {
   cancelledBy?: string | null
   cancelReason?: string | null
   summary: ImportCommitResult
+  stagingSummary?: ImportStagingResult | null
 }
 
 export const uploadImport = async (params: {

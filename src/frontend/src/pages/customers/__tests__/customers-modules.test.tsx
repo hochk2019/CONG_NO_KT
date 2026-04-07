@@ -16,6 +16,7 @@ const baseAuth: AuthContextValue = {
     expiresAt: null,
     username: 'tester',
     roles: [],
+    permissions: [],
   },
   isAuthenticated: false,
   isBootstrapping: false,
@@ -71,6 +72,31 @@ describe('customers modules', () => {
     await user.selectOptions(screen.getByLabelText('Trạng thái'), 'PAID')
     expect(onStatusChange).toHaveBeenCalledWith('PAID')
     expect(screen.getByText('Chọn bộ lọc')).toBeInTheDocument()
+  })
+
+  it('hides status filter when requested', () => {
+    render(
+      <TransactionFilters
+        searchLabel="Tìm chứng từ"
+        searchValue=""
+        onSearchChange={vi.fn()}
+        dateFrom=""
+        dateTo=""
+        onDateFromChange={vi.fn()}
+        onDateToChange={vi.fn()}
+        quickRange=""
+        onQuickRangeChange={vi.fn()}
+        hideStatus
+        statusValue="APPROVED"
+        statusOptions={[{ value: 'APPROVED', label: 'Đã duyệt' }]}
+        onStatusChange={vi.fn()}
+        hasFilters={false}
+        onClear={vi.fn()}
+        helperText="Ẩn bộ lọc trạng thái"
+      />,
+    )
+
+    expect(screen.queryByLabelText('Trạng thái')).not.toBeInTheDocument()
   })
 
   it('renders customer edit modal and closes', async () => {
@@ -151,6 +177,8 @@ describe('customers modules', () => {
     )
     expect(screen.getByText('Giao dịch khách hàng')).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Hóa đơn' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Tiền chưa phân bổ' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Tiền thừa do hủy HĐ' })).toBeInTheDocument()
   })
 
   it('renders transaction modals for invoice view', () => {
@@ -169,6 +197,8 @@ describe('customers modules', () => {
             sellerTaxCode: '2301098313',
             sellerShortName: 'Hoàng Minh',
             receiptRefs: [],
+            reductionInvoiceRefs: [],
+            reducedInvoiceRefs: [],
           },
         }}
         advanceModal={null}
@@ -185,10 +215,6 @@ describe('customers modules', () => {
         shortId={(value) => value.slice(0, 6)}
         invoiceVoidReason=""
         onInvoiceVoidReasonChange={vi.fn()}
-        invoiceReplacementId=""
-        onInvoiceReplacementChange={vi.fn()}
-        invoiceReplacementConfirmed={false}
-        onInvoiceReplacementConfirmedChange={vi.fn()}
         invoiceVoidLoading={false}
         invoiceVoidError={null}
         invoiceVoidSuccess={null}
@@ -209,6 +235,136 @@ describe('customers modules', () => {
     expect(screen.getByText('Phiếu thu liên quan')).toBeInTheDocument()
   })
 
+  it('renders invoice reduction cross-links in invoice modal', () => {
+    render(
+      <CustomerTransactionModals
+        invoiceModal={{
+          mode: 'view',
+          row: {
+            id: 'inv-1',
+            invoiceNo: 'INV-1',
+            issueDate: '2025-01-01',
+            totalAmount: 1000000,
+            outstandingAmount: 500000,
+            status: 'OPEN',
+            version: 1,
+            sellerTaxCode: '2301098313',
+            sellerShortName: 'Hoàng Minh',
+            receiptRefs: [],
+            reductionInvoiceRefs: [
+              {
+                id: 'inv-red-1',
+                invoiceNo: 'DCG-001',
+                issueDate: '2025-01-03',
+                amount: 200000,
+              },
+            ],
+            reducedInvoiceRefs: [
+              {
+                id: 'inv-base-1',
+                invoiceNo: 'HD-GOC-001',
+                issueDate: '2024-12-20',
+                amount: 150000,
+              },
+            ],
+          } as any,
+        }}
+        advanceModal={null}
+        receiptModal={null}
+        token=""
+        invoiceStatusLabels={{ OPEN: 'Chưa thanh toán' }}
+        advanceStatusLabels={{}}
+        allocationTypeLabels={{}}
+        onCloseInvoice={vi.fn()}
+        onCloseAdvance={vi.fn()}
+        onCloseReceipt={vi.fn()}
+        onVoidInvoice={vi.fn()}
+        onVoidAdvance={vi.fn()}
+        shortId={(value) => value.slice(0, 6)}
+        invoiceVoidReason=""
+        onInvoiceVoidReasonChange={vi.fn()}
+        invoiceVoidLoading={false}
+        invoiceVoidError={null}
+        invoiceVoidSuccess={null}
+        advanceVoidReason=""
+        onAdvanceVoidReasonChange={vi.fn()}
+        advanceOverrideLock={false}
+        onAdvanceOverrideLockChange={vi.fn()}
+        advanceOverrideReason=""
+        onAdvanceOverrideReasonChange={vi.fn()}
+        advanceVoidLoading={false}
+        advanceVoidError={null}
+        advanceVoidSuccess={null}
+        receiptAllocations={[]}
+        receiptAllocLoading={false}
+        receiptAllocError={null}
+      />,
+    )
+
+    expect(screen.getByText('Hóa đơn điều chỉnh giảm liên quan')).toBeInTheDocument()
+    expect(screen.getByText('Đã bù trừ vào hóa đơn')).toBeInTheDocument()
+    expect(screen.getByText(/DCG-001/)).toBeInTheDocument()
+    expect(screen.getByText(/HD-GOC-001/)).toBeInTheDocument()
+  })
+
+  it('renders held-credit warning for paid invoice void flow', () => {
+    render(
+      <CustomerTransactionModals
+        invoiceModal={{
+          mode: 'void',
+          row: {
+            id: 'inv-1',
+            invoiceNo: 'INV-1',
+            issueDate: '2025-01-01',
+            totalAmount: 1000000,
+            outstandingAmount: 0,
+            status: 'PAID',
+            version: 1,
+            sellerTaxCode: '2301098313',
+            sellerShortName: 'Hoàng Minh',
+            receiptRefs: [],
+            reductionInvoiceRefs: [],
+            reducedInvoiceRefs: [],
+          },
+        }}
+        advanceModal={null}
+        receiptModal={null}
+        token=""
+        invoiceStatusLabels={{ PAID: 'Đã thanh toán' }}
+        advanceStatusLabels={{}}
+        allocationTypeLabels={{}}
+        onCloseInvoice={vi.fn()}
+        onCloseAdvance={vi.fn()}
+        onCloseReceipt={vi.fn()}
+        onVoidInvoice={vi.fn()}
+        onVoidAdvance={vi.fn()}
+        shortId={(value) => value.slice(0, 6)}
+        invoiceVoidReason=""
+        onInvoiceVoidReasonChange={vi.fn()}
+        invoiceVoidLoading={false}
+        invoiceVoidError={null}
+        invoiceVoidSuccess={null}
+        advanceVoidReason=""
+        onAdvanceVoidReasonChange={vi.fn()}
+        advanceOverrideLock={false}
+        onAdvanceOverrideLockChange={vi.fn()}
+        advanceOverrideReason=""
+        onAdvanceOverrideReasonChange={vi.fn()}
+        advanceVoidLoading={false}
+        advanceVoidError={null}
+        advanceVoidSuccess={null}
+        receiptAllocations={[]}
+        receiptAllocLoading={false}
+        receiptAllocError={null}
+      />,
+    )
+
+    expect(
+      screen.getByText(/Tiền thu đã phân bổ sẽ chuyển sang Tiền thừa do hủy HĐ/i),
+    ).toBeInTheDocument()
+    expect(screen.getByText(/có thể dùng thêm credit chung chưa phân bổ/i)).toBeInTheDocument()
+  })
+
   it('renders customers page with auth context', () => {
     render(
       <MemoryRouter initialEntries={['/customers']}>
@@ -222,14 +378,35 @@ describe('customers modules', () => {
 
   it('applies deep-link taxCode/tab/doc in customers page', () => {
     render(
-      <MemoryRouter initialEntries={['/customers?taxCode=2301098313&tab=receipts&doc=PT-001']}>
+      <MemoryRouter initialEntries={['/customers?taxCode=2301098313&tab=heldCredits&doc=PT-001']}>
         <AuthContext.Provider value={baseAuth}>
           <CustomersPage />
         </AuthContext.Provider>
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('tab', { name: 'Phiếu thu' })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.getByRole('textbox', { name: /Tìm chứng từ \(PT \/ HD \/ TH\)/i })).toHaveValue('PT-001')
+    expect(screen.getByRole('tab', { name: 'Tiền thừa do hủy HĐ' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('textbox', { name: /Tìm phiếu thu \/ hóa đơn gốc/i })).toHaveValue('PT-001')
+  })
+
+  it('applies deep-link taxCode/tab/doc for unallocated receipts', () => {
+    render(
+      <MemoryRouter
+        initialEntries={['/customers?taxCode=2301098313&tab=unallocatedReceipts&doc=PT-002']}
+      >
+        <AuthContext.Provider value={baseAuth}>
+          <CustomersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('tab', { name: 'Tiền chưa phân bổ' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    )
+    expect(screen.getByRole('textbox', { name: /Tìm phiếu thu/i })).toHaveValue('PT-002')
   })
 })

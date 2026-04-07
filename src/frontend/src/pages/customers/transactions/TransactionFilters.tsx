@@ -14,6 +14,7 @@ type TransactionFiltersProps = {
   onDateToChange: (value: string) => void
   quickRange: string
   onQuickRangeChange: (value: string) => void
+  hideStatus?: boolean
   statusValue: string
   statusOptions: StatusOption[]
   onStatusChange: (value: string) => void
@@ -34,6 +35,7 @@ export default function TransactionFilters({
   onDateToChange,
   quickRange,
   onQuickRangeChange,
+  hideStatus = false,
   statusValue,
   statusOptions,
   onStatusChange,
@@ -78,17 +80,19 @@ export default function TransactionFilters({
             ))}
           </select>
         </label>
-        <label className="field field--compact">
-          <span>Trạng thái</span>
-          <select value={statusValue} onChange={(event) => onStatusChange(event.target.value)}>
-            <option value="">Tất cả</option>
-            {statusOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!hideStatus && (
+          <label className="field field--compact">
+            <span>Trạng thái</span>
+            <select value={statusValue} onChange={(event) => onStatusChange(event.target.value)}>
+              <option value="">Tất cả</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
       <div className="filters-actions">
         {hasFilters ? (

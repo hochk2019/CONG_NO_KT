@@ -13,4 +13,11 @@ public sealed record ImportBatchListItem(
     ImportCommitResult Summary,
     DateTimeOffset? CancelledAt,
     string? CancelledBy,
-    string? CancelReason);
+    string? CancelReason,
+    ImportBatchStagingSummary? StagingSummary);
+
+public sealed record ImportBatchStagingSummary(
+    int TotalRows,
+    int OkCount,
+    int WarnCount,
+    int ErrorCount);

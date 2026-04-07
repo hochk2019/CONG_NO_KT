@@ -24,12 +24,18 @@ vi.mock('../ManualInvoicesSection', () => ({
   },
 }))
 
-const buildAuthContext = (): AuthContextValue => ({
+type AuthOverride = {
+  roles?: string[]
+  permissions?: string[]
+}
+
+const buildAuthContext = ({ roles = ['Accountant'], permissions = [] }: AuthOverride = {}): AuthContextValue => ({
   state: {
     accessToken: 'token',
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'accountant',
-    roles: ['Accountant'],
+    roles,
+    permissions,
   },
   isAuthenticated: true,
   isBootstrapping: false,
@@ -42,10 +48,10 @@ function LocationProbe() {
   return <div data-testid="location-probe">{`${location.pathname}${location.search}`}</div>
 }
 
-function renderPage(initialEntry: string) {
+function renderPage(initialEntry: string, authOverride?: AuthOverride) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
-      <AuthContext.Provider value={buildAuthContext()}>
+      <AuthContext.Provider value={buildAuthContext(authOverride)}>
         <LocationProbe />
         <ImportsPage />
       </AuthContext.Provider>
@@ -67,6 +73,86 @@ describe('ImportsPage deep-link type', () => {
     const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as { fixedType?: string }
     expect(latestCall?.fixedType).toBe('ADVANCE')
     expect(screen.getByRole('tab', { name: 'Nhập file' })).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('maps stage and commit permission by fixed import type', async () => {
+    renderPage('/imports?tab=batch&type=ADVANCE', {
+      permissions: ['import.upload', 'import.commit.advance'],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('ADVANCE')
+    expect(latestCall?.canStage).toBe(true)
+    expect(latestCall?.canCommit).toBe(true)
+  })
+
+  it('does not grant batch staging from accountant role without import permissions', async () => {
+    renderPage('/imports?tab=batch&type=ADVANCE', {
+      roles: ['Accountant'],
+      permissions: [],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('ADVANCE')
+    expect(latestCall?.canStage).toBe(false)
+    expect(latestCall?.canCommit).toBe(false)
+  })
+
+  it('does not grant commit from supervisor role without explicit commit permission', async () => {
+    renderPage('/imports?tab=batch&type=INVOICE', {
+      roles: ['Supervisor'],
+      permissions: ['import.upload'],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('INVOICE')
+    expect(latestCall?.canStage).toBe(true)
+    expect(latestCall?.canCommit).toBe(false)
+  })
+
+  it('blocks invoice commit when user lacks invoice permission', async () => {
+    renderPage('/imports?tab=batch&type=INVOICE', {
+      permissions: ['import.upload', 'import.commit.advance'],
+    })
+
+    expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as {
+      canStage?: boolean
+      canCommit?: boolean
+      fixedType?: string
+    }
+
+    expect(latestCall?.fixedType).toBe('INVOICE')
+    expect(latestCall?.canStage).toBe(true)
+    expect(latestCall?.canCommit).toBe(false)
+  })
+
+  it('keeps manual invoice commit gated by invoice permission', async () => {
+    renderPage('/imports?tab=manual', {
+      permissions: ['import.upload', 'import.commit.advance'],
+    })
+
+    expect(await screen.findByTestId('manual-invoices-section')).toBeInTheDocument()
+    const latestCall = mocks.manualInvoicesSectionMock.mock.calls.at(-1)?.[0] as { canCommit?: boolean }
+    expect(latestCall?.canCommit).toBe(false)
   })
 
   it('preserves type query when switching tab and auto-fills missing tab', async () => {

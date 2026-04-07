@@ -1,7 +1,9 @@
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Invoices;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -54,82 +56,96 @@ public sealed class InvoiceService : IInvoiceService
             .ToListAsync(ct);
 
         var hasAllocations = allocations.Count > 0;
-        Guid? replacementId = null;
         if (hasAllocations)
         {
             if (!request.Force)
             {
                 throw new InvalidOperationException("Invoice has receipts and requires confirmation.");
             }
-
-            if (!request.ReplacementInvoiceId.HasValue)
-            {
-                throw new InvalidOperationException("Replacement invoice is required when receipts exist.");
-            }
-
-            replacementId = request.ReplacementInvoiceId.Value;
-        }
-
-        var replacement = replacementId.HasValue
-            ? await _db.Invoices.FirstOrDefaultAsync(i => i.Id == replacementId.Value && i.DeletedAt == null, ct)
-            : null;
-
-        if (replacementId.HasValue)
-        {
-            if (replacement is null)
-            {
-                throw new InvalidOperationException("Replacement invoice not found.");
-            }
-
-            if (replacement.Status == "VOID")
-            {
-                throw new InvalidOperationException("Replacement invoice is voided.");
-            }
-
-            if (replacement.Id == invoice.Id)
-            {
-                throw new InvalidOperationException("Replacement invoice must be different from original.");
-            }
-
-            if (replacement.SellerTaxCode != invoice.SellerTaxCode ||
-                replacement.CustomerTaxCode != invoice.CustomerTaxCode)
-            {
-                throw new InvalidOperationException("Replacement invoice must match seller and customer.");
-            }
         }
 
         var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == invoice.CustomerTaxCode, ct);
         var previousStatus = invoice.Status;
+        var now = DateTimeOffset.UtcNow;
+        var createdHeldCreditAmount = 0m;
+        var createdHeldCreditCount = 0;
+        var restoredHeldCreditAmount = 0m;
+        var restoredHeldCreditCount = 0;
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        if (hasAllocations && replacement is not null)
+        if (hasAllocations)
         {
-            var movedAmount = allocations.Sum(a => a.Amount);
-            var replacementAllocated = await _db.ReceiptAllocations
-                .Where(a => a.InvoiceId == replacement.Id)
-                .SumAsync(a => a.Amount, ct);
+            var heldCreditGroups = allocations
+                .Where(a => a.HeldCreditId.HasValue)
+                .GroupBy(a => a.HeldCreditId!.Value)
+                .Select(group => new
+                {
+                    HeldCreditId = group.Key,
+                    Amount = group.Sum(item => item.Amount)
+                })
+                .ToList();
 
-            var totalAllocated = replacementAllocated + movedAmount;
-            if (totalAllocated > replacement.TotalAmount)
+            if (heldCreditGroups.Count > 0)
             {
-                throw new InvalidOperationException("Replacement invoice allocation exceeds total amount.");
+                var heldCreditIds = heldCreditGroups.Select(group => group.HeldCreditId).ToList();
+                var heldCredits = await _db.ReceiptHeldCredits
+                    .Where(item => heldCreditIds.Contains(item.Id))
+                    .ToDictionaryAsync(item => item.Id, ct);
+
+                foreach (var group in heldCreditGroups)
+                {
+                    if (!heldCredits.TryGetValue(group.HeldCreditId, out var heldCredit))
+                    {
+                        throw new InvalidOperationException("Held credit not found for invoice allocation.");
+                    }
+
+                    heldCredit.AmountRemaining += group.Amount;
+                    heldCredit.Status = ComputeHeldCreditStatus(heldCredit);
+                    heldCredit.UpdatedAt = now;
+                    heldCredit.Version += 1;
+
+                    restoredHeldCreditAmount += group.Amount;
+                    restoredHeldCreditCount += 1;
+                }
             }
 
-            foreach (var allocation in allocations)
+            var genericAllocationGroups = allocations
+                .Where(a => !a.HeldCreditId.HasValue)
+                .GroupBy(a => a.ReceiptId)
+                .Select(group => new
+                {
+                    ReceiptId = group.Key,
+                    Amount = group.Sum(item => item.Amount)
+                })
+                .ToList();
+
+            foreach (var group in genericAllocationGroups)
             {
-                allocation.InvoiceId = replacement.Id;
+                _db.ReceiptHeldCredits.Add(new ReceiptHeldCredit
+                {
+                    Id = Guid.NewGuid(),
+                    ReceiptId = group.ReceiptId,
+                    OriginalInvoiceId = invoice.Id,
+                    OriginalAmount = group.Amount,
+                    AmountRemaining = group.Amount,
+                    Status = ReceiptHeldCreditStatusCodes.Holding,
+                    CreatedBy = _currentUser.UserId,
+                    CreatedAt = now,
+                    UpdatedAt = now,
+                    Version = 0
+                });
+
+                createdHeldCreditAmount += group.Amount;
+                createdHeldCreditCount += 1;
             }
 
-            replacement.OutstandingAmount = Math.Max(0, replacement.TotalAmount - totalAllocated);
-            replacement.Status = replacement.OutstandingAmount == 0 ? "PAID" : "PARTIAL";
-            replacement.UpdatedAt = DateTimeOffset.UtcNow;
-            replacement.Version += 1;
+            _db.ReceiptAllocations.RemoveRange(allocations);
         }
 
         invoice.Status = "VOID";
         invoice.OutstandingAmount = 0;
-        invoice.UpdatedAt = DateTimeOffset.UtcNow;
+        invoice.UpdatedAt = now;
         invoice.Version += 1;
 
         if (customer is not null)
@@ -149,7 +165,10 @@ public sealed class InvoiceService : IInvoiceService
             {
                 status = invoice.Status,
                 reason = request.Reason,
-                replacementInvoiceId = replacementId
+                heldCreditAmount = createdHeldCreditAmount,
+                heldCreditCount = createdHeldCreditCount,
+                restoredHeldCreditAmount,
+                restoredHeldCreditCount
             },
             ct);
 
@@ -158,7 +177,11 @@ public sealed class InvoiceService : IInvoiceService
             invoice.Status,
             invoice.Version,
             invoice.OutstandingAmount,
-            replacementId);
+            null,
+            createdHeldCreditAmount,
+            createdHeldCreditCount,
+            restoredHeldCreditAmount,
+            restoredHeldCreditCount);
     }
 
     private void EnsureCanManageInvoices()
@@ -170,5 +193,20 @@ public sealed class InvoiceService : IInvoiceService
         }
 
         throw new UnauthorizedAccessException("Not allowed to manage invoices.");
+    }
+
+    private static string ComputeHeldCreditStatus(ReceiptHeldCredit heldCredit)
+    {
+        if (heldCredit.AmountRemaining <= 0)
+        {
+            return ReceiptHeldCreditStatusCodes.Reapplied;
+        }
+
+        if (heldCredit.AmountRemaining >= heldCredit.OriginalAmount)
+        {
+            return ReceiptHeldCreditStatusCodes.Holding;
+        }
+
+        return ReceiptHeldCreditStatusCodes.Partial;
     }
 }

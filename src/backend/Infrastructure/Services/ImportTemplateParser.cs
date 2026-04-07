@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.Json;
 using ClosedXML.Excel;
 using CongNoGolden.Infrastructure.Data.Entities;
@@ -37,6 +36,10 @@ public static class ImportTemplateParser
             var messages = new List<string>();
             ImportStagingHelpers.ValidateRequired(seller, "SELLER_TAX_REQUIRED", messages);
             ImportStagingHelpers.ValidateRequired(customer, "CUSTOMER_TAX_REQUIRED", messages);
+            ImportStagingHelpers.ValidateRequired(
+                documentNo,
+                type == ImportTemplateType.Advance ? "ADVANCE_NO_REQUIRED" : "RECEIPT_NO_REQUIRED",
+                messages);
             if (amount <= 0)
             {
                 messages.Add("AMOUNT_REQUIRED");
@@ -68,8 +71,7 @@ public static class ImportTemplateParser
                 }
 
                 raw["advance_date"] = advanceDate?.ToString("yyyy-MM-dd");
-                dedupKey = ImportStagingHelpers.BuildKey(seller, customer, advanceDate?.ToString() ?? string.Empty,
-                    amount.ToString(CultureInfo.InvariantCulture));
+                dedupKey = BuildDocumentDedupKey(seller, customer, documentNo, row.RowNumber());
             }
             else
             {
@@ -106,8 +108,7 @@ public static class ImportTemplateParser
                 raw["applied_period_start"] = appliedPeriod?.ToString("yyyy-MM-dd");
                 raw["method"] = method;
 
-                dedupKey = ImportStagingHelpers.BuildKey(seller, customer, receiptDate?.ToString() ?? string.Empty,
-                    appliedPeriod?.ToString() ?? string.Empty, amount.ToString(CultureInfo.InvariantCulture));
+                dedupKey = BuildDocumentDedupKey(seller, customer, documentNo, row.RowNumber());
             }
 
             var isDup = !dedup.Add(dedupKey);
@@ -194,5 +195,16 @@ public static class ImportTemplateParser
                 return;
             }
         }
+    }
+
+    private static string BuildDocumentDedupKey(
+        string seller,
+        string customer,
+        string documentNo,
+        int rowNumber)
+    {
+        return string.IsNullOrWhiteSpace(documentNo)
+            ? ImportStagingHelpers.BuildKey(seller, customer, $"missing-document-{rowNumber}")
+            : ImportStagingHelpers.BuildKey(seller, customer, documentNo);
     }
 }

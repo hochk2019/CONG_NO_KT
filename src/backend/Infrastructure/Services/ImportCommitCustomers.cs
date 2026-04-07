@@ -13,7 +13,7 @@ public static class ImportCommitCustomers
         Dictionary<string, Customer> cache,
         CancellationToken ct)
     {
-        var taxCode = ImportCommitJson.GetString(raw, "customer_tax_code");
+        var taxCode = ImportCommitJson.ResolveInvoiceCustomerTaxCode(raw);
         if (string.IsNullOrWhiteSpace(taxCode))
         {
             return null;

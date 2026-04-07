@@ -34,7 +34,7 @@ export type AdvanceListItem = {
 export type AdvanceCreateRequest = {
   sellerTaxCode: string
   customerTaxCode: string
-  advanceNo?: string | null
+  advanceNo: string
   advanceDate: string
   amount: number
   description?: string

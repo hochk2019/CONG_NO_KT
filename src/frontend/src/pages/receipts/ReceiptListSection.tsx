@@ -22,12 +22,14 @@ import {
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
+import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatDate, formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
 import ReceiptAllocationModal from './ReceiptAllocationModal'
 import ReceiptCancelModal from './ReceiptCancelModal'
+import ReceiptSurplusQueuePanel from './ReceiptSurplusQueuePanel'
 import ReceiptViewAllocationsModal from './ReceiptViewAllocationsModal'
 import {
   allocationPriorityLabels,
@@ -123,6 +125,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [listPriority, setListPriority] = useState(() => getStoredFilter(RECEIPTS_PRIORITY_KEY))
   const [listReminder, setListReminder] = useState(() => getStoredReminderFilter())
   const [listLoading, setListLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState<'receipts' | 'surplusQueue'>('receipts')
   const [listError, setListError] = useState<string | null>(null)
   const [listMessage, setListMessage] = useState<string | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -170,7 +173,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   }, [listDateFrom, listDateTo, parsedAmountMin, parsedAmountMax])
 
   useEffect(() => {
-    if (!token) return
+    if (!token || activeTab !== 'receipts') return
     let isActive = true
     const loadSellers = async () => {
       try {
@@ -263,6 +266,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
       isActive = false
     }
   }, [
+    activeTab,
     token,
     listPage,
     listPageSize,
@@ -700,296 +704,315 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         <div>
           <h3>Danh sách phiếu thu</h3>
         </div>
-        {listLoading && <span className="muted">Đang tải...</span>}
+        {activeTab === 'receipts' && listLoading && <span className="muted">Đang tải...</span>}
       </div>
 
-      <div className="filters-grid">
-        <label className="field">
-          <span>Trạng thái</span>
-          <select
-            value={listAllocationStatus || listStatus}
-            onChange={(event) => {
-              const next = event.target.value
-              if (!next) {
-                setListStatus('')
-                setListAllocationStatus('')
-                storeFilter(RECEIPTS_STATUS_KEY, '')
-                storeFilter(RECEIPTS_ALLOCATION_KEY, '')
-              } else if (ALLOCATION_FILTERS.has(next)) {
-                setListAllocationStatus(next)
-                setListStatus('')
-                storeFilter(RECEIPTS_ALLOCATION_KEY, next)
-                storeFilter(RECEIPTS_STATUS_KEY, '')
-              } else {
-                setListStatus(next)
-                setListAllocationStatus('')
-                storeFilter(RECEIPTS_STATUS_KEY, next)
-                storeFilter(RECEIPTS_ALLOCATION_KEY, '')
-              }
-              setListPage(1)
-            }}
-          >
-            <option value="">Tất cả</option>
-            <option value="DRAFT">{receiptStatusLabels.DRAFT}</option>
-            <option value="APPROVED">{receiptStatusLabels.APPROVED}</option>
-            <option value="VOID">{receiptStatusLabels.VOID}</option>
-            <option value="ALLOCATED">{allocationStatusLabels.ALLOCATED}</option>
-            <option value="PARTIAL">{allocationStatusLabels.PARTIAL}</option>
-            <option value="UNALLOCATED">{allocationStatusLabels.UNALLOCATED}</option>
-          </select>
-        </label>
-        <LookupInput
-          label="MST bên bán"
-          value={listSeller}
-          placeholder="MST bên bán"
-          options={sellerOptions}
-          onChange={(value) => {
-            setListSeller(value)
-            setSellerQuery(value)
-            setListPage(1)
-          }}
-        />
-        <LookupInput
-          label="MST bên mua"
-          value={listCustomer}
-          placeholder="MST bên mua"
-          options={customerOptions}
-          onChange={(value) => {
-            setListCustomer(value)
-            setCustomerQuery(value)
-            setListPage(1)
-          }}
-        />
-        <label className="field">
-          <span>&nbsp;</span>
-          <button
-            className="btn btn-ghost btn-sm"
-            type="button"
-            onClick={() => setAdvancedOpen((prev) => !prev)}
-          >
-            {advancedOpen ? 'Ẩn tìm nâng cao' : 'Tìm kiếm nâng cao'}
-          </button>
-        </label>
+      <div className="tab-row" role="tablist" aria-label="Danh sách phiếu thu">
+        <button
+          className={`tab ${activeTab === 'receipts' ? 'tab--active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'receipts'}
+          onClick={() => setActiveTab('receipts')}
+        >
+          Tất cả phiếu thu
+        </button>
+        <button
+          className={`tab ${activeTab === 'surplusQueue' ? 'tab--active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'surplusQueue'}
+          onClick={() => setActiveTab('surplusQueue')}
+        >
+          Tiền thừa chưa phân bổ
+        </button>
       </div>
 
-      {advancedOpen && (
-        <div className="advanced-panel">
-          <div className="card-row">
-            <strong>Tìm kiếm nâng cao</strong>
-            <button className="btn btn-ghost btn-sm" type="button" onClick={() => setAdvancedOpen(false)}>
-              Thu gọn
-            </button>
-          </div>
-          <div className="advanced-panel__content">
-            <div className="filters-grid filters-grid--compact">
-              <label className="field field-span-full">
-                <span>Tìm chứng từ</span>
-                <input
-                  value={listDocumentNo}
-                  placeholder="Số phiếu thu / hóa đơn / khoản trả hộ"
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListDocumentNo(next)
-                    storeFilter(RECEIPTS_DOCUMENT_KEY, next)
-                    setListPage(1)
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>Ngày chứng từ từ</span>
-                <input
-                  type="date"
-                  value={listDateFrom}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListDateFrom(next)
-                    storeFilter(RECEIPTS_DATE_FROM_KEY, next)
-                    setListPage(1)
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>Ngày chứng từ đến</span>
-                <input
-                  type="date"
-                  value={listDateTo}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListDateTo(next)
-                    storeFilter(RECEIPTS_DATE_TO_KEY, next)
-                    setListPage(1)
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>Số tiền từ</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="1000"
-                  value={listAmountMin}
-                  placeholder="0"
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListAmountMin(next)
-                    storeFilter(RECEIPTS_AMOUNT_MIN_KEY, next)
-                    setListPage(1)
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>Số tiền đến</span>
-                <input
-                  type="number"
-                  min={0}
-                  step="1000"
-                  value={listAmountMax}
-                  placeholder="0"
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListAmountMax(next)
-                    storeFilter(RECEIPTS_AMOUNT_MAX_KEY, next)
-                    setListPage(1)
-                  }}
-                />
-              </label>
-              <label className="field">
-                <span>Hình thức</span>
-                <select
-                  value={listMethod}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListMethod(next)
-                    storeFilter(RECEIPTS_METHOD_KEY, next)
-                    setListPage(1)
-                  }}
-                >
-                  <option value="">Tất cả</option>
-                  <option value="BANK">{methodLabels.BANK}</option>
-                  <option value="CASH">{methodLabels.CASH}</option>
-                  <option value="OTHER">{methodLabels.OTHER}</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Ưu tiên phân bổ</span>
-                <select
-                  value={listPriority}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListPriority(next)
-                    storeFilter(RECEIPTS_PRIORITY_KEY, next)
-                    setListPage(1)
-                  }}
-                >
-                  <option value="">Tất cả</option>
-                  <option value="ISSUE_DATE">{allocationPriorityLabels.ISSUE_DATE}</option>
-                  <option value="DUE_DATE">{allocationPriorityLabels.DUE_DATE}</option>
-                </select>
-              </label>
-              <label className="field">
-                <span>Nhắc duyệt</span>
-                <select
-                  value={listReminder}
-                  onChange={(event) => {
-                    const next = event.target.value
-                    setListReminder(next)
-                    storeFilter(RECEIPTS_REMINDER_KEY, next)
-                    setListPage(1)
-                  }}
-                >
-                  <option value="ALL">Tất cả</option>
-                  <option value="ENABLED">Đang bật</option>
-                  <option value="DISABLED">Đã tắt</option>
-                </select>
-              </label>
-            </div>
-            <div className="filters-actions">
-              <button
-                className="btn btn-ghost btn-sm"
-                type="button"
-                onClick={() => {
-                  setListDocumentNo('')
-                  setListDateFrom('')
-                  setListDateTo('')
-                  setListAmountMin('')
-                  setListAmountMax('')
-                  setListMethod('')
-                  setListPriority('')
-                  setListReminder(DEFAULT_REMINDER_FILTER)
-                  storeFilter(RECEIPTS_DOCUMENT_KEY, '')
-                  storeFilter(RECEIPTS_DATE_FROM_KEY, '')
-                  storeFilter(RECEIPTS_DATE_TO_KEY, '')
-                  storeFilter(RECEIPTS_AMOUNT_MIN_KEY, '')
-                  storeFilter(RECEIPTS_AMOUNT_MAX_KEY, '')
-                  storeFilter(RECEIPTS_METHOD_KEY, '')
-                  storeFilter(RECEIPTS_PRIORITY_KEY, '')
-                  storeFilter(RECEIPTS_REMINDER_KEY, DEFAULT_REMINDER_FILTER)
+      {activeTab === 'receipts' ? (
+        <>
+          <div className="filters-grid">
+            <label className="field">
+              <span>Trạng thái</span>
+              <select
+                value={listAllocationStatus || listStatus}
+                onChange={(event) => {
+                  const next = event.target.value
+                  if (!next) {
+                    setListStatus('')
+                    setListAllocationStatus('')
+                    storeFilter(RECEIPTS_STATUS_KEY, '')
+                    storeFilter(RECEIPTS_ALLOCATION_KEY, '')
+                  } else if (ALLOCATION_FILTERS.has(next)) {
+                    setListAllocationStatus(next)
+                    setListStatus('')
+                    storeFilter(RECEIPTS_ALLOCATION_KEY, next)
+                    storeFilter(RECEIPTS_STATUS_KEY, '')
+                  } else {
+                    setListStatus(next)
+                    setListAllocationStatus('')
+                    storeFilter(RECEIPTS_STATUS_KEY, next)
+                    storeFilter(RECEIPTS_ALLOCATION_KEY, '')
+                  }
                   setListPage(1)
                 }}
               >
-                Đặt lại
+                <option value="">Tất cả</option>
+                <option value="DRAFT">{receiptStatusLabels.DRAFT}</option>
+                <option value="APPROVED">{receiptStatusLabels.APPROVED}</option>
+                <option value="VOID">{receiptStatusLabels.VOID}</option>
+                <option value="ALLOCATED">{allocationStatusLabels.ALLOCATED}</option>
+                <option value="PARTIAL">{allocationStatusLabels.PARTIAL}</option>
+                <option value="UNALLOCATED">{allocationStatusLabels.UNALLOCATED}</option>
+              </select>
+            </label>
+            <LookupInput
+              label="MST bên bán"
+              value={listSeller}
+              placeholder="MST bên bán"
+              options={sellerOptions}
+              onChange={(value) => {
+                setListSeller(value)
+                setSellerQuery(value)
+                setListPage(1)
+              }}
+            />
+            <LookupInput
+              label="MST bên mua"
+              value={listCustomer}
+              placeholder="MST bên mua"
+              options={customerOptions}
+              onChange={(value) => {
+                setListCustomer(value)
+                setCustomerQuery(value)
+                setListPage(1)
+              }}
+            />
+            <label className="field">
+              <span>&nbsp;</span>
+              <button
+                className="btn btn-ghost btn-sm"
+                type="button"
+                onClick={() => setAdvancedOpen((prev) => !prev)}
+              >
+                {advancedOpen ? 'Ẩn tìm nâng cao' : 'Tìm kiếm nâng cao'}
               </button>
-              <span className="muted">Bộ lọc nâng cao áp dụng ngay khi thay đổi.</span>
-            </div>
+            </label>
           </div>
-        </div>
+
+          {advancedOpen && (
+            <div className="advanced-panel">
+              <div className="card-row">
+                <strong>Tìm kiếm nâng cao</strong>
+                <button className="btn btn-ghost btn-sm" type="button" onClick={() => setAdvancedOpen(false)}>
+                  Thu gọn
+                </button>
+              </div>
+              <div className="advanced-panel__content">
+                <div className="filters-grid filters-grid--compact">
+                  <label className="field field-span-full">
+                    <span>Tìm chứng từ</span>
+                    <input
+                      value={listDocumentNo}
+                      placeholder="Số phiếu thu / hóa đơn / khoản trả hộ"
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListDocumentNo(next)
+                        storeFilter(RECEIPTS_DOCUMENT_KEY, next)
+                        setListPage(1)
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Ngày chứng từ từ</span>
+                    <input
+                      type="date"
+                      value={listDateFrom}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListDateFrom(next)
+                        storeFilter(RECEIPTS_DATE_FROM_KEY, next)
+                        setListPage(1)
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Ngày chứng từ đến</span>
+                    <input
+                      type="date"
+                      value={listDateTo}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListDateTo(next)
+                        storeFilter(RECEIPTS_DATE_TO_KEY, next)
+                        setListPage(1)
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Số tiền từ</span>
+                    <MoneyInput
+                      value={listAmountMin}
+                      placeholder="0"
+                      onValueChange={(next) => {
+                        setListAmountMin(next)
+                        storeFilter(RECEIPTS_AMOUNT_MIN_KEY, next)
+                        setListPage(1)
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Số tiền đến</span>
+                    <MoneyInput
+                      value={listAmountMax}
+                      placeholder="0"
+                      onValueChange={(next) => {
+                        setListAmountMax(next)
+                        storeFilter(RECEIPTS_AMOUNT_MAX_KEY, next)
+                        setListPage(1)
+                      }}
+                    />
+                  </label>
+                  <label className="field">
+                    <span>Hình thức</span>
+                    <select
+                      value={listMethod}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListMethod(next)
+                        storeFilter(RECEIPTS_METHOD_KEY, next)
+                        setListPage(1)
+                      }}
+                    >
+                      <option value="">Tất cả</option>
+                      <option value="BANK">{methodLabels.BANK}</option>
+                      <option value="CASH">{methodLabels.CASH}</option>
+                      <option value="OTHER">{methodLabels.OTHER}</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Ưu tiên phân bổ</span>
+                    <select
+                      value={listPriority}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListPriority(next)
+                        storeFilter(RECEIPTS_PRIORITY_KEY, next)
+                        setListPage(1)
+                      }}
+                    >
+                      <option value="">Tất cả</option>
+                      <option value="ISSUE_DATE">{allocationPriorityLabels.ISSUE_DATE}</option>
+                      <option value="DUE_DATE">{allocationPriorityLabels.DUE_DATE}</option>
+                    </select>
+                  </label>
+                  <label className="field">
+                    <span>Nhắc duyệt</span>
+                    <select
+                      value={listReminder}
+                      onChange={(event) => {
+                        const next = event.target.value
+                        setListReminder(next)
+                        storeFilter(RECEIPTS_REMINDER_KEY, next)
+                        setListPage(1)
+                      }}
+                    >
+                      <option value="ALL">Tất cả</option>
+                      <option value="ENABLED">Đang bật</option>
+                      <option value="DISABLED">Đã tắt</option>
+                    </select>
+                  </label>
+                </div>
+                <div className="filters-actions">
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    type="button"
+                    onClick={() => {
+                      setListDocumentNo('')
+                      setListDateFrom('')
+                      setListDateTo('')
+                      setListAmountMin('')
+                      setListAmountMax('')
+                      setListMethod('')
+                      setListPriority('')
+                      setListReminder(DEFAULT_REMINDER_FILTER)
+                      storeFilter(RECEIPTS_DOCUMENT_KEY, '')
+                      storeFilter(RECEIPTS_DATE_FROM_KEY, '')
+                      storeFilter(RECEIPTS_DATE_TO_KEY, '')
+                      storeFilter(RECEIPTS_AMOUNT_MIN_KEY, '')
+                      storeFilter(RECEIPTS_AMOUNT_MAX_KEY, '')
+                      storeFilter(RECEIPTS_METHOD_KEY, '')
+                      storeFilter(RECEIPTS_PRIORITY_KEY, '')
+                      storeFilter(RECEIPTS_REMINDER_KEY, DEFAULT_REMINDER_FILTER)
+                      setListPage(1)
+                    }}
+                  >
+                    Đặt lại
+                  </button>
+                  <span className="muted">Bộ lọc nâng cao áp dụng ngay khi thay đổi.</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {validationError && <div className="alert alert--error">{validationError}</div>}
+          {listError && <div className="alert alert--error">{listError}</div>}
+          {listMessage && <div className="alert alert--success">{listMessage}</div>}
+
+          <div className="filters-actions">
+            <span className="muted">
+              Đã chọn {selectedEligibleRows.length}/{selectableRows.length} phiếu thu nháp có thể duyệt.
+            </span>
+            <button
+              className="btn btn-ghost btn-sm"
+              type="button"
+              onClick={handleSelectAllReceipts}
+              disabled={selectableRows.length === 0 || bulkApproveLoading}
+            >
+              Chọn tất cả
+            </button>
+            <button
+              className="btn btn-ghost btn-sm"
+              type="button"
+              onClick={handleClearSelection}
+              disabled={selectedReceiptIds.length === 0 || bulkApproveLoading}
+            >
+              Bỏ chọn
+            </button>
+            <button
+              className="btn btn-primary btn-sm"
+              type="button"
+              onClick={() => {
+                setBulkApproveError(null)
+                setBulkApproveOpen(true)
+              }}
+              disabled={selectedEligibleRows.length === 0 || bulkApproveLoading}
+            >
+              Duyệt đã chọn
+            </button>
+          </div>
+
+          <DataTable
+            columns={columns}
+            rows={listRows}
+            getRowKey={(row) => row.id}
+            minWidth="1100px"
+            emptyMessage={listLoading ? 'Đang tải...' : 'Không có phiếu thu.'}
+            pagination={{
+              page: listPage,
+              pageSize: listPageSize,
+              total: listTotal,
+            }}
+            onPageChange={setListPage}
+            onPageSizeChange={(size) => {
+              storePageSize(size)
+              setListPageSize(size)
+              setListPage(1)
+            }}
+          />
+        </>
+      ) : (
+        <ReceiptSurplusQueuePanel token={token} />
       )}
-
-      {validationError && <div className="alert alert--error">{validationError}</div>}
-      {listError && <div className="alert alert--error">{listError}</div>}
-      {listMessage && <div className="alert alert--success">{listMessage}</div>}
-
-      <div className="filters-actions">
-        <span className="muted">
-          Đã chọn {selectedEligibleRows.length}/{selectableRows.length} phiếu thu nháp có thể duyệt.
-        </span>
-        <button
-          className="btn btn-ghost btn-sm"
-          type="button"
-          onClick={handleSelectAllReceipts}
-          disabled={selectableRows.length === 0 || bulkApproveLoading}
-        >
-          Chọn tất cả
-        </button>
-        <button
-          className="btn btn-ghost btn-sm"
-          type="button"
-          onClick={handleClearSelection}
-          disabled={selectedReceiptIds.length === 0 || bulkApproveLoading}
-        >
-          Bỏ chọn
-        </button>
-        <button
-          className="btn btn-primary btn-sm"
-          type="button"
-          onClick={() => {
-            setBulkApproveError(null)
-            setBulkApproveOpen(true)
-          }}
-          disabled={selectedEligibleRows.length === 0 || bulkApproveLoading}
-        >
-          Duyệt đã chọn
-        </button>
-      </div>
-
-      <DataTable
-        columns={columns}
-        rows={listRows}
-        getRowKey={(row) => row.id}
-        minWidth="1100px"
-        emptyMessage={listLoading ? 'Đang tải...' : 'Không có phiếu thu.'}
-        pagination={{
-          page: listPage,
-          pageSize: listPageSize,
-          total: listTotal,
-        }}
-        onPageChange={setListPage}
-        onPageSizeChange={(size) => {
-          storePageSize(size)
-          setListPageSize(size)
-          setListPage(1)
-        }}
-      />
 
       <ReceiptCancelModal
         key={cancelRow?.id ?? 'receipt-cancel'}

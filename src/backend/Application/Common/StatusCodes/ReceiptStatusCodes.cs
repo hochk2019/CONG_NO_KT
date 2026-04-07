@@ -15,3 +15,11 @@ public static class ReceiptAllocationStatusCodes
     public const string Partial = "PARTIAL";
     public const string Allocated = "ALLOCATED";
 }
+
+public static class ReceiptHeldCreditStatusCodes
+{
+    public const string Holding = "HOLDING";
+    public const string Partial = "PARTIAL";
+    public const string Reapplied = "REAPPLIED";
+    public const string Released = "RELEASED";
+}

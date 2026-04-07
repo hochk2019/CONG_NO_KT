@@ -5,12 +5,15 @@ namespace CongNoGolden.Application.Receipts;
 public interface IReceiptService
 {
     Task<PagedResult<ReceiptListItem>> ListAsync(ReceiptListRequest request, CancellationToken ct);
+    Task<PagedResult<ReceiptSurplusQueueItem>> ListSurplusQueueAsync(ReceiptSurplusQueueRequest request, CancellationToken ct);
     Task<ReceiptDto> GetAsync(Guid receiptId, CancellationToken ct);
     Task<ReceiptDto> CreateAsync(ReceiptCreateRequest request, CancellationToken ct);
     Task<ReceiptDto> UpdateDraftAsync(Guid receiptId, ReceiptDraftUpdateRequest request, CancellationToken ct);
     Task<IReadOnlyList<ReceiptOpenItemDto>> ListOpenItemsAsync(string sellerTaxCode, string customerTaxCode, CancellationToken ct);
     Task<ReceiptPreviewResult> PreviewAsync(ReceiptPreviewRequest request, CancellationToken ct);
     Task<ReceiptPreviewResult> ApproveAsync(Guid receiptId, ReceiptApproveRequest request, CancellationToken ct);
+    Task<ReceiptDto> UpdateAutoAllocateAsync(Guid receiptId, ReceiptAutoAllocateUpdateRequest request, CancellationToken ct);
+    Task<ReceiptPreviewResult> AllocateApprovedAsync(Guid receiptId, ReceiptApprovedAllocationRequest request, CancellationToken ct);
     Task<ReceiptBulkApproveResult> ApproveBulkAsync(ReceiptBulkApproveRequest request, CancellationToken ct);
     Task<ReceiptVoidResult> VoidAsync(Guid receiptId, ReceiptVoidRequest request, CancellationToken ct);
     Task<ReceiptDto> UnvoidAsync(Guid receiptId, ReceiptUnvoidRequest request, CancellationToken ct);

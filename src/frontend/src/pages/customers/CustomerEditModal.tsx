@@ -1,5 +1,6 @@
 import type { CustomerDetail } from '../../api/customers'
 import type { LookupOption } from '../../api/lookups'
+import MoneyInput from '../../components/MoneyInput'
 import { formatDate, formatMoney } from '../../utils/format'
 
 type CustomerEditModalProps = {
@@ -240,11 +241,7 @@ export default function CustomerEditModal({
                     </label>
                     <label className="field">
                       <span>Hạn mức tín dụng</span>
-                      <input
-                        type="number"
-                        value={editCreditLimit}
-                        onChange={(event) => setEditCreditLimit(event.target.value)}
-                      />
+                      <MoneyInput value={editCreditLimit} onValueChange={setEditCreditLimit} />
                     </label>
                     <label className="field">
                       <span>Địa chỉ</span>

@@ -16,7 +16,11 @@ public sealed class JwtTokenService : IJwtTokenService
         _options = options.Value;
     }
 
-    public LoginResult CreateToken(Guid userId, string username, IReadOnlyList<string> roles)
+    public LoginResult CreateToken(
+        Guid userId,
+        string username,
+        IReadOnlyList<string> roles,
+        IReadOnlyList<string> permissions)
     {
         if (string.IsNullOrWhiteSpace(_options.Secret))
         {
@@ -34,6 +38,14 @@ public sealed class JwtTokenService : IJwtTokenService
             if (!string.IsNullOrWhiteSpace(role))
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
+            }
+        }
+
+        foreach (var permission in permissions)
+        {
+            if (!string.IsNullOrWhiteSpace(permission))
+            {
+                claims.Add(new Claim(AppClaimTypes.Permission, permission));
             }
         }
 

@@ -3,6 +3,7 @@ using System.Text;
 using CongNoGolden.Application.Auth;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
@@ -18,7 +19,7 @@ public sealed class AuthServiceTests
         await using var db = CreateDbContext(nameof(LoginAsync_LocksAccountAfterConfiguredFailures));
         await SeedUserAsync(db);
 
-        var service = CreateService(db, new AuthSecurityOptions
+        var service = CreateService(db, authSecurityOptions: new AuthSecurityOptions
         {
             EnableLoginLockout = true,
             MaxFailedLoginAttempts = 3,
@@ -76,6 +77,35 @@ public sealed class AuthServiceTests
         var ex = await Assert.ThrowsAsync<UnauthorizedAccessException>(
             () => service.LoginAsync(new LoginRequest("tester", "StrongPass123"), null, CancellationToken.None));
         Assert.Contains("temporarily locked", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LoginAsync_IncludesPermissionsResolvedFromAssignedRoles()
+    {
+        await using var db = CreateDbContext(nameof(LoginAsync_IncludesPermissionsResolvedFromAssignedRoles));
+        var user = await SeedUserAsync(db);
+        await AssignRoleWithPermissionsAsync(
+            db,
+            user,
+            "Supervisor",
+            AppPermissions.CustomerView,
+            AppPermissions.ImportHistory,
+            AppPermissions.ImportCommitInvoice);
+
+        var jwtTokenService = new FakeJwtTokenService();
+        var service = CreateService(db, jwtTokenService);
+
+        await service.LoginAsync(new LoginRequest("tester", "StrongPass123"), null, CancellationToken.None);
+
+        Assert.Equal(new[] { "Supervisor" }, jwtTokenService.LastRoles);
+        Assert.Equal(
+            new[]
+            {
+                AppPermissions.CustomerView,
+                AppPermissions.ImportCommitInvoice,
+                AppPermissions.ImportHistory
+            },
+            jwtTokenService.LastPermissions.OrderBy(static permission => permission).ToArray());
     }
 
     [Fact]
@@ -142,6 +172,49 @@ public sealed class AuthServiceTests
         Assert.Null(tokens[1].RevokedAt);
         Assert.Equal(absoluteExpiresAt, tokens[1].AbsoluteExpiresAt);
         Assert.True(tokens[1].ExpiresAt <= tokens[1].AbsoluteExpiresAt);
+    }
+
+    [Fact]
+    public async Task RefreshAsync_IncludesPermissionsResolvedFromAssignedRoles()
+    {
+        await using var db = CreateDbContext(nameof(RefreshAsync_IncludesPermissionsResolvedFromAssignedRoles));
+        var now = DateTimeOffset.UtcNow;
+        var user = await SeedUserAsync(db);
+        var token = "refresh-with-permissions";
+
+        await AssignRoleWithPermissionsAsync(
+            db,
+            user,
+            "Accountant",
+            AppPermissions.CustomerView,
+            AppPermissions.ImportUpload,
+            AppPermissions.ImportHistory);
+
+        db.RefreshTokens.Add(new RefreshToken
+        {
+            Id = Guid.NewGuid(),
+            UserId = user.Id,
+            TokenHash = HashToken(token),
+            CreatedAt = now.AddDays(-1),
+            ExpiresAt = now.AddDays(1),
+            AbsoluteExpiresAt = now.AddDays(10)
+        });
+        await db.SaveChangesAsync();
+
+        var jwtTokenService = new FakeJwtTokenService();
+        var service = CreateService(db, jwtTokenService);
+
+        await service.RefreshAsync(token, CreateRequestContext("10.10.10.15", "ua-1"), CancellationToken.None);
+
+        Assert.Equal(new[] { "Accountant" }, jwtTokenService.LastRoles);
+        Assert.Equal(
+            new[]
+            {
+                AppPermissions.CustomerView,
+                AppPermissions.ImportHistory,
+                AppPermissions.ImportUpload
+            },
+            jwtTokenService.LastPermissions.OrderBy(static permission => permission).ToArray());
     }
 
     [Fact]
@@ -323,6 +396,7 @@ public sealed class AuthServiceTests
 
     private static AuthService CreateService(
         ConGNoDbContext db,
+        IJwtTokenService? jwtTokenService = null,
         AuthSecurityOptions? authSecurityOptions = null)
     {
         var jwtOptions = Options.Create(new JwtOptions
@@ -335,7 +409,7 @@ public sealed class AuthServiceTests
         });
 
         var securityOptions = Options.Create(authSecurityOptions ?? new AuthSecurityOptions());
-        return new AuthService(db, new FakeJwtTokenService(), jwtOptions, securityOptions);
+        return new AuthService(db, jwtTokenService ?? new FakeJwtTokenService(), jwtOptions, securityOptions);
     }
 
     private static async Task<User> SeedUserAsync(ConGNoDbContext db)
@@ -356,6 +430,48 @@ public sealed class AuthServiceTests
         db.Users.Add(user);
         await db.SaveChangesAsync();
         return user;
+    }
+
+    private static async Task AssignRoleWithPermissionsAsync(
+        ConGNoDbContext db,
+        User user,
+        string roleCode,
+        params string[] permissions)
+    {
+        var role = new Role
+        {
+            Code = roleCode,
+            Name = roleCode
+        };
+
+        db.Roles.Add(role);
+        await db.SaveChangesAsync();
+
+        db.UserRoles.Add(new UserRole
+        {
+            UserId = user.Id,
+            RoleId = role.Id
+        });
+
+        foreach (var permissionCode in permissions)
+        {
+            var permission = new Permission
+            {
+                Code = permissionCode,
+                Name = permissionCode
+            };
+
+            db.Add(permission);
+            await db.SaveChangesAsync();
+
+            db.Add(new RolePermission
+            {
+                RoleId = role.Id,
+                PermissionId = permission.Id
+            });
+        }
+
+        await db.SaveChangesAsync();
     }
 
     private static ConGNoDbContext CreateDbContext(string testName)
@@ -410,8 +526,17 @@ public sealed class AuthServiceTests
 
     private sealed class FakeJwtTokenService : IJwtTokenService
     {
-        public LoginResult CreateToken(Guid userId, string username, IReadOnlyList<string> roles)
+        public IReadOnlyList<string> LastRoles { get; private set; } = Array.Empty<string>();
+        public IReadOnlyList<string> LastPermissions { get; private set; } = Array.Empty<string>();
+
+        public LoginResult CreateToken(
+            Guid userId,
+            string username,
+            IReadOnlyList<string> roles,
+            IReadOnlyList<string> permissions)
         {
+            LastRoles = roles.ToArray();
+            LastPermissions = permissions.ToArray();
             return new LoginResult("access-token", DateTimeOffset.UtcNow.AddMinutes(60));
         }
     }

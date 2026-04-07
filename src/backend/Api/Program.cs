@@ -8,6 +8,7 @@ using CongNoGolden.Application.Collections;
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Infrastructure;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services;
 using CongNoGolden.Infrastructure.Services.Common;
 using CongNoGolden.Infrastructure.Migrations;
@@ -238,23 +239,33 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization(options =>
 {
-    options.AddPolicy("ImportUpload", policy => policy.RequireRole("Admin", "Supervisor", "Accountant"));
-    options.AddPolicy("ImportCommit", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("ImportHistory", policy => policy.RequireRole("Admin", "Supervisor", "Accountant"));
-    options.AddPolicy("AdvanceManage", policy => policy.RequireRole("Admin", "Supervisor", "Accountant"));
-    options.AddPolicy("ReceiptApprove", policy => policy.RequireRole("Admin", "Supervisor", "Accountant"));
-    options.AddPolicy("PeriodLockManage", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("ReportsView", policy => policy.RequireRole("Admin", "Supervisor", "Accountant", "Viewer"));
-    options.AddPolicy("CustomerView", policy => policy.RequireRole("Admin", "Supervisor", "Accountant", "Viewer"));
-    options.AddPolicy("CustomerManage", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("InvoiceManage", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("AdminManage", policy => policy.RequireRole("Admin"));
-    options.AddPolicy("AuditView", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("AdminHealthView", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("RiskView", policy => policy.RequireRole("Admin", "Supervisor", "Accountant", "Viewer"));
-    options.AddPolicy("RiskManage", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("BackupManage", policy => policy.RequireRole("Admin", "Supervisor"));
-    options.AddPolicy("BackupRestore", policy => policy.RequireRole("Admin"));
+    options.AddPolicy("ImportUpload", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.ImportUpload));
+    options.AddPolicy("ImportCommit", policy => policy.RequireClaim(
+        AppClaimTypes.Permission,
+        AppPermissions.ImportCommitInvoice,
+        AppPermissions.ImportCommitAdvance,
+        AppPermissions.ImportCommitReceipt));
+    options.AddPolicy("ImportRollback", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.ImportRollback));
+    options.AddPolicy("ImportHistory", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.ImportHistory));
+    options.AddPolicy("AdvanceManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.AdvanceManage));
+    options.AddPolicy("ReceiptApprove", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.ReceiptApprove));
+    options.AddPolicy("PeriodLockManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.PeriodLockManage));
+    options.AddPolicy("ReportsView", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.ReportsView));
+    options.AddPolicy("CustomerView", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.CustomerView));
+    options.AddPolicy("CustomerManage", policy => policy.RequireClaim(
+        AppClaimTypes.Permission,
+        AppPermissions.CustomerEditAll,
+        AppPermissions.CustomerEditOwned,
+        AppPermissions.CustomerEditUnassigned,
+        AppPermissions.CustomerAssignmentManage));
+    options.AddPolicy("InvoiceManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.InvoiceManage));
+    options.AddPolicy("AdminManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.AdminManage));
+    options.AddPolicy("AuditView", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.AuditView));
+    options.AddPolicy("AdminHealthView", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.AdminHealthView));
+    options.AddPolicy("RiskView", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.RiskView));
+    options.AddPolicy("RiskManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.RiskManage));
+    options.AddPolicy("BackupManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.BackupManage));
+    options.AddPolicy("BackupRestore", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.BackupRestore));
 });
 
 var app = builder.Build();
@@ -406,6 +417,7 @@ app.MapPeriodLockEndpoints();
 app.MapReportEndpoints();
 app.MapDashboardEndpoints();
 app.MapCustomerEndpoints();
+app.MapReceiptHeldCreditEndpoints();
 app.MapAdminEndpoints();
 app.MapAdminMaintenanceEndpoints();
 app.MapLookupEndpoints();
@@ -420,3 +432,4 @@ app.MapErpIntegrationEndpoints();
 app.MapBackupEndpoints();
 
 app.Run();
+

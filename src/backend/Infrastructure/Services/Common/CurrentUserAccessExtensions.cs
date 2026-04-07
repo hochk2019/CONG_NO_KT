@@ -47,6 +47,35 @@ public static class CurrentUserAccessExtensions
         return false;
     }
 
+    public static bool HasAnyPermission(this ICurrentUser currentUser, params string[] permissions)
+    {
+        return HasAnyPermission(currentUser, (IEnumerable<string>)permissions);
+    }
+
+    public static bool HasAnyPermission(this ICurrentUser currentUser, IEnumerable<string> permissions)
+    {
+        ArgumentNullException.ThrowIfNull(currentUser);
+        ArgumentNullException.ThrowIfNull(permissions);
+
+        foreach (var expectedPermission in permissions)
+        {
+            if (string.IsNullOrWhiteSpace(expectedPermission))
+            {
+                continue;
+            }
+
+            foreach (var permission in currentUser.Permissions)
+            {
+                if (string.Equals(permission, expectedPermission, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     public static Guid? ResolveOwnerFilter(
         this ICurrentUser currentUser,
         Guid? explicitOwner = null,

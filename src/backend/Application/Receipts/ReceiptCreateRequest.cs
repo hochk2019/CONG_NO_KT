@@ -3,7 +3,7 @@ namespace CongNoGolden.Application.Receipts;
 public sealed record ReceiptCreateRequest(
     string SellerTaxCode,
     string CustomerTaxCode,
-    string? ReceiptNo,
+    string ReceiptNo,
     DateOnly ReceiptDate,
     decimal Amount,
     string AllocationMode,

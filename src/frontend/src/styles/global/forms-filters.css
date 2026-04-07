@@ -303,6 +303,31 @@
   display: none;
 }
 
+.permission-groups {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.permission-group {
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--color-surface) 94%, var(--color-bg));
+}
+
+.permission-group h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.permission-group .muted {
+  margin-top: 0.2rem;
+}
+
+.permission-group__grid {
+  margin-top: var(--space-2);
+}
+
 .progress {
   margin-top: var(--space-2);
   width: 100%;

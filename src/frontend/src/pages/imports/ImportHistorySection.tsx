@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../../api/client'
-import { cancelImport, listImportBatches, rollbackImport } from '../../api/imports'
+import {
+  cancelImport,
+  listImportBatches,
+  rollbackImport,
+  type ImportBatchHistoryItem,
+} from '../../api/imports'
 import DataTable from '../../components/DataTable'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { formatDate, formatDateTime } from '../../utils/format'
+import { getImportBatchRecoveryState } from './importBatchRecovery'
 import { formatRollbackErrorMessage } from './rollbackErrorMessages'
 
 type ImportHistorySectionProps = {
@@ -67,27 +73,7 @@ export default function ImportHistorySection({
   fixedType,
   onResumeBatch,
 }: ImportHistorySectionProps) {
-  const [rows, setRows] = useState<
-    {
-      batchId: string
-      type: string
-      status: string
-      fileName?: string | null
-      periodFrom?: string | null
-      periodTo?: string | null
-      createdAt: string
-      createdBy?: string | null
-      committedAt?: string | null
-      cancelledAt?: string | null
-      cancelledBy?: string | null
-      cancelReason?: string | null
-      summary: {
-        insertedInvoices: number
-        insertedAdvances: number
-        insertedReceipts: number
-      }
-    }[]
-  >([])
+  const [rows, setRows] = useState<ImportBatchHistoryItem[]>([])
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(() => getStoredPageSize())
   const [total, setTotal] = useState(0)
@@ -415,23 +401,54 @@ export default function ImportHistorySection({
       {
         key: 'summary',
         label: 'Tổng hợp',
-        render: (row: {
-          summary: { insertedInvoices: number; insertedAdvances: number; insertedReceipts: number }
-        }) =>
-          `I:${row.summary.insertedInvoices} A:${row.summary.insertedAdvances} R:${row.summary.insertedReceipts}`,
+        render: (row: ImportBatchHistoryItem) => {
+          if (row.status.toUpperCase() === 'STAGING') {
+            const summary = row.stagingSummary
+            const recoveryState = getImportBatchRecoveryState({
+              batchId: row.batchId,
+              summary: summary ?? null,
+              previewLoading: false,
+            })
+            const headline = recoveryState.hasBlockingErrors
+              ? `${summary?.errorCount ?? 0} lỗi cần sửa`
+              : (summary?.warnCount ?? 0) > 0
+                ? `${summary?.warnCount ?? 0} cảnh báo cần rà soát`
+                : 'Sẵn sàng ghi dữ liệu'
+
+            if (!summary) {
+              return headline
+            }
+
+            return (
+              <div>
+                <div>{headline}</div>
+                <span className="muted">
+                  {`Tổng ${summary.totalRows} · Hợp lệ ${summary.okCount} · Cảnh báo ${summary.warnCount} · Lỗi ${summary.errorCount}`}
+                </span>
+              </div>
+            )
+          }
+
+          return `I:${row.summary.insertedInvoices} A:${row.summary.insertedAdvances} R:${row.summary.insertedReceipts}`
+        },
       },
       {
         key: 'actions',
         label: 'Thao tác',
-        render: (row: {
-          batchId: string
-          status: string
-          type: string
-          periodFrom?: string | null
-          periodTo?: string | null
-        }) => {
+        render: (row: ImportBatchHistoryItem) => {
           const normalized = row.status.toUpperCase()
           if (normalized === 'STAGING' && canStage) {
+            const recoveryState = getImportBatchRecoveryState({
+              batchId: row.batchId,
+              summary: row.stagingSummary ?? null,
+              previewLoading: false,
+            })
+            const resumeLabel = recoveryState.hasBlockingErrors
+              ? 'Xem lỗi'
+              : (row.stagingSummary?.warnCount ?? 0) > 0
+                ? 'Rà soát cảnh báo'
+                : 'Mở để ghi'
+
             return (
               <div className="inline-actions">
                 <button
@@ -440,7 +457,7 @@ export default function ImportHistorySection({
                   disabled={loading}
                   onClick={() => onResumeBatch(row)}
                 >
-                  Tiếp tục
+                  {resumeLabel}
                 </button>
                 <button
                   className="btn btn-outline-danger"
@@ -490,7 +507,7 @@ export default function ImportHistorySection({
       <div className="card-row">
         <div>
           <h3>Lịch sử nhập liệu</h3>
-          <p className="muted">Xem lại các lô đã tải, ghi dữ liệu hoặc đã hủy.</p>
+          <p className="muted">Xem lại các lô để kiểm tra lỗi, ghi dữ liệu, hoàn tác hoặc hủy.</p>
         </div>
         {loading && <span className="muted">Đang tải...</span>}
       </div>

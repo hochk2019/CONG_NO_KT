@@ -6,6 +6,7 @@ public sealed record ReceiptDto(
     int Version,
     decimal Amount,
     decimal UnallocatedAmount,
+    bool AutoAllocateEnabled,
     string? ReceiptNo,
     DateOnly ReceiptDate,
     DateOnly? AppliedPeriodStart,

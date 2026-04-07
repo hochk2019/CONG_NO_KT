@@ -27,6 +27,7 @@ public sealed partial class ReceiptService
             receipt.Version,
             receipt.Amount,
             receipt.UnallocatedAmount,
+            receipt.AutoAllocateEnabled,
             receipt.ReceiptNo,
             receipt.ReceiptDate,
             receipt.AppliedPeriodStart,

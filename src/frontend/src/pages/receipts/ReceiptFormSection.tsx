@@ -13,6 +13,7 @@ import {
   type LookupOption,
 } from '../../api/lookups'
 import LookupInput from '../../components/LookupInput'
+import MoneyInput from '../../components/MoneyInput'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
@@ -28,6 +29,7 @@ type ReceiptFormSectionProps = {
 type FieldErrorKey =
   | 'sellerTaxCode'
   | 'customerTaxCode'
+  | 'receiptNo'
   | 'receiptDate'
   | 'amount'
   | 'selectedTargets'
@@ -197,6 +199,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
     const canSubmit =
       sellerTaxCode.trim().length > 0 &&
       customerTaxCode.trim().length > 0 &&
+      receiptNo.trim().length > 0 &&
       receiptDate.trim().length > 0 &&
       Number.isFinite(amountValue) &&
       amountValue > 0 &&
@@ -207,6 +210,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
       const blockers: string[] = []
       if (!sellerTaxCode.trim()) blockers.push('Chưa chọn MST bên bán')
       if (!customerTaxCode.trim()) blockers.push('Chưa chọn MST bên mua')
+      if (!receiptNo.trim()) blockers.push('Chưa nhập số chứng từ')
       if (!receiptDate.trim()) blockers.push('Chưa chọn ngày thu')
       if (!Number.isFinite(amountValue) || amountValue <= 0) blockers.push('Số tiền chưa hợp lệ')
       if (openItems.length > 0 && selectedTargets.length === 0) {
@@ -217,6 +221,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
     }, [
       sellerTaxCode,
       customerTaxCode,
+      receiptNo,
       receiptDate,
       amountValue,
       openItems.length,
@@ -241,6 +246,9 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
       if (!customerTaxCode.trim()) {
         nextErrors.customerTaxCode = 'Vui lòng nhập MST bên mua.'
       }
+      if (!receiptNo.trim()) {
+        nextErrors.receiptNo = 'Vui lòng nhập số chứng từ.'
+      }
       if (!receiptDate.trim()) {
         nextErrors.receiptDate = 'Vui lòng chọn ngày thu.'
       }
@@ -262,6 +270,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
       amount,
       sellerTaxCode,
       customerTaxCode,
+      receiptNo,
       receiptDate,
       openItems.length,
       selectedTargets.length,
@@ -283,7 +292,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
           const created = await createReceipt(token, {
             sellerTaxCode: sellerTaxCode.trim(),
             customerTaxCode: customerTaxCode.trim(),
-            receiptNo: receiptNo.trim() || null,
+            receiptNo: receiptNo.trim(),
             receiptDate: receiptDate.trim(),
             amount: amountValue,
             allocationMode: 'MANUAL',
@@ -382,7 +391,7 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
             <span className="receipt-step-index">B2</span>
             <div>
               <h2>Thông tin phiếu thu</h2>
-              <p className="muted">Nhập các trường bắt buộc trước, trường tùy chọn đặt phía sau.</p>
+              <p className="muted">Nhập số chứng từ, ngày thu, số tiền và các trường bắt buộc trước khi lưu.</p>
             </div>
           </div>
           <button className="btn btn-outline btn-sm" type="button" onClick={() => setAdvancedOpen(true)}>
@@ -405,16 +414,13 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
           </label>
           <label className={fieldErrors.amount ? 'field field--error' : 'field'}>
             <span>Số tiền</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="decimal"
+            <MoneyInput
               value={amount}
-              onChange={(event) => {
-                setAmount(event.target.value)
+              onValueChange={(nextValue) => {
+                setAmount(nextValue)
                 clearFieldError('amount')
               }}
-              placeholder="VD: 10000000"
+              placeholder="VD: 10.000.000"
             />
             {fieldErrors.amount && <span className="field-error">{fieldErrors.amount}</span>}
           </label>
@@ -426,13 +432,17 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
               <option value="OTHER">{methodLabels.OTHER}</option>
             </select>
           </label>
-          <label className="field">
+          <label className={fieldErrors.receiptNo ? 'field field--error' : 'field'}>
             <span>Số chứng từ</span>
             <input
               value={receiptNo}
-              onChange={(event) => setReceiptNo(event.target.value)}
+              onChange={(event) => {
+                setReceiptNo(event.target.value)
+                clearFieldError('receiptNo')
+              }}
               placeholder="VD: PT-001"
             />
+            {fieldErrors.receiptNo && <span className="field-error">{fieldErrors.receiptNo}</span>}
           </label>
           <label className="field field-span-full field-wide">
             <span>Diễn giải</span>

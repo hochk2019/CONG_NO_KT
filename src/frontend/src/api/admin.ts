@@ -17,6 +17,12 @@ export type AdminRole = {
   id: number
   code: string
   name: string
+  permissions: string[]
+}
+
+export type AdminPermission = {
+  code: string
+  name: string
 }
 
 export type AdminUserCreateRequest = {
@@ -65,6 +71,10 @@ export const fetchAdminRoles = async (token: string) => {
   return apiFetch<AdminRole[]>('/admin/roles', { token })
 }
 
+export const fetchAdminPermissions = async (token: string) => {
+  return apiFetch<AdminPermission[]>('/admin/permissions', { token })
+}
+
 export const createAdminUser = async (
   token: string,
   payload: AdminUserCreateRequest,
@@ -85,6 +95,18 @@ export const updateUserRoles = async (
     method: 'PUT',
     token,
     body: { roles },
+  })
+}
+
+export const updateRolePermissions = async (
+  token: string,
+  roleId: number,
+  permissions: string[],
+) => {
+  return apiFetch<void>(`/admin/roles/${roleId}/permissions`, {
+    method: 'PUT',
+    token,
+    body: { permissions },
   })
 }
 

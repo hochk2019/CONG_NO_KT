@@ -57,6 +57,7 @@ public sealed class InvoiceCreditReconcileService : IInvoiceCreditReconcileServi
                 var receipts = await _db.Receipts
                     .Where(r => r.DeletedAt == null && r.Status == "APPROVED")
                     .Where(r => r.UnallocatedAmount > 0)
+                    .Where(r => r.AutoAllocateEnabled)
                     .Where(r => r.SellerTaxCode == pair.SellerTaxCode && r.CustomerTaxCode == pair.CustomerTaxCode)
                     .OrderBy(r => r.ReceiptDate)
                     .ThenBy(r => r.CreatedAt)

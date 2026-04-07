@@ -46,6 +46,65 @@ public class ImportInvoiceParserTests
         Assert.Contains("DUP_IN_FILE", messages);
     }
 
+    [Fact]
+    public void Reduction_Row_Preserves_Branch_Tax_And_Adds_Root_Matching_Tax()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Report");
+        WriteSellerHeader(sheet);
+        WriteInvoiceHeaders(sheet);
+        WriteInvoiceRow(
+            sheet,
+            7,
+            "1",
+            "Buyer Reduction",
+            "0310226744-003",
+            "ADJ001",
+            -200m,
+            -20m,
+            "Hóa đơn điều chỉnh giảm");
+
+        var rows = ImportInvoiceParser.ParseReportDetail(sheet, Guid.NewGuid());
+
+        Assert.Single(rows);
+        Assert.Equal("INSERT", rows[0].ActionSuggestion);
+        Assert.NotEqual(ImportStagingHelpers.StatusError, rows[0].ValidationStatus);
+
+        using var raw = JsonDocument.Parse(rows[0].RawData);
+        Assert.Equal("0310226744-003", raw.RootElement.GetProperty("customer_tax_code").GetString());
+        Assert.Equal("0310226744", raw.RootElement.GetProperty("customer_tax_code_matching").GetString());
+        Assert.Equal("ADJUSTMENT_REDUCTION", raw.RootElement.GetProperty("invoice_type").GetString());
+        Assert.Equal(-220m, raw.RootElement.GetProperty("total_amount").GetDecimal());
+    }
+
+    [Fact]
+    public void Informational_Zero_Row_Is_Skipped_With_Warning()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Report");
+        WriteSellerHeader(sheet);
+        WriteInvoiceHeaders(sheet);
+        WriteInvoiceRow(
+            sheet,
+            7,
+            "1",
+            "Buyer Info",
+            "0101",
+            "INFO001",
+            0m,
+            0m,
+            "Hóa đơn bị thay thế");
+
+        var rows = ImportInvoiceParser.ParseReportDetail(sheet, Guid.NewGuid());
+
+        Assert.Single(rows);
+        Assert.Equal("SKIP", rows[0].ActionSuggestion);
+        Assert.Equal(ImportStagingHelpers.StatusWarn, rows[0].ValidationStatus);
+
+        var messages = ReadMessages(rows[0].ValidationMessages);
+        Assert.Contains("INFO_REPLACED_INVOICE", messages);
+    }
+
     private static void WriteSellerHeader(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "MaSoThue";
@@ -75,14 +134,15 @@ public class ImportInvoiceParserTests
         string buyerTax,
         string invoiceNo,
         decimal revenue,
-        decimal vat)
+        decimal vat,
+        string note = "note")
     {
         sheet.Cell(row, 1).Value = stt;
         sheet.Cell(row, 2).Value = buyerName;
         sheet.Cell(row, 3).Value = buyerTax;
         sheet.Cell(row, 4).Value = revenue;
         sheet.Cell(row, 5).Value = vat;
-        sheet.Cell(row, 6).Value = "note";
+        sheet.Cell(row, 6).Value = note;
         sheet.Cell(row, 7).Value = "01GTKT";
         sheet.Cell(row, 8).Value = "AA/23E";
         sheet.Cell(row, 9).Value = invoiceNo;

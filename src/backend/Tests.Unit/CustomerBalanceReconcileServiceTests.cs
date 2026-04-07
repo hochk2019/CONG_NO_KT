@@ -140,7 +140,7 @@ public sealed class CustomerBalanceReconcileServiceTests
                 TotalAmount = 100m,
                 OutstandingAmount = 100m,
                 InvoiceType = "NORMAL",
-                Status = "APPROVED",
+                Status = "OPEN",
                 CreatedAt = now,
                 UpdatedAt = now,
                 Version = 0
@@ -174,7 +174,7 @@ public sealed class CustomerBalanceReconcileServiceTests
                 TotalAmount = 50m,
                 OutstandingAmount = 50m,
                 InvoiceType = "NORMAL",
-                Status = "APPROVED",
+                Status = "OPEN",
                 CreatedAt = now,
                 UpdatedAt = now,
                 Version = 0

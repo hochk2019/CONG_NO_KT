@@ -42,9 +42,12 @@ public sealed class AdvanceService : IAdvanceService
             throw new InvalidOperationException("Seller and customer tax code are required.");
         }
 
-        var advanceNo = string.IsNullOrWhiteSpace(request.AdvanceNo)
-            ? null
-            : request.AdvanceNo.Trim();
+        if (string.IsNullOrWhiteSpace(request.AdvanceNo))
+        {
+            throw new InvalidOperationException("Advance number is required.");
+        }
+
+        var advanceNo = request.AdvanceNo.Trim();
 
         var sellerExists = await _db.Sellers.AnyAsync(s => s.SellerTaxCode == seller, ct);
         if (!sellerExists)
@@ -57,6 +60,14 @@ public sealed class AdvanceService : IAdvanceService
         {
             throw new InvalidOperationException("Customer not found.");
         }
+
+        await DocumentDuplicateGuard.EnsureAdvanceNumberAvailableAsync(
+            _db,
+            seller,
+            customer,
+            advanceNo,
+            excludeAdvanceId: null,
+            ct);
 
         var advance = new Advance
         {
@@ -76,7 +87,7 @@ public sealed class AdvanceService : IAdvanceService
         };
 
         _db.Advances.Add(advance);
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveAdvanceChangesAsync(_db, ct);
 
         await _auditService.LogAsync(
             "ADVANCE_CREATE",
@@ -320,6 +331,21 @@ public sealed class AdvanceService : IAdvanceService
             throw new InvalidOperationException("Advance has allocations and cannot be unvoided.");
         }
 
+        var advanceNo = advance.AdvanceNo?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(advanceNo))
+        {
+            throw new InvalidOperationException("Advance number is required.");
+        }
+
+        advance.AdvanceNo = advanceNo;
+        await DocumentDuplicateGuard.EnsureAdvanceNumberAvailableAsync(
+            _db,
+            advance.SellerTaxCode,
+            advance.CustomerTaxCode,
+            advanceNo,
+            advance.Id,
+            ct);
+
         var previousStatus = advance.Status;
         advance.Status = "DRAFT";
         advance.OutstandingAmount = advance.Amount;
@@ -328,7 +354,7 @@ public sealed class AdvanceService : IAdvanceService
         advance.UpdatedAt = DateTimeOffset.UtcNow;
         advance.Version += 1;
 
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveAdvanceChangesAsync(_db, ct);
 
         if (overrideApplied)
         {
@@ -600,6 +626,7 @@ public sealed class AdvanceService : IAdvanceService
             .Where(r => r.DeletedAt == null && r.Status == "APPROVED")
             .Where(r => r.SellerTaxCode == advance.SellerTaxCode && r.CustomerTaxCode == advance.CustomerTaxCode)
             .Where(r => r.UnallocatedAmount > 0)
+            .Where(r => r.AutoAllocateEnabled)
             .OrderBy(r => r.ReceiptDate)
             .ThenBy(r => r.CreatedAt)
             .ToListAsync(ct);

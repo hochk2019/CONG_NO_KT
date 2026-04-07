@@ -10,10 +10,18 @@ public sealed record CustomerInvoiceDto(
     int Version,
     string SellerTaxCode,
     string? SellerShortName,
-    IReadOnlyList<CustomerReceiptRefDto> ReceiptRefs);
+    IReadOnlyList<CustomerReceiptRefDto> ReceiptRefs,
+    IReadOnlyList<CustomerInvoiceRefDto> ReductionInvoiceRefs,
+    IReadOnlyList<CustomerInvoiceRefDto> ReducedInvoiceRefs);
 
 public sealed record CustomerReceiptRefDto(
     Guid Id,
     string? ReceiptNo,
     DateOnly ReceiptDate,
+    decimal Amount);
+
+public sealed record CustomerInvoiceRefDto(
+    Guid Id,
+    string InvoiceNo,
+    DateOnly IssueDate,
     decimal Amount);

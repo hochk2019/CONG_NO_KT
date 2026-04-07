@@ -260,8 +260,8 @@ public sealed class ReportPagedTests
             VatAmount = 0,
             TotalAmount = amount,
             OutstandingAmount = amount,
-            InvoiceType = "SALE",
-            Status = "APPROVED",
+            InvoiceType = "NORMAL",
+            Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0

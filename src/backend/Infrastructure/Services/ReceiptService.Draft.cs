@@ -41,6 +41,11 @@ public sealed partial class ReceiptService
             throw new InvalidOperationException("Amount must be greater than zero.");
         }
 
+        if (string.IsNullOrWhiteSpace(request.ReceiptNo))
+        {
+            throw new InvalidOperationException("Receipt number is required.");
+        }
+
         var method = string.IsNullOrWhiteSpace(request.Method)
             ? receipt.Method
             : NormalizeMethod(request.Method);
@@ -87,7 +92,15 @@ public sealed partial class ReceiptService
             ? ReceiptAllocationStatusCodes.Selected
             : ReceiptAllocationStatusCodes.Unallocated;
         var allocationSource = selectedTargets.Count > 0 ? "MANUAL" : null;
-        var normalizedReceiptNo = string.IsNullOrWhiteSpace(request.ReceiptNo) ? null : request.ReceiptNo.Trim();
+        var normalizedReceiptNo = request.ReceiptNo.Trim();
+
+        await DocumentDuplicateGuard.EnsureReceiptNumberAvailableAsync(
+            _db,
+            receipt.SellerTaxCode,
+            receipt.CustomerTaxCode,
+            normalizedReceiptNo,
+            receipt.Id,
+            ct);
 
         receipt.ReceiptNo = normalizedReceiptNo;
         receipt.ReceiptDate = request.ReceiptDate;
@@ -104,7 +117,7 @@ public sealed partial class ReceiptService
         receipt.UpdatedAt = DateTimeOffset.UtcNow;
         receipt.Version += 1;
 
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveReceiptChangesAsync(_db, ct);
 
         await _auditService.LogAsync(
             "RECEIPT_UPDATE_DRAFT",
@@ -189,6 +202,7 @@ public sealed partial class ReceiptService
             receipt.Version,
             receipt.Amount,
             receipt.UnallocatedAmount,
+            receipt.AutoAllocateEnabled,
             receipt.ReceiptNo,
             receipt.ReceiptDate,
             receipt.AppliedPeriodStart,

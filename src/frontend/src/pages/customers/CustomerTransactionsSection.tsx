@@ -12,6 +12,8 @@ import { voidAdvance } from '../../api/advances'
 import { voidInvoice } from '../../api/invoices'
 import { useReceiptModal } from './transactions/useReceiptModal'
 import DataTable from '../../components/DataTable'
+import CustomerHeldCreditsPanel from './CustomerHeldCreditsPanel'
+import CustomerUnallocatedReceiptsPanel from './CustomerUnallocatedReceiptsPanel'
 import CustomerTransactionModals from './CustomerTransactionModals'
 import TransactionFilters from './transactions/TransactionFilters'
 import {
@@ -37,7 +39,12 @@ type CustomerTransactionsSectionProps = {
   onClearSelection: () => void
 }
 
-type CustomerTransactionsTab = 'invoices' | 'advances' | 'receipts'
+type CustomerTransactionsTab =
+  | 'invoices'
+  | 'advances'
+  | 'receipts'
+  | 'unallocatedReceipts'
+  | 'heldCredits'
 
 type InvoiceModalState = {
   mode: 'view' | 'void'
@@ -78,8 +85,6 @@ export default function CustomerTransactionsSection({
   const [invoiceVoidVersion, setInvoiceVoidVersion] = useState('')
   const [invoiceVoidStatus, setInvoiceVoidStatus] = useState('')
   const [invoiceVoidReason, setInvoiceVoidReason] = useState('')
-  const [invoiceReplacementId, setInvoiceReplacementId] = useState('')
-  const [invoiceReplacementConfirmed, setInvoiceReplacementConfirmed] = useState(false)
   const [invoiceVoidLoading, setInvoiceVoidLoading] = useState(false)
   const [invoiceVoidError, setInvoiceVoidError] = useState<string | null>(null)
   const [invoiceVoidSuccess, setInvoiceVoidSuccess] = useState<string | null>(null)
@@ -153,8 +158,10 @@ export default function CustomerTransactionsSection({
       setAdvancePage(1)
       return
     }
-    setReceiptSearch(doc)
-    setReceiptPage(1)
+    if (targetTab === 'receipts') {
+      setReceiptSearch(doc)
+      setReceiptPage(1)
+    }
   }, [initialDoc, initialTab, selectedTaxCode])
 
   useEffect(() => {
@@ -357,8 +364,6 @@ export default function CustomerTransactionsSection({
       setInvoiceVoidVersion(String(row.version))
       setInvoiceVoidStatus(row.status)
       setInvoiceVoidReason('')
-      setInvoiceReplacementId('')
-      setInvoiceReplacementConfirmed(false)
       setInvoiceVoidError(null)
       setInvoiceVoidSuccess(null)
     }
@@ -396,32 +401,24 @@ export default function CustomerTransactionsSection({
     }
 
     const status = invoiceVoidStatus.toUpperCase()
-    const requiresReplacement = status === 'PAID' || status === 'PARTIAL'
-    if (requiresReplacement && !invoiceReplacementId.trim()) {
-      setInvoiceVoidError('Hóa đơn đã thu tiền, cần nhập hóa đơn thay thế trước khi hủy.')
-      return
-    }
-
-    if (requiresReplacement && !invoiceReplacementConfirmed) {
-      setInvoiceVoidError('Vui lòng xác nhận đã import hóa đơn thay thế trước khi hủy.')
-      return
-    }
+    const requiresForce = status === 'PAID' || status === 'PARTIAL'
 
     setInvoiceVoidLoading(true)
     setInvoiceVoidError(null)
     setInvoiceVoidSuccess(null)
     try {
-      await voidInvoice(token, invoiceVoidId, {
+      const result = await voidInvoice(token, invoiceVoidId, {
         reason: invoiceVoidReason.trim(),
-        replacementInvoiceId: invoiceReplacementId.trim() || null,
-        force: requiresReplacement,
+        force: requiresForce,
         version: versionValue,
       })
       setInvoiceVoidSuccess('Đã hủy hóa đơn.')
       setInvoiceVoidReason('')
-      setInvoiceReplacementId('')
-      setInvoiceReplacementConfirmed(false)
       setInvoiceReload((value) => value + 1)
+      if (result.heldCreditCount > 0 || result.restoredHeldCreditCount > 0) {
+        setActiveTab('heldCredits')
+        onTabChange?.('heldCredits')
+      }
       setInvoiceModal(null)
     } catch (err) {
       if (err instanceof ApiError) {
@@ -439,13 +436,11 @@ export default function CustomerTransactionsSection({
     invoiceVoidReason,
     invoiceVoidVersion,
     invoiceVoidStatus,
-    invoiceReplacementId,
-    invoiceReplacementConfirmed,
+    onTabChange,
   ])
 
   const handleCloseInvoiceModal = useCallback(() => {
     setInvoiceModal(null)
-    setInvoiceReplacementConfirmed(false)
   }, [])
 
   const handleVoidAdvance = useCallback(async () => {
@@ -533,6 +528,9 @@ export default function CustomerTransactionsSection({
     onTabChange?.(tab)
   }, [onTabChange])
 
+  const heldCreditInitialDoc = initialTab === 'heldCredits' ? initialDoc : null
+  const unallocatedReceiptInitialDoc = initialTab === 'unallocatedReceipts' ? initialDoc : null
+
   if (!selectedTaxCode) {
     return null
   }
@@ -542,7 +540,9 @@ export default function CustomerTransactionsSection({
       <div className="card-row">
         <div>
           <h3>Giao dịch khách hàng</h3>
-          <p className="muted">Hóa đơn, khoản trả hộ KH, phiếu thu.</p>
+          <p className="muted">
+            Hóa đơn, khoản trả hộ KH, phiếu thu, tiền chưa phân bổ và tiền thừa do hủy HĐ.
+          </p>
         </div>
         <div className="customer-actions customer-actions--active">
           <span className="customer-chip customer-chip--active">MST {selectedTaxCode}</span>
@@ -585,6 +585,28 @@ export default function CustomerTransactionsSection({
           onClick={() => handleSwitchTab('receipts')}
         >
           Phiếu thu
+        </button>
+        <button
+          id="customer-tab-unallocated-receipts"
+          className={`tab ${activeTab === 'unallocatedReceipts' ? 'tab--active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'unallocatedReceipts'}
+          aria-controls="customer-panel-unallocated-receipts"
+          onClick={() => handleSwitchTab('unallocatedReceipts')}
+        >
+          Tiền chưa phân bổ
+        </button>
+        <button
+          id="customer-tab-held-credits"
+          className={`tab ${activeTab === 'heldCredits' ? 'tab--active' : ''}`}
+          type="button"
+          role="tab"
+          aria-selected={activeTab === 'heldCredits'}
+          aria-controls="customer-panel-held-credits"
+          onClick={() => handleSwitchTab('heldCredits')}
+        >
+          Tiền thừa do hủy HĐ
         </button>
       </div>
 
@@ -764,6 +786,24 @@ export default function CustomerTransactionsSection({
         </div>
       )}
 
+      {activeTab === 'unallocatedReceipts' && (
+        <CustomerUnallocatedReceiptsPanel
+          token={token}
+          canManageCustomers={canManageCustomers}
+          selectedTaxCode={selectedTaxCode}
+          initialDoc={unallocatedReceiptInitialDoc}
+        />
+      )}
+
+      {activeTab === 'heldCredits' && (
+        <CustomerHeldCreditsPanel
+          token={token}
+          canManageCustomers={canManageCustomers}
+          selectedTaxCode={selectedTaxCode}
+          initialDoc={heldCreditInitialDoc}
+        />
+      )}
+
       <CustomerTransactionModals
         invoiceModal={invoiceModal}
         advanceModal={advanceModal}
@@ -780,10 +820,6 @@ export default function CustomerTransactionsSection({
         shortId={shortId}
         invoiceVoidReason={invoiceVoidReason}
         onInvoiceVoidReasonChange={setInvoiceVoidReason}
-        invoiceReplacementId={invoiceReplacementId}
-        onInvoiceReplacementChange={setInvoiceReplacementId}
-        invoiceReplacementConfirmed={invoiceReplacementConfirmed}
-        onInvoiceReplacementConfirmedChange={setInvoiceReplacementConfirmed}
         invoiceVoidLoading={invoiceVoidLoading}
         invoiceVoidError={invoiceVoidError}
         invoiceVoidSuccess={invoiceVoidSuccess}

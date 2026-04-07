@@ -80,7 +80,7 @@ public sealed class CustomerService360Tests
                 TotalAmount = 200m,
                 OutstandingAmount = 200m,
                 InvoiceType = "NORMAL",
-                Status = "APPROVED",
+                Status = "OPEN",
                 CreatedAt = now,
                 UpdatedAt = now,
                 Version = 0
@@ -97,7 +97,7 @@ public sealed class CustomerService360Tests
                 TotalAmount = 100m,
                 OutstandingAmount = 100m,
                 InvoiceType = "NORMAL",
-                Status = "APPROVED",
+                Status = "OPEN",
                 CreatedAt = now,
                 UpdatedAt = now,
                 Version = 0

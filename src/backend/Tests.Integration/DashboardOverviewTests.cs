@@ -302,8 +302,8 @@ public sealed class DashboardOverviewTests
             VatAmount = 0,
             TotalAmount = amount,
             OutstandingAmount = 0,
-            InvoiceType = "SALE",
-            Status = "APPROVED",
+            InvoiceType = "NORMAL",
+            Status = "PAID",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0

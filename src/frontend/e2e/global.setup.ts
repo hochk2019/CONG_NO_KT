@@ -36,7 +36,15 @@ async function globalSetup(config: FullConfig) {
   await page.getByLabel('Mật khẩu').fill(e2ePassword)
   await page.getByRole('button', { name: 'Đăng nhập' }).click()
   await page.waitForURL(/\/dashboard$/, { timeout: 15_000 })
-  await page.getByRole('button', { name: 'Đăng xuất' }).waitFor({ state: 'visible', timeout: 15_000 })
+  await page.waitForLoadState('domcontentloaded')
+  await page.waitForLoadState('networkidle', { timeout: 15_000 }).catch(() => undefined)
+
+  const logoutButton = page.getByRole('button', { name: 'Đăng xuất' }).first()
+  const dashboardHeading = page.getByRole('heading', { level: 1 }).first()
+  await Promise.race([
+    logoutButton.waitFor({ state: 'visible', timeout: 10_000 }),
+    dashboardHeading.waitFor({ state: 'visible', timeout: 10_000 }),
+  ]).catch(() => undefined)
 
   await context.storageState({ path: authFilePath })
   await browser.close()

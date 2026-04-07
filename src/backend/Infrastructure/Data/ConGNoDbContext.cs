@@ -12,16 +12,20 @@ public sealed class ConGNoDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
+    public DbSet<Permission> Permissions => Set<Permission>();
     public DbSet<UserRole> UserRoles => Set<UserRole>();
+    public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<Seller> Sellers => Set<Seller>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<ImportBatch> ImportBatches => Set<ImportBatch>();
     public DbSet<ImportStagingRow> ImportStagingRows => Set<ImportStagingRow>();
     public DbSet<Invoice> Invoices => Set<Invoice>();
+    public DbSet<InvoiceReductionApplication> InvoiceReductionApplications => Set<InvoiceReductionApplication>();
     public DbSet<Advance> Advances => Set<Advance>();
     public DbSet<Receipt> Receipts => Set<Receipt>();
     public DbSet<ReceiptAllocation> ReceiptAllocations => Set<ReceiptAllocation>();
+    public DbSet<ReceiptHeldCredit> ReceiptHeldCredits => Set<ReceiptHeldCredit>();
     public DbSet<PeriodLock> PeriodLocks => Set<PeriodLock>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<RiskRule> RiskRules => Set<RiskRule>();
@@ -58,12 +62,27 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("roles");
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Code).IsUnique();
+        });
+
+        modelBuilder.Entity<Permission>(entity =>
+        {
+            entity.ToTable("permissions");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Code).IsUnique();
         });
 
         modelBuilder.Entity<UserRole>(entity =>
         {
             entity.ToTable("user_roles");
             entity.HasKey(x => new { x.UserId, x.RoleId });
+        });
+
+        modelBuilder.Entity<RolePermission>(entity =>
+        {
+            entity.ToTable("role_permissions");
+            entity.HasKey(x => new { x.RoleId, x.PermissionId });
+            entity.HasIndex(x => x.PermissionId);
         });
 
         modelBuilder.Entity<RefreshToken>(entity =>
@@ -111,14 +130,65 @@ public sealed class ConGNoDbContext : DbContext
 
         modelBuilder.Entity<Invoice>(entity =>
         {
-            entity.ToTable("invoices");
+            entity.ToTable("invoices", tableBuilder =>
+            {
+                tableBuilder.HasCheckConstraint(
+                    "ck_invoice_type",
+                    "invoice_type IN ('NORMAL','REPLACE','ADJUST','ADJUSTMENT_REDUCTION')");
+                tableBuilder.HasCheckConstraint(
+                    "ck_invoice_status",
+                    "status IN ('OPEN','PARTIAL','PAID','VOID','DISPUTE')");
+                tableBuilder.HasCheckConstraint(
+                    "ck_invoice_adjust_negative",
+                    "invoice_type NOT IN ('ADJUST','ADJUSTMENT_REDUCTION') OR (revenue_excl_vat <= 0 AND vat_amount <= 0 AND total_amount <= 0)");
+            });
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.InvoiceSeries, x.InvoiceNo, x.IssueDate })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL")
+                .HasDatabaseName("uq_invoices_dedup");
+            entity.Property(x => x.InvoiceType).HasMaxLength(32).HasDefaultValue("NORMAL");
+            entity.Property(x => x.Status).HasMaxLength(16).HasDefaultValue("OPEN");
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("invoices_customer_tax_code_fkey");
+        });
+
+        modelBuilder.Entity<InvoiceReductionApplication>(entity =>
+        {
+            entity.ToTable("invoice_reduction_applications");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.ReductionInvoiceId);
+            entity.HasIndex(x => x.AppliedInvoiceId);
+            entity.HasOne<Invoice>()
+                .WithMany()
+                .HasForeignKey(x => x.ReductionInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("invoice_reduction_applications_reduction_invoice_id_fkey");
+            entity.HasOne<Invoice>()
+                .WithMany()
+                .HasForeignKey(x => x.AppliedInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("invoice_reduction_applications_applied_invoice_id_fkey");
         });
 
         modelBuilder.Entity<Advance>(entity =>
         {
             entity.ToTable("advances");
             entity.HasKey(x => x.Id);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.AdvanceNo })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL AND advance_no IS NOT NULL")
+                .HasDatabaseName("uq_advances_dedup");
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("advances_customer_tax_code_fkey");
         });
 
         modelBuilder.Entity<Receipt>(entity =>
@@ -126,11 +196,28 @@ public sealed class ConGNoDbContext : DbContext
             entity.ToTable("receipts");
             entity.HasKey(x => x.Id);
             entity.Property(x => x.AllocationTargets).HasColumnType("jsonb");
+            entity.Property(x => x.AutoAllocateEnabled).HasDefaultValue(true);
+            entity.HasIndex(x => new { x.SellerTaxCode, x.CustomerTaxCode, x.ReceiptNo })
+                .IsUnique()
+                .HasFilter("deleted_at IS NULL AND receipt_no IS NOT NULL")
+                .HasDatabaseName("uq_receipts_dedup");
+            entity.HasOne<Customer>()
+                .WithMany()
+                .HasForeignKey(x => x.CustomerTaxCode)
+                .HasPrincipalKey(x => x.TaxCode)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("receipts_customer_tax_code_fkey");
         });
 
         modelBuilder.Entity<ReceiptAllocation>(entity =>
         {
             entity.ToTable("receipt_allocations");
+            entity.HasKey(x => x.Id);
+        });
+
+        modelBuilder.Entity<ReceiptHeldCredit>(entity =>
+        {
+            entity.ToTable("receipt_held_credits");
             entity.HasKey(x => x.Id);
         });
 

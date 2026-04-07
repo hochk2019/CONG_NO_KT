@@ -1,6 +1,8 @@
 using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -30,11 +32,15 @@ public sealed class ImportRollbackService : IImportRollbackService
             throw new InvalidOperationException("Batch not found.");
         }
 
+        if (!ImportPermissionEvaluator.CanRollbackImport(_currentUser))
+        {
+            throw new UnauthorizedAccessException("You do not have permission to roll back import batches.");
+        }
+
         if (batch.Status != StatusCommitted)
         {
             throw new InvalidOperationException("Batch status is not eligible for rollback.");
         }
-
         var previousStatus = batch.Status;
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
@@ -44,6 +50,12 @@ public sealed class ImportRollbackService : IImportRollbackService
         var receipts = await _db.Receipts.Where(r => r.SourceBatchId == batchId && r.DeletedAt == null).ToListAsync(ct);
 
         var invoiceIds = invoices.Select(i => i.Id).ToList();
+        var reductionApplications = invoiceIds.Count == 0
+            ? new List<InvoiceReductionApplication>()
+            : await _db.InvoiceReductionApplications
+                .Where(a => invoiceIds.Contains(a.ReductionInvoiceId))
+                .OrderBy(a => a.CreatedAt)
+                .ToListAsync(ct);
         var advanceIds = advances.Select(a => a.Id).ToList();
         var receiptIds = receipts.Select(r => r.Id).ToList();
 
@@ -154,6 +166,11 @@ public sealed class ImportRollbackService : IImportRollbackService
             overrideApplied = true;
         }
 
+        if (reductionApplications.Count > 0)
+        {
+            await RestoreReductionApplicationsAsync(reductionApplications, ct);
+        }
+
         foreach (var invoice in invoices)
         {
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == invoice.CustomerTaxCode, ct);
@@ -208,6 +225,50 @@ public sealed class ImportRollbackService : IImportRollbackService
             ct);
 
         return new ImportRollbackResult(invoices.Count, advances.Count, receipts.Count);
+    }
+
+    private async Task RestoreReductionApplicationsAsync(
+        IReadOnlyList<InvoiceReductionApplication> reductionApplications,
+        CancellationToken ct)
+    {
+        var appliedInvoiceIds = reductionApplications
+            .Select(a => a.AppliedInvoiceId)
+            .Distinct()
+            .ToList();
+        if (appliedInvoiceIds.Count == 0)
+        {
+            return;
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var appliedInvoices = await _db.Invoices
+            .Where(i => appliedInvoiceIds.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id, ct);
+
+        foreach (var reductionApplication in reductionApplications)
+        {
+            if (!appliedInvoices.TryGetValue(reductionApplication.AppliedInvoiceId, out var appliedInvoice))
+            {
+                continue;
+            }
+
+            appliedInvoice.OutstandingAmount += reductionApplication.Amount;
+            appliedInvoice.Status = GetInvoiceOutstandingStatus(appliedInvoice);
+            appliedInvoice.UpdatedAt = now;
+            appliedInvoice.Version += 1;
+        }
+
+        _db.InvoiceReductionApplications.RemoveRange(reductionApplications);
+    }
+
+    private static string GetInvoiceOutstandingStatus(Invoice invoice)
+    {
+        if (invoice.OutstandingAmount <= 0m)
+        {
+            return "PAID";
+        }
+
+        return invoice.OutstandingAmount >= invoice.TotalAmount ? "OPEN" : "PARTIAL";
     }
 
     private static ImportRollbackBlockedException CreateBlockedException(

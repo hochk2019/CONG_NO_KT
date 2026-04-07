@@ -88,6 +88,180 @@ public class ReceiptDraftAndBulkApproveTests
     }
 
     [Fact]
+    public async Task CreateAsync_RejectsEmptyReceiptNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("89898989-8989-8989-8989-898989898989");
+        await SeedMasterAsync(db, userId);
+
+        var user = new TestCurrentUser(userId, new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(
+                new ReceiptCreateRequest(
+                    "SELLER01",
+                    "CUST01",
+                    "   ",
+                    DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                    100m,
+                    "MANUAL",
+                    null,
+                    "BANK",
+                    null,
+                    "ISSUE_DATE",
+                    null),
+                CancellationToken.None));
+
+        Assert.Equal("Receipt number is required.", error.Message);
+    }
+
+    [Fact]
+    public async Task CreateAsync_RejectsDuplicateReceiptNo_ForSameSellerAndCustomer()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("68686868-6868-6868-6868-686868686868");
+        await SeedMasterAsync(db, userId);
+
+        db.Receipts.Add(new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = "SELLER01",
+            CustomerTaxCode = "CUST01",
+            ReceiptNo = "RCPT-DUP-001",
+            ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            Amount = 100m,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "UNALLOCATED",
+            AllocationPriority = "ISSUE_DATE",
+            Status = "DRAFT",
+            UnallocatedAmount = 0,
+            CreatedBy = userId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(userId, new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.CreateAsync(
+                new ReceiptCreateRequest(
+                    "SELLER01",
+                    "CUST01",
+                    "RCPT-DUP-001",
+                    DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                    150m,
+                    "MANUAL",
+                    null,
+                    "BANK",
+                    null,
+                    "ISSUE_DATE",
+                    null),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Phiếu thu với số chứng từ này đã tồn tại cho người bán và khách hàng này.",
+            error.Message);
+    }
+
+    [Fact]
+    public async Task UpdateDraftAsync_RejectsEmptyReceiptNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("78787878-7878-7878-7878-787878787878");
+        await SeedMasterAsync(db, userId);
+
+        var draft = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = "SELLER01",
+            CustomerTaxCode = "CUST01",
+            ReceiptNo = "RCPT-EMPTY-CHECK",
+            ReceiptDate = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            Amount = 100m,
+            Method = "BANK",
+            AllocationMode = "FIFO",
+            AllocationStatus = "UNALLOCATED",
+            AllocationPriority = "ISSUE_DATE",
+            Status = "DRAFT",
+            UnallocatedAmount = 0,
+            CreatedBy = userId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+        db.Receipts.Add(draft);
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(userId, new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateDraftAsync(
+                draft.Id,
+                new ReceiptDraftUpdateRequest(
+                    "   ",
+                    draft.ReceiptDate,
+                    draft.Amount,
+                    draft.AllocationMode,
+                    draft.AppliedPeriodStart,
+                    draft.Method,
+                    draft.Description,
+                    draft.AllocationPriority,
+                    null,
+                    draft.Version),
+                CancellationToken.None));
+
+        Assert.Equal("Receipt number is required.", error.Message);
+    }
+
+    [Fact]
+    public async Task UpdateDraftAsync_RejectsDuplicateReceiptNo_ForSameSellerAndCustomer()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("67676767-6767-6767-6767-676767676767");
+        await SeedMasterAsync(db, userId);
+
+        var draft = await SeedDraftReceiptAsync(db, userId, "SELLER01", "CUST01", 100m, "RCPT-EDIT-001");
+        await SeedDraftReceiptAsync(db, userId, "SELLER01", "CUST01", 120m, "RCPT-EDIT-002");
+
+        var user = new TestCurrentUser(userId, new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UpdateDraftAsync(
+                draft.Id,
+                new ReceiptDraftUpdateRequest(
+                    "RCPT-EDIT-002",
+                    draft.ReceiptDate,
+                    draft.Amount,
+                    draft.AllocationMode,
+                    draft.AppliedPeriodStart,
+                    draft.Method,
+                    draft.Description,
+                    draft.AllocationPriority,
+                    null,
+                    draft.Version),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Phiếu thu với số chứng từ này đã tồn tại cho người bán và khách hàng này.",
+            error.Message);
+    }
+
+    [Fact]
     public async Task ApproveBulkAsync_ApprovesValidRows_AndReportsFailures()
     {
         await using var db = _fixture.CreateContext();
@@ -213,6 +387,7 @@ public class ReceiptDraftAndBulkApproveTests
             IssueDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-7)),
             TotalAmount = amount,
             OutstandingAmount = amount,
+            InvoiceType = "NORMAL",
             Status = "OPEN",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

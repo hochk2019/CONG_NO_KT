@@ -5,4 +5,8 @@ public sealed record InvoiceVoidResult(
     string Status,
     int Version,
     decimal OutstandingAmount,
-    Guid? ReplacementInvoiceId);
+    Guid? ReplacementInvoiceId,
+    decimal HeldCreditAmount = 0,
+    int HeldCreditCount = 0,
+    decimal RestoredHeldCreditAmount = 0,
+    int RestoredHeldCreditCount = 0);

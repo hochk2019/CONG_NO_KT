@@ -26,10 +26,23 @@ public sealed class Role
     public string Name { get; set; } = string.Empty;
 }
 
+public sealed class Permission
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+}
+
 public sealed class UserRole
 {
     public Guid UserId { get; set; }
     public int RoleId { get; set; }
+}
+
+public sealed class RolePermission
+{
+    public int RoleId { get; set; }
+    public int PermissionId { get; set; }
 }
 
 public sealed class RefreshToken

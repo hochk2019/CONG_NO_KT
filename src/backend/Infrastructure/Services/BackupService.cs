@@ -509,6 +509,9 @@ public sealed partial class BackupService : IBackupService
 
     private BackupSettingsDto MapSettings(BackupSettings settings)
     {
+        var usesContainerPaths = IsRunningInContainerRuntime();
+        var hostBackupPath = usesContainerPaths ? GetHostBackupPathHint() : settings.BackupPath;
+
         return new BackupSettingsDto(
             settings.Enabled,
             settings.BackupPath,
@@ -517,7 +520,12 @@ public sealed partial class BackupService : IBackupService
             settings.ScheduleTime,
             settings.Timezone,
             settings.PgBinPath,
-            settings.LastRunAt);
+            settings.LastRunAt,
+            usesContainerPaths,
+            hostBackupPath,
+            usesContainerPaths ? "BACKUP_HOST_PATH" : null,
+            !usesContainerPaths,
+            !usesContainerPaths);
     }
 
     private static BackupJobListItem MapJobListItem(BackupJob job)
@@ -715,6 +723,12 @@ public sealed partial class BackupService : IBackupService
             : LinuxDefaultBackupPath;
     }
 
+    private string? GetHostBackupPathHint()
+    {
+        var configured = _configuration["Backup:HostPathHint"]?.Trim();
+        return string.IsNullOrWhiteSpace(configured) ? null : configured;
+    }
+
     private string GetDefaultPgBinPath()
     {
         var configured = _configuration["Backup:DefaultPgBinPath"]?.Trim();
@@ -726,6 +740,14 @@ public sealed partial class BackupService : IBackupService
         return OperatingSystem.IsWindows()
             ? WindowsDefaultPgBinPath
             : LinuxDefaultPgBinPath;
+    }
+
+    private static bool IsRunningInContainerRuntime()
+    {
+        return string.Equals(
+            Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER"),
+            "true",
+            StringComparison.OrdinalIgnoreCase);
     }
 
     private string NormalizeBackupPathForRuntime(string? rawPath)

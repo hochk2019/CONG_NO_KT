@@ -8,6 +8,7 @@ public sealed record ReceiptListItem(
     DateOnly ReceiptDate,
     decimal Amount,
     decimal UnallocatedAmount,
+    bool AutoAllocateEnabled,
     string AllocationMode,
     string AllocationStatus,
     string AllocationPriority,

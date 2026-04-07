@@ -3,6 +3,7 @@ type JwtPayload = Record<string, unknown>
 type DecodedJwt = {
   username: string | null
   roles: string[]
+  permissions: string[]
 }
 
 const roleKeys = [
@@ -10,6 +11,8 @@ const roleKeys = [
   'roles',
   'http://schemas.microsoft.com/ws/2008/06/identity/claims/role',
 ]
+
+const permissionKeys = ['permission', 'permissions']
 
 const nameKeys = [
   'name',
@@ -26,21 +29,21 @@ const base64UrlDecode = (input: string) => {
   return atob(base64)
 }
 
-const collectRoles = (payload: JwtPayload) => {
-  const roles: string[] = []
-  roleKeys.forEach((key) => {
+const collectClaimValues = (payload: JwtPayload, keys: string[]) => {
+  const values: string[] = []
+  keys.forEach((key) => {
     const value = payload[key]
     if (typeof value === 'string') {
-      roles.push(value)
+      values.push(value)
     } else if (Array.isArray(value)) {
       value.forEach((item) => {
         if (typeof item === 'string') {
-          roles.push(item)
+          values.push(item)
         }
       })
     }
   })
-  return Array.from(new Set(roles))
+  return Array.from(new Set(values))
 }
 
 const findName = (payload: JwtPayload) => {
@@ -57,14 +60,15 @@ export const decodeJwt = (token: string): DecodedJwt => {
   try {
     const [, payload] = token.split('.')
     if (!payload) {
-      return { username: null, roles: [] }
+      return { username: null, roles: [], permissions: [] }
     }
     const decoded = JSON.parse(base64UrlDecode(payload)) as JwtPayload
     return {
       username: findName(decoded),
-      roles: collectRoles(decoded),
+      roles: collectClaimValues(decoded, roleKeys),
+      permissions: collectClaimValues(decoded, permissionKeys),
     }
   } catch {
-    return { username: null, roles: [] }
+    return { username: null, roles: [], permissions: [] }
   }
 }

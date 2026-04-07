@@ -14,8 +14,8 @@ public sealed class Invoice
     public decimal TotalAmount { get; set; }
     public decimal OutstandingAmount { get; set; }
     public string? Note { get; set; }
-    public string InvoiceType { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
+    public string InvoiceType { get; set; } = "NORMAL";
+    public string Status { get; set; } = "OPEN";
     public Guid? SourceBatchId { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }
@@ -44,4 +44,13 @@ public sealed class Advance
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
     public int Version { get; set; }
+}
+
+public sealed class InvoiceReductionApplication
+{
+    public Guid Id { get; set; }
+    public Guid ReductionInvoiceId { get; set; }
+    public Guid AppliedInvoiceId { get; set; }
+    public decimal Amount { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
 }

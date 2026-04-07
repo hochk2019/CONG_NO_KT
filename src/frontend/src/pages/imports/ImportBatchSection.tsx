@@ -10,6 +10,11 @@ import {
 } from '../../api/imports'
 import ImportHistorySection from './ImportHistorySection'
 import ImportPreviewModal from './ImportPreviewModal'
+import {
+  getImportBatchRecoveryState,
+  type ImportBatchQualitySnapshot,
+} from './importBatchRecovery'
+import { formatValidationMessages } from './importValidationMessages'
 import { formatRollbackErrorMessage } from './rollbackErrorMessages'
 
 const DEFAULT_PAGE_SIZE = 10
@@ -64,25 +69,6 @@ const actionSuggestionLabels: Record<string, string> = {
   INSERT: 'Ghi',
   SKIP: 'Bỏ qua',
 }
-const validationMessageLabels: Record<string, string> = {
-  DUP_IN_DB: 'Trùng hóa đơn đã có trong hệ thống',
-  DUP_IN_FILE: 'Trùng trong file',
-  BUYER_TAX_REQUIRED: 'Thiếu MST người mua',
-  BUYER_NAME_REQUIRED: 'Thiếu tên người mua',
-  INVOICE_NO_REQUIRED: 'Thiếu số hóa đơn',
-  ISSUE_DATE_REQUIRED: 'Thiếu ngày phát hành',
-  SELLER_TAX_REQUIRED: 'Thiếu MST người bán',
-  CUSTOMER_TAX_REQUIRED: 'Thiếu MST khách hàng',
-  ADVANCE_DATE_REQUIRED: 'Thiếu ngày trả hộ',
-  RECEIPT_DATE_REQUIRED: 'Thiếu ngày thu',
-  APPLIED_PERIOD_REQUIRED: 'Thiếu kỳ áp dụng',
-  APPLIED_PERIOD_NOT_FIRST_DAY: 'Kỳ áp dụng phải là ngày đầu tháng',
-  METHOD_INVALID: 'Hình thức thu không hợp lệ',
-  AMOUNT_REQUIRED: 'Thiếu số tiền',
-  NEGATIVE_AMOUNT: 'Số tiền âm không hợp lệ',
-}
-const formatValidationMessages = (messages: string[]) =>
-  messages.map((message) => validationMessageLabels[message] ?? message).join(', ')
 
 const previewPageSizes = [10, 20, 50, 100, 200]
 const MAX_IMPORT_FILE_SIZE_BYTES = 20 * 1024 * 1024
@@ -109,12 +95,7 @@ export default function ImportBatchSection({
   const [periodTo, setPeriodTo] = useState('')
   const [idempotencyKey, setIdempotencyKey] = useState('')
   const [batchId, setBatchId] = useState('')
-  const [staging, setStaging] = useState<{
-    totalRows: number
-    okCount: number
-    warnCount: number
-    errorCount: number
-  } | null>(null)
+  const [staging, setStaging] = useState<ImportBatchQualitySnapshot | null>(null)
   const [previewStatus, setPreviewStatus] = useState(() => getStoredFilter(IMPORTS_PREVIEW_STATUS_KEY))
   const [preview, setPreview] = useState<{
     page: number
@@ -151,10 +132,52 @@ export default function ImportBatchSection({
   const [previewOpen, setPreviewOpen] = useState(false)
   const [isDropzoneActive, setIsDropzoneActive] = useState(false)
 
+  const currentQualitySummary = useMemo<ImportBatchQualitySnapshot | null>(() => {
+    if (preview) {
+      return {
+        totalRows: preview.totalRows,
+        okCount: preview.okCount,
+        warnCount: preview.warnCount,
+        errorCount: preview.errorCount,
+      }
+    }
+
+    return staging
+  }, [preview, staging])
+
   const summaryLabel = useMemo(() => {
-    if (!staging) return 'Chưa có lô nào.'
-    return `Tổng ${staging.totalRows} dòng · Hợp lệ ${staging.okCount} · Cảnh báo ${staging.warnCount} · Lỗi ${staging.errorCount}`
-  }, [staging])
+    if (previewLoading) return 'Đang tải chi tiết lô...'
+    if (!currentQualitySummary) {
+      return batchId ? 'Mở lô để kiểm tra dữ liệu.' : 'Chưa có lô nào.'
+    }
+
+    return `Tổng ${currentQualitySummary.totalRows} dòng · Hợp lệ ${currentQualitySummary.okCount} · Cảnh báo ${currentQualitySummary.warnCount} · Lỗi ${currentQualitySummary.errorCount}`
+  }, [batchId, currentQualitySummary, previewLoading])
+
+  const recoveryState = useMemo(
+    () =>
+      getImportBatchRecoveryState({
+        batchId,
+        summary: currentQualitySummary,
+        previewLoading,
+      }),
+    [batchId, currentQualitySummary, previewLoading],
+  )
+  const uploadButtonLabel = useMemo(() => {
+    if (recoveryState.status === 'blocked') {
+      return 'Tải lại file đã sửa'
+    }
+
+    if (batchId) {
+      return 'Tải file khác'
+    }
+
+    return 'Tải file'
+  }, [batchId, recoveryState.status])
+  const previewButtonClassName =
+    recoveryState.status === 'review' ? 'btn btn-primary' : 'btn btn-outline'
+  const commitButtonClassName =
+    recoveryState.status === 'review' ? 'btn btn-outline' : 'btn btn-primary'
 
   const previewTotalPages = preview
     ? Math.max(1, Math.ceil(preview.totalRows / preview.pageSize))
@@ -383,6 +406,17 @@ export default function ImportBatchSection({
 
   const handleCommit = async () => {
     if (!batchId || !token) return
+    if (recoveryState.hasBlockingErrors) {
+      if (!previewLoaded) {
+        setPreviewLoaded(true)
+        setPreviewPage(1)
+      }
+      setPreviewOpen(true)
+      setCommitError(
+        recoveryState.commitBlockedReason ?? 'Lô đang còn lỗi nên chưa thể ghi dữ liệu.',
+      )
+      return
+    }
     if (overrideLock && !overrideReason.trim()) {
       setFieldError('overrideReason', 'Vui lòng nhập lý do vượt khóa kỳ.')
       setCommitError('Vui lòng nhập lý do vượt khóa kỳ.')
@@ -454,6 +488,7 @@ export default function ImportBatchSection({
     setPreviewPage(1)
     setPreviewLoaded(true)
     setPreviewOpen(true)
+    setPreview(null)
     setCommitResult(null)
     setUploadError(null)
     setCommitError(null)
@@ -483,7 +518,9 @@ export default function ImportBatchSection({
         <p className="eyebrow">Bước 1</p>
         <h3>Chuẩn bị template</h3>
         <p className="muted">
-          Không đổi tên cột trong template. Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy.
+          Giữ nguyên header ở sheet Data. Dòng 1 là header cố định, dòng 2 là dòng mẫu tham chiếu.
+          Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy. Với khoản trả hộ KH và phiếu thu,
+          số chứng từ là bắt buộc để hệ thống kiểm tra trùng.
         </p>
         <div className="inline-actions">
           <span className="muted">Tải template:</span>
@@ -504,7 +541,9 @@ export default function ImportBatchSection({
           )}
         </div>
         <p className="muted">
-          Hóa đơn hỗ trợ cả template đơn giản và ReportDetail.xlsx (sheet ExportData).
+          Hóa đơn hỗ trợ cả template chuẩn và ReportDetail.xlsx (sheet ExportData). Mỗi workbook
+          đều có thêm sheet Hướng dẫn để đối soát cột, định dạng và quy tắc chống trùng trước khi
+          import.
         </p>
       </section>
 
@@ -597,16 +636,16 @@ export default function ImportBatchSection({
         </details>
         <div className="inline-actions">
           <button className="btn btn-primary" onClick={handleUpload} disabled={uploading}>
-            {uploading ? 'Đang tải...' : 'Tải file'}
+            {uploading ? 'Đang tải...' : uploadButtonLabel}
           </button>
           <button
-            className="btn btn-outline"
+            className={previewButtonClassName}
             type="button"
             onClick={handlePreview}
             disabled={!batchId || uploading || cancelLoading}
-            title={!batchId ? 'Ấn vào tải file trước.' : 'Xem trước dữ liệu'}
+            title={!batchId ? 'Ấn vào tải file trước.' : recoveryState.message ?? 'Xem trước dữ liệu'}
           >
-            Xem trước
+            {recoveryState.previewButtonLabel}
           </button>
           <button
             className="btn btn-outline"
@@ -629,6 +668,20 @@ export default function ImportBatchSection({
           <div className="meta-row">
             <span>Mã lô: {batchId}</span>
             <span className="pill pill-warn">{historyStatusLabels.STAGING}</span>
+          </div>
+        )}
+        {batchId && recoveryState.title && (
+          <div className="context-banner" role="status" aria-live="polite">
+            <div>
+              <p className="context-banner__title">{recoveryState.title}</p>
+              {recoveryState.message && <p className="muted">{recoveryState.message}</p>}
+            </div>
+            <div className="inline-actions inline-actions--tight">
+              {recoveryState.status === 'blocked' && <span className="pill pill-warn">Cần sửa file</span>}
+              {recoveryState.status === 'review' && <span className="pill pill-info">Cần rà soát</span>}
+              {recoveryState.status === 'ready' && <span className="pill pill-ok">Sẵn sàng ghi</span>}
+              {recoveryState.status === 'loading' && <span className="muted">Đang tải...</span>}
+            </div>
           </div>
         )}
         {uploadError && <div className="alert alert--error" role="alert" aria-live="assertive">{uploadError}</div>}
@@ -684,16 +737,16 @@ export default function ImportBatchSection({
         </details>
         <div className="inline-actions">
           <button
-            className="btn btn-primary"
+            className={commitButtonClassName}
             onClick={handleCommit}
-            disabled={commitLoading || !canCommit}
+            disabled={commitLoading || !canCommit || !batchId || recoveryState.hasBlockingErrors}
           >
             {commitLoading ? 'Đang ghi...' : 'Ghi dữ liệu'}
           </button>
           <button
             className="btn btn-outline"
             onClick={handleRollback}
-            disabled={rollbackLoading || !canCommit}
+            disabled={rollbackLoading || !canCommit || !batchId}
           >
             {rollbackLoading ? 'Đang hoàn tác...' : 'Hoàn tác'}
           </button>

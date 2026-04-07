@@ -395,6 +395,12 @@ export default function AdminBackupPage() {
     )
   }
 
+  const usesContainerPaths = settings.usesContainerPaths ?? false
+  const hostBackupPath = settings.hostBackupPath?.trim() || '(chưa cấu hình)'
+  const hostBackupPathConfigKey = settings.hostBackupPathConfigKey?.trim() || 'BACKUP_HOST_PATH'
+  const canEditBackupPath = settings.canEditBackupPath ?? !usesContainerPaths
+  const canEditPgBinPath = settings.canEditPgBinPath ?? !usesContainerPaths
+
   return (
     <div className="page-stack">
       <div className="page-header">
@@ -411,6 +417,13 @@ export default function AdminBackupPage() {
 
       {status.maintenance && (
         <div className="alert alert--warn">{status.message ?? 'Hệ thống đang phục hồi dữ liệu.'}</div>
+      )}
+      {usesContainerPaths && (
+        <div className="alert alert--warn">
+          Hệ thống đang chạy trong Docker. Muốn đổi thư mục lưu trên máy chủ, hãy cập nhật biến{' '}
+          <strong>{hostBackupPathConfigKey}</strong> rồi khởi động lại <strong>docker compose</strong>.
+          Nút <strong>Tải về</strong> vẫn cho phép chọn nơi lưu cục bộ trong trình duyệt.
+        </div>
       )}
       {notice && <div className="alert alert--success">{notice}</div>}
       {error && <div className="alert alert--error">{error}</div>}
@@ -460,13 +473,23 @@ export default function AdminBackupPage() {
             />
           </label>
           <label className="field">
-            <span>Thư mục lưu</span>
+            <span>{usesContainerPaths ? 'Thư mục lưu trên máy chủ' : 'Thư mục lưu'}</span>
             <input
-              value={settings.backupPath}
-              onChange={(event) =>
-                setSettings((prev) => (prev ? { ...prev, backupPath: event.target.value } : prev))
+              value={usesContainerPaths ? hostBackupPath : settings.backupPath}
+              readOnly={usesContainerPaths || !canEditBackupPath}
+              onChange={
+                canEditBackupPath
+                  ? (event) =>
+                      setSettings((prev) => (prev ? { ...prev, backupPath: event.target.value } : prev))
+                  : undefined
               }
             />
+            {usesContainerPaths && (
+              <small className="muted">
+                Đây là thư mục Windows/host đã bind mount vào container. Đổi qua biến{' '}
+                {hostBackupPathConfigKey}.
+              </small>
+            )}
           </label>
           <label className="field">
             <span>Số bản lưu giữ</span>
@@ -482,14 +505,30 @@ export default function AdminBackupPage() {
               }
             />
           </label>
+          {usesContainerPaths && (
+            <label className="field">
+              <span>Thư mục lưu trong container</span>
+              <input value={settings.backupPath} readOnly />
+              <small className="muted">
+                Backend trong container thực sự ghi file vào đường dẫn này.
+              </small>
+            </label>
+          )}
           <label className="field">
-            <span>Đường dẫn pg_bin</span>
+            <span>
+              {usesContainerPaths ? 'Đường dẫn pg_dump / pg_restore trong container' : 'Đường dẫn pg_bin'}
+            </span>
             <input
               value={settings.pgBinPath}
-              onChange={(event) =>
-                setSettings((prev) => (prev ? { ...prev, pgBinPath: event.target.value } : prev))
+              readOnly={usesContainerPaths || !canEditPgBinPath}
+              onChange={
+                canEditPgBinPath
+                  ? (event) =>
+                      setSettings((prev) => (prev ? { ...prev, pgBinPath: event.target.value } : prev))
+                  : undefined
               }
             />
+            {usesContainerPaths && <small className="muted">Giá trị mặc định trong Docker thường là /usr/bin.</small>}
           </label>
         </div>
         <div className="form-actions">

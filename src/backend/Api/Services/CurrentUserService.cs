@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using CongNoGolden.Application.Auth;
 using CongNoGolden.Application.Common.Interfaces;
 
 namespace CongNoGolden.Api.Services;
@@ -18,6 +19,11 @@ public sealed class CurrentUserService : ICurrentUser
 
     public IReadOnlyList<string> Roles => _httpContextAccessor.HttpContext?.User
         ?.FindAll(ClaimTypes.Role)
+        .Select(c => c.Value)
+        .ToArray() ?? Array.Empty<string>();
+
+    public IReadOnlyList<string> Permissions => _httpContextAccessor.HttpContext?.User
+        ?.FindAll(AppClaimTypes.Permission)
         .Select(c => c.Value)
         .ToArray() ?? Array.Empty<string>();
 

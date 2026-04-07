@@ -18,6 +18,7 @@ public sealed class Receipt
     public string? AllocationSource { get; set; }
     public DateTimeOffset? AllocationSuggestedAt { get; set; }
     public decimal UnallocatedAmount { get; set; }
+    public bool AutoAllocateEnabled { get; set; } = true;
     public string Status { get; set; } = string.Empty;
     public Guid? ApprovedBy { get; set; }
     public DateTimeOffset? ApprovedAt { get; set; }
@@ -36,9 +37,24 @@ public sealed class ReceiptAllocation
 {
     public Guid Id { get; set; }
     public Guid ReceiptId { get; set; }
+    public Guid? HeldCreditId { get; set; }
     public string TargetType { get; set; } = string.Empty;
     public Guid? InvoiceId { get; set; }
     public Guid? AdvanceId { get; set; }
     public decimal Amount { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
+}
+
+public sealed class ReceiptHeldCredit
+{
+    public Guid Id { get; set; }
+    public Guid ReceiptId { get; set; }
+    public Guid OriginalInvoiceId { get; set; }
+    public decimal OriginalAmount { get; set; }
+    public decimal AmountRemaining { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public Guid? CreatedBy { get; set; }
+    public DateTimeOffset CreatedAt { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; }
+    public int Version { get; set; }
 }

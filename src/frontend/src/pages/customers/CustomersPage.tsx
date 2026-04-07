@@ -6,7 +6,14 @@ import Customer360Section from './Customer360Section'
 import CustomerListSection from './CustomerListSection'
 import CustomerTransactionsSection from './CustomerTransactionsSection'
 
-type CustomerTab = 'invoices' | 'advances' | 'receipts'
+type CustomerTab = 'invoices' | 'advances' | 'receipts' | 'unallocatedReceipts' | 'heldCredits'
+
+const CUSTOMER_MANAGE_PERMISSIONS = [
+  'customer.edit.all',
+  'customer.edit.owned',
+  'customer.edit.unassigned',
+  'customer.assignment.manage',
+] as const
 
 const parseTaxCode = (value: string | null) => {
   const normalized = value?.trim() ?? ''
@@ -14,7 +21,13 @@ const parseTaxCode = (value: string | null) => {
 }
 
 const parseTab = (value: string | null): CustomerTab | undefined => {
-  if (value === 'invoices' || value === 'advances' || value === 'receipts') {
+  if (
+    value === 'invoices' ||
+    value === 'advances' ||
+    value === 'receipts' ||
+    value === 'unallocatedReceipts' ||
+    value === 'heldCredits'
+  ) {
     return value
   }
   return undefined
@@ -29,7 +42,9 @@ export default function CustomersPage() {
   const { state } = useAuth()
   const [searchParams, setSearchParams] = useSearchParams()
   const token = state.accessToken ?? ''
-  const canManageCustomers = state.roles.includes('Admin') || state.roles.includes('Supervisor')
+  const canManageCustomers = state.permissions.some((permission) =>
+    CUSTOMER_MANAGE_PERMISSIONS.includes(permission as (typeof CUSTOMER_MANAGE_PERMISSIONS)[number]),
+  )
 
   const queryTaxCode = useMemo(() => parseTaxCode(searchParams.get('taxCode')), [searchParams])
   const queryTab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams])

@@ -244,6 +244,62 @@ public class VoidReversalTests
     }
 
     [Fact]
+    public async Task AdvanceUnvoidAsync_Rejects_ReusedAdvanceNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+        var (seller, customer) = await SeedMasterAsync(db);
+
+        var voidedAdvance = new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            AdvanceNo = "TH-REUSED",
+            AdvanceDate = new DateOnly(2026, 2, 16),
+            Amount = 150_000m,
+            OutstandingAmount = 0m,
+            Status = "VOID",
+            DeletedAt = DateTimeOffset.UtcNow,
+            DeletedBy = Guid.Parse("abababab-abab-abab-abab-abababababab"),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 2
+        };
+
+        var activeAdvance = new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            AdvanceNo = "TH-REUSED",
+            AdvanceDate = new DateOnly(2026, 2, 17),
+            Amount = 200_000m,
+            OutstandingAmount = 200_000m,
+            Status = "DRAFT",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Advances.AddRange(voidedAdvance, activeAdvance);
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(new[] { "Admin" });
+        var service = new AdvanceService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UnvoidAsync(
+                voidedAdvance.Id,
+                new AdvanceUnvoidRequest(voidedAdvance.Version),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Khoản trả hộ với số chứng từ này đã tồn tại cho người bán và khách hàng này.",
+            error.Message);
+    }
+
+    [Fact]
     public async Task ReceiptUnvoidAsync_RestoresToDraft_AndSelectedState()
     {
         await using var db = _fixture.CreateContext();
@@ -294,6 +350,70 @@ public class VoidReversalTests
         Assert.Null(row.DeletedAt);
         Assert.Null(row.DeletedBy);
         Assert.Equal(6, row.Version);
+    }
+
+    [Fact]
+    public async Task ReceiptUnvoidAsync_Rejects_ReusedReceiptNo()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+        var (seller, customer) = await SeedMasterAsync(db);
+
+        var voidedReceipt = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            ReceiptNo = "PT-REUSED",
+            ReceiptDate = new DateOnly(2026, 2, 18),
+            Amount = 500_000m,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "VOID",
+            AllocationPriority = "ISSUE_DATE",
+            UnallocatedAmount = 0m,
+            Status = "VOID",
+            DeletedAt = DateTimeOffset.UtcNow,
+            DeletedBy = Guid.Parse("cdcdcdcd-cdcd-cdcd-cdcd-cdcdcdcdcdcd"),
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 5
+        };
+
+        var activeReceipt = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            ReceiptNo = "PT-REUSED",
+            ReceiptDate = new DateOnly(2026, 2, 19),
+            Amount = 250_000m,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "UNALLOCATED",
+            AllocationPriority = "ISSUE_DATE",
+            UnallocatedAmount = 0m,
+            Status = "DRAFT",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Receipts.AddRange(voidedReceipt, activeReceipt);
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            service.UnvoidAsync(
+                voidedReceipt.Id,
+                new ReceiptUnvoidRequest(voidedReceipt.Version),
+                CancellationToken.None));
+
+        Assert.Equal(
+            "Phiếu thu với số chứng từ này đã tồn tại cho người bán và khách hàng này.",
+            error.Message);
     }
 
     private static async Task ResetAsync(ConGNoDbContext db)

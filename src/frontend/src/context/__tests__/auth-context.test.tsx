@@ -23,10 +23,15 @@ const buildToken = (payload: Record<string, unknown>) => {
 
 const AuthStatus = () => {
   const { isAuthenticated, isBootstrapping, state } = useAuth()
+  const stateWithPermissions = state as typeof state & { permissions?: string[] }
+  const permissions = Array.isArray(stateWithPermissions.permissions) ? stateWithPermissions.permissions : []
   return (
-    <div data-testid="status">
-      {isAuthenticated ? `auth:${state.username}` : isBootstrapping ? 'boot' : 'guest'}
-    </div>
+    <>
+      <div data-testid="status">
+        {isAuthenticated ? `auth:${state.username}` : isBootstrapping ? 'boot' : 'guest'}
+      </div>
+      <div data-testid="permissions">{permissions.join(',')}</div>
+    </>
   )
 }
 
@@ -67,6 +72,34 @@ describe('AuthProvider bootstrap', () => {
     expect(screen.getByTestId('status')).toHaveTextContent('auth:admin')
   })
 
+  it('decodes permission claims into auth state and persists them after bootstrap refresh', async () => {
+    const token = buildToken({
+      'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'admin',
+      'http://schemas.microsoft.com/ws/2008/06/identity/claims/role': ['Admin'],
+      permission: ['customer.view', 'import.commit.invoice'],
+    })
+    const expiresAt = new Date(Date.now() + 3600_000).toISOString()
+    refreshSession.mockResolvedValueOnce({ accessToken: token, expiresAt })
+
+    render(
+      <AuthProvider>
+        <AuthStatus />
+      </AuthProvider>,
+    )
+
+    await act(async () => {
+      await Promise.resolve()
+    })
+
+    expect(screen.getByTestId('status')).toHaveTextContent('auth:admin')
+    expect(screen.getByTestId('permissions')).toHaveTextContent('customer.view,import.commit.invoice')
+
+    const persistedState = JSON.parse(window.sessionStorage.getItem(AUTH_SESSION_STORAGE_KEY) ?? '{}') as {
+      permissions?: string[]
+    }
+    expect(persistedState.permissions).toEqual(['customer.view', 'import.commit.invoice'])
+  })
+
   it('keeps restored session on bootstrap 401 after reload', async () => {
     const token = buildToken({
       'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name': 'admin',
@@ -80,6 +113,7 @@ describe('AuthProvider bootstrap', () => {
         expiresAt,
         username: 'admin',
         roles: ['Admin'],
+        permissions: ['customer.view', 'import.commit.invoice'],
       }),
     )
     refreshSession.mockRejectedValueOnce(new ApiError('Unauthorized', 401))
@@ -95,6 +129,7 @@ describe('AuthProvider bootstrap', () => {
     })
 
     expect(screen.getByTestId('status')).toHaveTextContent('auth:admin')
+    expect(screen.getByTestId('permissions')).toHaveTextContent('customer.view,import.commit.invoice')
   })
 
   it('falls back to guest when no restored session and bootstrap returns 401', async () => {

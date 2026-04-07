@@ -87,6 +87,76 @@ public class InvoiceCreditReconcileServiceTests
         Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
     }
 
+    [Fact]
+    public async Task RunAsync_SkipsReceipts_WhenAutoAllocateDisabled()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+
+        var receipt = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            ReceiptNo = "PT-HOLD",
+            ReceiptDate = new DateOnly(2026, 1, 21),
+            Amount = 600_000m,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "PARTIAL",
+            AllocationPriority = "ISSUE_DATE",
+            AutoAllocateEnabled = false,
+            UnallocatedAmount = 600_000m,
+            Status = "APPROVED",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            InvoiceTemplateCode = "01GTKT",
+            InvoiceSeries = "AA/23E",
+            InvoiceNo = "INV002",
+            IssueDate = new DateOnly(2026, 2, 2),
+            RevenueExclVat = 400_000m,
+            VatAmount = 100_000m,
+            TotalAmount = 500_000m,
+            OutstandingAmount = 500_000m,
+            InvoiceType = "NORMAL",
+            Status = "OPEN",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Receipts.Add(receipt);
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+
+        using var loggerFactory = LoggerFactory.Create(builder => { });
+        var service = new InvoiceCreditReconcileService(db, loggerFactory.CreateLogger<InvoiceCreditReconcileService>());
+
+        await service.RunAsync(CancellationToken.None);
+
+        var updatedInvoice = await db.Invoices.AsNoTracking().FirstAsync(i => i.Id == invoice.Id);
+        var updatedReceipt = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == receipt.Id);
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.InvoiceId == invoice.Id)
+            .ToListAsync();
+
+        Assert.Empty(allocations);
+        Assert.Equal("OPEN", updatedInvoice.Status);
+        Assert.Equal(500_000m, updatedInvoice.OutstandingAmount);
+        Assert.Equal(600_000m, updatedReceipt.UnallocatedAmount);
+        Assert.Equal("PARTIAL", updatedReceipt.AllocationStatus);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(

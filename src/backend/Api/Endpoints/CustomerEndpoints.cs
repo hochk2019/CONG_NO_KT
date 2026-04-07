@@ -1,6 +1,7 @@
 using CongNoGolden.Api;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
@@ -63,6 +64,7 @@ public static class CustomerEndpoints
             CustomerUpdateRequest request,
             ConGNoDbContext db,
             IAuditService auditService,
+            ICurrentUser currentUser,
             CancellationToken ct) =>
         {
             var key = taxCode.Trim();
@@ -129,6 +131,12 @@ public static class CustomerEndpoints
                     return ApiErrors.InvalidRequest("Manager user not found.");
                 }
                 managerName = string.IsNullOrWhiteSpace(manager.FullName) ? manager.Username : manager.FullName;
+            }
+
+            if (!CustomerPermissionEvaluator.CanUpdateCustomer(currentUser, customer, ownerId, managerId))
+            {
+                return ApiErrors.FromException(
+                    new UnauthorizedAccessException("You do not have permission to update this customer."));
             }
 
             var before = new
@@ -207,7 +215,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    null),
                 ct);
             return Results.Ok(result);
         })
@@ -238,7 +247,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    null),
                 ct);
             return Results.Ok(result);
         })
@@ -254,6 +264,7 @@ public static class CustomerEndpoints
             string? receiptNo,
             DateOnly? from,
             DateOnly? to,
+            bool? unallocatedOnly,
             int? page,
             int? pageSize,
             ICustomerService service,
@@ -269,7 +280,8 @@ public static class CustomerEndpoints
                     from,
                     to,
                     page.GetValueOrDefault(1),
-                    pageSize.GetValueOrDefault(20)),
+                    pageSize.GetValueOrDefault(20),
+                    unallocatedOnly),
                 ct);
             return Results.Ok(result);
         })
@@ -282,6 +294,7 @@ public static class CustomerEndpoints
             CustomerOwnerUpdateRequest request,
             ConGNoDbContext db,
             IAuditService auditService,
+            ICurrentUser currentUser,
             CancellationToken ct) =>
         {
             var key = taxCode.Trim();
@@ -315,6 +328,12 @@ public static class CustomerEndpoints
             if (previousOwner == ownerId)
             {
                 return Results.NoContent();
+            }
+
+            if (!CustomerPermissionEvaluator.CanManageAssignments(currentUser))
+            {
+                return ApiErrors.FromException(
+                    new UnauthorizedAccessException("You do not have permission to reassign customer ownership."));
             }
 
             customer.AccountantOwnerId = ownerId;

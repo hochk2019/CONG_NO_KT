@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -8,7 +8,9 @@ import AdminUsersPage from '../../AdminUsersPage'
 const mocks = vi.hoisted(() => ({
   fetchAdminUsers: vi.fn(),
   fetchAdminRoles: vi.fn(),
+  fetchAdminPermissions: vi.fn(),
   createAdminUser: vi.fn(),
+  updateRolePermissions: vi.fn(),
   updateUserPassword: vi.fn(),
   updateUserRoles: vi.fn(),
   updateUserStatus: vi.fn(),
@@ -18,7 +20,9 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../../api/admin', () => ({
   fetchAdminUsers: mocks.fetchAdminUsers,
   fetchAdminRoles: mocks.fetchAdminRoles,
+  fetchAdminPermissions: mocks.fetchAdminPermissions,
   createAdminUser: mocks.createAdminUser,
+  updateRolePermissions: mocks.updateRolePermissions,
   updateUserPassword: mocks.updateUserPassword,
   updateUserRoles: mocks.updateUserRoles,
   updateUserStatus: mocks.updateUserStatus,
@@ -31,6 +35,7 @@ const buildAuthContext = (): AuthContextValue => ({
     expiresAt: new Date(Date.now() + 60_000).toISOString(),
     username: 'tester',
     roles: ['Admin'],
+    permissions: ['admin.manage'],
   },
   isAuthenticated: true,
   isBootstrapping: false,
@@ -58,8 +63,13 @@ const seedMocks = () => {
     pageSize: 10,
   })
   mocks.fetchAdminRoles.mockResolvedValue([
-    { id: 1, code: 'Admin', name: 'Quản trị' },
-    { id: 2, code: 'Accountant', name: 'Kế toán' },
+    { id: 1, code: 'Admin', name: 'Quản trị', permissions: ['admin.manage', 'audit.view'] },
+    { id: 2, code: 'Accountant', name: 'Kế toán', permissions: ['customer.view'] },
+  ])
+  mocks.fetchAdminPermissions.mockResolvedValue([
+    { code: 'admin.manage', name: 'Quản trị hệ thống' },
+    { code: 'audit.view', name: 'Xem nhật ký' },
+    { code: 'customer.view', name: 'Xem khách hàng' },
   ])
 }
 
@@ -67,6 +77,32 @@ describe('AdminUsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     seedMocks()
+  })
+
+  it('opens role permissions in a modal from the users card header', async () => {
+    const authValue = buildAuthContext()
+    const user = userEvent.setup()
+
+    render(
+      <MemoryRouter>
+        <AuthContext.Provider value={authValue}>
+          <AdminUsersPage />
+        </AuthContext.Provider>
+      </MemoryRouter>,
+    )
+
+    const openButton = await screen.findByRole('button', { name: 'Quyền theo vai trò' })
+    await user.click(openButton)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Quyền theo vai trò' })
+    expect(dialog).toHaveTextContent('Quản lý tập quyền chi tiết cho từng vai trò hệ thống.')
+    expect(within(dialog).getByLabelText('Vai trò')).toBeInTheDocument()
+    expect(within(dialog).getByText('audit.view (Xem nhật ký)')).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Quyền theo vai trò' })).not.toBeInTheDocument()
+    })
   })
 
   it('opens role editor in a modal', async () => {

@@ -33,8 +33,8 @@ public sealed class ReceiptAutomationServiceTests
         var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var now = DateTimeOffset.UtcNow;
 
-        await SeedInvoiceAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, "INV-01", today.AddDays(-3), 1_000, "APPROVED");
-        await SeedInvoiceAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, "INV-02", today.AddDays(-2), 1_500, "APPROVED");
+        await SeedInvoiceAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, "INV-01", today.AddDays(-3), 1_000, "OPEN");
+        await SeedInvoiceAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, "INV-02", today.AddDays(-2), 1_500, "OPEN");
         await SeedAdvanceAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, today.AddDays(-1), 500, "APPROVED");
 
         await SeedReceiptAsync(seedDb, seller.SellerTaxCode, customer.TaxCode, now, "R-01");
@@ -136,7 +136,7 @@ public sealed class ReceiptAutomationServiceTests
             VatAmount = 0,
             TotalAmount = amount,
             OutstandingAmount = amount,
-            InvoiceType = "SALE",
+            InvoiceType = "NORMAL",
             Status = status,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

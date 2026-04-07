@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Common;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
@@ -450,9 +451,13 @@ public sealed class CustomerService : ICustomerService
 
         var invoiceIdsPage = items.Select(i => i.Id).ToList();
         Dictionary<Guid, List<CustomerReceiptRefDto>> receiptLookup;
+        Dictionary<Guid, List<CustomerInvoiceRefDto>> reductionInvoiceLookup;
+        Dictionary<Guid, List<CustomerInvoiceRefDto>> reducedInvoiceLookup;
         if (invoiceIdsPage.Count == 0)
         {
             receiptLookup = new Dictionary<Guid, List<CustomerReceiptRefDto>>();
+            reductionInvoiceLookup = new Dictionary<Guid, List<CustomerInvoiceRefDto>>();
+            reducedInvoiceLookup = new Dictionary<Guid, List<CustomerInvoiceRefDto>>();
         }
         else
         {
@@ -479,6 +484,68 @@ public sealed class CustomerService : ICustomerService
                     g => g
                         .Select(r => new CustomerReceiptRefDto(r.Id, r.ReceiptNo, r.ReceiptDate, r.Amount))
                         .ToList());
+
+            var reductionRows = await _db.InvoiceReductionApplications
+                .AsNoTracking()
+                .Where(application => invoiceIdsPage.Contains(application.AppliedInvoiceId))
+                .Join(
+                    _db.Invoices.AsNoTracking().Where(invoice => invoice.DeletedAt == null),
+                    application => application.ReductionInvoiceId,
+                    invoice => invoice.Id,
+                    (application, invoice) => new
+                    {
+                        application.AppliedInvoiceId,
+                        invoice.Id,
+                        invoice.InvoiceNo,
+                        invoice.IssueDate,
+                        application.Amount
+                    })
+                .ToListAsync(ct);
+
+            reductionInvoiceLookup = reductionRows
+                .GroupBy(row => row.AppliedInvoiceId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .OrderByDescending(row => row.IssueDate)
+                        .ThenBy(row => row.InvoiceNo)
+                        .Select(row => new CustomerInvoiceRefDto(
+                            row.Id,
+                            row.InvoiceNo,
+                            row.IssueDate,
+                            row.Amount))
+                        .ToList());
+
+            var reducedRows = await _db.InvoiceReductionApplications
+                .AsNoTracking()
+                .Where(application => invoiceIdsPage.Contains(application.ReductionInvoiceId))
+                .Join(
+                    _db.Invoices.AsNoTracking().Where(invoice => invoice.DeletedAt == null),
+                    application => application.AppliedInvoiceId,
+                    invoice => invoice.Id,
+                    (application, invoice) => new
+                    {
+                        application.ReductionInvoiceId,
+                        invoice.Id,
+                        invoice.InvoiceNo,
+                        invoice.IssueDate,
+                        application.Amount
+                    })
+                .ToListAsync(ct);
+
+            reducedInvoiceLookup = reducedRows
+                .GroupBy(row => row.ReductionInvoiceId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .OrderByDescending(row => row.IssueDate)
+                        .ThenBy(row => row.InvoiceNo)
+                        .Select(row => new CustomerInvoiceRefDto(
+                            row.Id,
+                            row.InvoiceNo,
+                            row.IssueDate,
+                            row.Amount))
+                        .ToList());
         }
 
         var mapped = items.Select(i => new CustomerInvoiceDto(
@@ -491,7 +558,13 @@ public sealed class CustomerService : ICustomerService
                 i.Version,
                 i.SellerTaxCode,
                 i.SellerShortName,
-                receiptLookup.TryGetValue(i.Id, out var receipts) ? receipts : Array.Empty<CustomerReceiptRefDto>()))
+                receiptLookup.TryGetValue(i.Id, out var receipts) ? receipts : Array.Empty<CustomerReceiptRefDto>(),
+                reductionInvoiceLookup.TryGetValue(i.Id, out var reductionInvoices)
+                    ? reductionInvoices
+                    : Array.Empty<CustomerInvoiceRefDto>(),
+                reducedInvoiceLookup.TryGetValue(i.Id, out var reducedInvoices)
+                    ? reducedInvoices
+                    : Array.Empty<CustomerInvoiceRefDto>()))
             .ToList();
 
         return new PagedResult<CustomerInvoiceDto>(mapped, page, pageSize, total);
@@ -775,6 +848,13 @@ public sealed class CustomerService : ICustomerService
             query = query.Where(r => r.ReceiptDate <= request.To.Value);
         }
 
+        if (request.UnallocatedOnly == true)
+        {
+            query = query.Where(r =>
+                r.Status == ReceiptStatusCodes.Approved &&
+                r.UnallocatedAmount > 0);
+        }
+
         var total = await query.CountAsync(ct);
         var items = await query
             .OrderByDescending(r => r.ReceiptDate)
@@ -788,6 +868,8 @@ public sealed class CustomerService : ICustomerService
                 r.AppliedPeriodStart,
                 r.Amount,
                 r.UnallocatedAmount,
+                r.AutoAllocateEnabled,
+                r.Version,
                 r.Status,
                 r.SellerTaxCode,
                 _db.Sellers

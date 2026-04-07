@@ -18,6 +18,13 @@ export const receiptStatusLabels: Record<string, string> = {
   VOID: 'Đã hủy',
 }
 
+export const heldCreditStatusLabels: Record<string, string> = {
+  HOLDING: 'Đang treo do hủy HĐ',
+  PARTIAL: 'Đã áp một phần',
+  REAPPLIED: 'Đã áp xong',
+  RELEASED: 'Đã chuyển credit chung',
+}
+
 export const allocationTypeLabels: Record<string, string> = {
   INVOICE: 'Hóa đơn',
   ADVANCE: 'Khoản trả hộ KH',
@@ -28,6 +35,7 @@ export const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 export const CUSTOMER_INVOICE_STATUS_KEY = 'pref.customers.invoiceStatus'
 export const CUSTOMER_ADVANCE_STATUS_KEY = 'pref.customers.advanceStatus'
 export const CUSTOMER_RECEIPT_STATUS_KEY = 'pref.customers.receiptStatus'
+export const CUSTOMER_HELD_CREDIT_STATUS_KEY = 'pref.customers.heldCreditStatus'
 
 export const quickRangeOptions = [
   { value: '', label: 'Tùy chọn' },

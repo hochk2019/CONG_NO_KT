@@ -26,9 +26,9 @@ public sealed class ReportAgingTests
         var (seller, customer) = await SeedMasterAsync(db);
         var asOf = DateOnly.FromDateTime(DateTime.UtcNow.Date);
 
-        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-OK", asOf.AddDays(-10), 1000, "APPROVED");
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-OK", asOf.AddDays(-10), 1000, "OPEN");
         await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-VOID", asOf.AddDays(-5), 500, "VOID");
-        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-FUTURE", asOf.AddDays(5), 700, "APPROVED");
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-FUTURE", asOf.AddDays(5), 700, "OPEN");
         await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, asOf.AddDays(5), 300, "APPROVED");
 
         DapperTypeHandlers.Register();
@@ -106,7 +106,7 @@ public sealed class ReportAgingTests
             VatAmount = 0,
             TotalAmount = amount,
             OutstandingAmount = amount,
-            InvoiceType = "SALE",
+            InvoiceType = "NORMAL",
             Status = status,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

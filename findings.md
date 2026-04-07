@@ -1,5 +1,19 @@
 # Findings - 2026-02-23
 
+## Customer Assignment Import (2026-04-06)
+- Nguồn dữ liệu: `người phụ trách.xlsx`, `376` dòng hữu hiệu, không có MST trùng trong file.
+- Mapping tài khoản phụ trách trong DB hợp lệ cho toàn bộ phạm vi import:
+  - `kt.ngat`, `kt.trang`, `kt.tranghp`, `kt.diem`, `kt.linh`
+- Kết quả ghi dữ liệu:
+  - Tạo mới `138` khách hàng.
+  - Cập nhật `238` khách hàng hiện có.
+  - Gán toàn bộ quản lý về `kt.ngat` (`Phạm Thị Hồng Ngát`).
+- Hậu kiểm sau import:
+  - Không còn khách hàng nào trong file bị thiếu trên DB.
+  - Không còn lệch `accountant_owner_id`.
+  - Không còn lệch `manager_user_id`.
+  - Không còn trường hợp thiếu tên/địa chỉ trong phạm vi yêu cầu nếu DB trước đó để trống.
+
 ## Tracker / Task State
 - `task.md`: không còn checkbox mở (`- [ ]`).
 - Bead còn mở trước khi xử lý: `cng-fwg` (`in_progress`) dù nội dung Phase 60 đã hoàn thành.
@@ -156,3 +170,127 @@
 - Verification trong phiên:
   - `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` => pass (`4/4`).
   - `npm run lint` => pass.
+
+## 2026-03-17 - cng-huj import reduction adjustments
+- Workbook `ReportDetail.xlsx` có 4 dòng âm, tất cả cùng note `Hóa đơn điều chỉnh giảm`, tổng giảm AR `9,158,400`, giảm doanh thu trước VAT `8,480,000`, giảm VAT `678,400`.
+- File có 9 dòng giá trị `0`; 5 dòng note `Hóa đơn bị thay thế`, 4 dòng note `Hóa đơn điều chỉnh thông tin`. Đây là dòng thông tin, không nên ghi nhận tài chính nhưng preview cần nêu rõ lý do skip.
+- Dữ liệu file không đủ để match 1:1 ổn định cho toàn bộ dòng âm:
+  - `2210` / `0110386229`: không có positive exact match.
+  - `2213` / `0103440965`: có 4 positive exact matches, không deterministic.
+  - `2233` / `0310226744-003`: không có exact match.
+  - `2514` / `0310226744`: có 2 exact matches và còn case root/branch ambiguity.
+- Kết luận nghiệp vụ đã chốt:
+  - Dòng âm hợp lệ phải đi theo document type riêng `ADJUSTMENT_REDUCTION`.
+  - Match trực tiếp chỉ dùng khi unique đủ chắc chắn; nếu không thì FIFO trên open receivables của khách hàng đã group theo root MST.
+  - Nếu số giảm vượt toàn bộ công nợ mở thì phần còn lại phải vào held/general credit, không để thành invoice âm đang mở.
+- Điểm chặn kỹ thuật hiện tại:
+  - Parser/staging đang reject số âm ở `ImportInvoiceParser.cs` và `ImportStagingHelpers.cs`.
+  - Commit builder đang hardcode `InvoiceType = "NORMAL"` và `OutstandingAmount = total` trong `ImportCommitBuilders.cs`.
+  - Auto allocation/import reconcile hiện chỉ xử lý invoice outstanding dương trong `ImportCommitService.cs`, `InvoiceCreditReconcileService.cs`, `AllocationEngine.cs`, `CustomerBalanceReconcileService.cs`.
+- `InvoiceType` đã tồn tại trong entity và preview đã có cơ chế hiển thị lý do skip, nên hướng thay đổi phù hợp là mở rộng flow hiện có thay vì tạo bảng/chứng từ tài chính mới hoàn toàn.
+
+## 2026-03-17 - cng-huj verification sync
+- Parser/unit flow đã xanh:
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceParserTests" -v minimal` => `4/4`.
+- Import reduction integration flow đã xanh:
+  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --no-restore -p:BuildInParallel=false -m:1 --filter "FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests"` => `7/7`.
+- Preview validation messages cho dòng thông tin giá trị `0` đã xanh:
+  - `npm --prefix src/frontend run test -- --run src/pages/imports/__tests__/importValidationMessages.test.ts` => `2/2`.
+- Heuristic match cuối cùng đã chốt trong code:
+  - nếu có đúng một open invoice có `OutstandingAmount` bằng chính giá trị reduction thì ưu tiên invoice đó trước;
+  - nếu có `0` hoặc `>1` exact match thì giữ nguyên FIFO theo `IssueDate/CreatedAt`.
+- Lý do heuristic trên được giữ ở mức tối thiểu:
+  - dữ liệu file import không có khóa tham chiếu nguồn ổn định cho mọi dòng âm;
+  - notebook thực tế cho thấy có case không có exact match và có case nhiều exact match, nên chỉ exact-match duy nhất mới đủ an toàn để override FIFO.
+
+## 2026-03-18 - cng-z39 runtime + e2e verification
+- Runtime Docker được rebuild từ snapshot `HEAD` sạch, nên phần verify production-like bám đúng fix đã commit trong `ConGNoDbContext` thay vì ăn theo các thay đổi backend/frontend còn dở trong worktree hiện tại.
+- E2E preview cần locator scope theo dialog:
+  - MST khách hàng mới cũng xuất hiện trong tên file upload tạm, nên `getByText(customerTaxCode)` gây strict-mode violation;
+  - modal preview có cả scrim `Đóng hộp thoại` và button action `Đóng`, nên selector đóng modal phải khóa vào exact button bên trong dialog.
+- Selector ổn định cuối cùng:
+  - preview assert dựa trên `pre.code-block` chứa JSON `"customer_tax_code":"<mst>"`;
+  - close action dùng `previewDialog.getByRole('button', { name: 'Đóng', exact: true })`.
+- Sau khi rebuild runtime, `/health` và `/health/ready` đều trả `ok`, và Playwright scenario import `ADVANCE` với customer mới xác nhận dữ liệu commit xong xuất hiện lại ở workspace `Advances` với nguồn `Import · <batch>`.
+
+## 2026-03-18 - cng-p9o import recovery UX
+- Root cause UX:
+  - Batch `STAGING` có dòng lỗi nhưng history chỉ hiển thị CTA kiểu `Tiếp tục`, không nói rõ batch đang bị chặn hay chỉ cần rà soát.
+  - Workspace import vẫn để `Ghi dữ liệu` khả dụng quá lâu, làm kế toán tưởng hệ thống có thể commit được dù preview vẫn còn lỗi.
+  - Guidance chỉ xuất hiện sau khi mở preview, nên batch lỗi tạo cảm giác bị kẹt thay vì có recovery path.
+- Quick fix đã triển khai:
+  - Thêm `importBatchRecovery.ts` để chuẩn hóa trạng thái `loading/blocked/review/ready`.
+  - `ImportBatchSection` có banner ngữ cảnh + pill trạng thái + đổi nhãn CTA preview theo từng trạng thái.
+  - `handleCommit` chặn commit khi còn lỗi, mở preview và trả thông điệp rõ ràng thay vì tiếp tục gửi commit.
+  - `ImportPreviewModal` có alert hướng dẫn riêng cho `error` và `warning`.
+  - `ImportHistorySection` đổi CTA `Tiếp tục` thành `Kiểm tra lô` và copy summary `Chưa ghi dữ liệu`.
+- Verification:
+  - Targeted vitest cho helper/workspace/preview/history pass `19/19`.
+  - `npm run build` pass.
+  - `npm run lint` không có lỗi mới; còn `1` warning unrelated tại `ReceiptListSection.tsx`.
+- Residual gap sau quick fix:
+  - History API vẫn chưa trả validation counts/sub-status, nên trạng thái blocked/review/ready hiện mới được diễn giải tốt nhất trong workspace đang mở.
+  - UI chưa có grouping triage kiểu `Cần xử lý ngay` / `Sẵn sàng ghi`.
+  - Recovery action vẫn mới dừng ở mức “xem lỗi/rà soát/hủy”, chưa có flow tải lại file đã sửa ngay từ cùng ngữ cảnh.
+
+## 2026-03-18 - cng-0ye redesign plan
+- Đã tạo bead follow-up `cng-0ye` để giữ scope redesign dài hạn tách biệt khỏi quick fix `cng-p9o`.
+- Hướng redesign đề xuất:
+  - API/status model:
+    - trả `okCount/warnCount/errorCount` hoặc staging sub-status riêng cho history;
+    - cho phép UI biết lô đang `blocked`, `review`, hay `ready` mà không cần fetch full preview trước.
+  - History triage:
+    - gom nhóm lô theo mức ưu tiên xử lý;
+    - hiển thị nhãn tiếng Việt rõ ràng như `Có lỗi cần sửa`, `Cần rà soát`, `Sẵn sàng ghi`.
+  - Workspace ergonomics:
+    - chỉ đưa CTA phù hợp với trạng thái hiện tại lên primary;
+    - giảm phụ thuộc vào preview modal để hiểu “cần làm gì tiếp theo”.
+  - Rollout/testing:
+    - giữ backward-compatible với quick fix hiện tại;
+    - thêm regression/e2e cho từng staging sub-status mới.
+
+## 2026-03-18 - cng-z25 template parser regression
+- Root cause:
+  - `cng-huj` chỉ sửa [ImportInvoiceParser.cs](E:/GPT/CONG_NO_KT/src/backend/Infrastructure/Services/ImportInvoiceParser.cs) cho file kiểu `ReportDetail`.
+  - File INVOICE dạng template vẫn đi qua [ImportInvoiceTemplateParser.cs](E:/GPT/CONG_NO_KT/src/backend/Infrastructure/Services/ImportInvoiceTemplateParser.cs) từ [ImportStagingService.cs](E:/GPT/CONG_NO_KT/src/backend/Infrastructure/Services/ImportStagingService.cs).
+  - Parser template còn hardcode rule `revenue < 0 || vat < 0 || total < 0 => NEGATIVE_AMOUNT`, nên dòng `Hóa đơn điều chỉnh giảm` bị `SKIP`.
+- Fix đã triển khai:
+  - thêm nhận diện `IsReductionAdjustmentNote(note)` cho parser template;
+  - bỏ `NEGATIVE_AMOUNT` với dòng adjustment hợp lệ;
+  - giữ nguyên MST gốc ở `customer_tax_code`;
+  - thêm `customer_tax_code_matching` theo root MST;
+  - set `invoice_type = ADJUSTMENT_REDUCTION`.
+- Regression test:
+  - thêm case đỏ/xanh tại [ImportInvoiceTemplateParserTests.cs](E:/GPT/CONG_NO_KT/src/backend/Tests.Unit/ImportInvoiceTemplateParserTests.cs) để khóa behavior template import.
+- Verification:
+  - test đỏ tái hiện lỗi: expected `INSERT`, actual `SKIP`;
+  - targeted parser tests sau fix pass `7/7`.
+
+## 2026-03-18 - cng-h1d frontend prefetch alignment
+- Root cause:
+  - auth state/frontend gating đã bắt đầu đi theo `permissions`, nhưng [pageLoaders.ts](E:/GPT/CONG_NO_KT/src/frontend/src/pages/pageLoaders.ts) vẫn chọn affinity/prefetch budget từ `roles` thuần.
+  - [AppShell.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/layouts/AppShell.tsx) cũng chưa truyền `state.permissions` vào prefetch planner, nên user không có role nhưng có permission accountant vẫn bị fallback sang thứ tự generic.
+- Fix đã triển khai:
+  - thêm mapping `rolePermissionSignals` + helper `hasAnyPermission(...)` để suy ra effective role từ `roles + permissions`;
+  - cập nhật `computePrefetchBudget`, `computePrefetchPlan`, `selectPrefetchTargets` nhận `permissions`;
+  - cập nhật [page-loaders.test.ts](E:/GPT/CONG_NO_KT/src/frontend/src/pages/__tests__/page-loaders.test.ts) và [AppShell.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/layouts/AppShell.tsx) để khóa regression cho permission-only users.
+- Verification:
+  - `npm --prefix src/frontend run test -- --run src/pages/__tests__/page-loaders.test.ts` => `10/10`;
+  - `npm --prefix src/frontend run test -- --run src/layouts/__tests__/app-shell.test.tsx` => `9/9`.
+- Residual gap:
+  - đây mới là alignment cho prefetch/navigation heuristics;
+  - Phase 110 vẫn còn các slice lớn hơn về backend permission matrix, customer edit/import commit permissions, và admin permission management.
+
+## 2026-03-19 - cng-h1d permission matrix closure
+- Current state confirmed:
+  - customer manage gating và import commit gating ở frontend đã chuyển sang permission-first, không còn fallback role cứng cho các flow accountant cần dùng;
+  - admin UI đã có [RolePermissionsManager](E:/GPT/CONG_NO_KT/src/frontend/src/pages/admin/RolePermissionsManager.tsx) và được gắn vào [AdminUsersPage.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/AdminUsersPage.tsx);
+  - backend đã đăng ký các route permission management (`/admin/permissions`, `/admin/roles/{roleId:int}/permissions`) và có route test tương ứng.
+- Fix hoàn tất trong lượt này:
+  - loại import React trùng trong [CustomersPage.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/customers/CustomersPage.tsx) để tránh lỗi build/lint;
+  - cập nhật regression test [role-permissions-manager.test.tsx](E:/GPT/CONG_NO_KT/src/frontend/src/pages/admin/__tests__/role-permissions-manager.test.tsx) để chọn đúng `select` option theo `role.id`, khớp contract thực của component.
+- Verification:
+  - `npm --prefix src/frontend run test -- --run src/context/__tests__/auth-guards.test.tsx src/pages/customers/__tests__/customers-page.permissions.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/admin/__tests__/admin-users-page.test.tsx` => `16/16`;
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~AdminEndpointsRouteTests" -v minimal` => `1/1`.
+- Status:
+  - checklist Phase 110 đã đủ bằng chứng để đóng bead `cng-h1d`.

@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 namespace CongNoGolden.Application.Receipts;
 
 public sealed record ReceiptDraftUpdateRequest(
-    string? ReceiptNo,
+    string ReceiptNo,
     DateOnly ReceiptDate,
     decimal Amount,
     string AllocationMode,

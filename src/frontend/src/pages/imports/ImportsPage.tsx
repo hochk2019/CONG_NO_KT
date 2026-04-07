@@ -32,8 +32,7 @@ const resolveImportType = (value: string | null): ImportType | null => {
 export default function ImportsPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
-  const canStage = state.roles.some((role) => ['Admin', 'Supervisor', 'Accountant'].includes(role))
-  const canCommit = state.roles.includes('Admin') || state.roles.includes('Supervisor')
+  const hasPermission = (permission: string) => state.permissions.includes(permission)
 
   const location = useLocation()
   const navigate = useNavigate()
@@ -42,6 +41,16 @@ export default function ImportsPage() {
   const queryTabParam = useMemo(() => searchParams.get('tab'), [searchParams])
   const fixedType = useMemo(() => resolveImportType(searchParams.get('type')), [searchParams])
   const activeTab = useMemo(() => resolveTab(queryTabParam ?? storedTab), [queryTabParam, storedTab])
+  const canStage = hasPermission('import.upload')
+  const canCommitByType = {
+    INVOICE: hasPermission('import.commit.invoice'),
+    ADVANCE: hasPermission('import.commit.advance'),
+    RECEIPT: hasPermission('import.commit.receipt'),
+  } satisfies Record<ImportType, boolean>
+  const batchCanCommit = fixedType
+    ? canCommitByType[fixedType]
+    : canCommitByType.INVOICE || canCommitByType.ADVANCE || canCommitByType.RECEIPT
+  const manualCanCommit = canCommitByType.INVOICE
 
   useEffect(() => {
     storeTab(activeTab)
@@ -99,9 +108,14 @@ export default function ImportsPage() {
       </div>
 
       {activeTab === 'batch' && (
-        <ImportBatchSection token={token} canStage={canStage} canCommit={canCommit} fixedType={fixedType ?? undefined} />
+        <ImportBatchSection
+          token={token}
+          canStage={canStage}
+          canCommit={batchCanCommit}
+          fixedType={fixedType ?? undefined}
+        />
       )}
-      {activeTab === 'manual' && <ManualInvoicesSection token={token} canCommit={canCommit} />}
+      {activeTab === 'manual' && <ManualInvoicesSection token={token} canCommit={manualCanCommit} />}
     </div>
   )
 }

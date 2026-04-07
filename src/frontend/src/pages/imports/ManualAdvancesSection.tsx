@@ -17,6 +17,7 @@ import {
 } from '../../api/lookups'
 import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
+import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import {
@@ -60,6 +61,7 @@ const DEFAULT_SOURCE_FILTER = ''
 type ManualAdvancesSectionProps = {
   token: string
   canApprove: boolean
+  onImportTemplate?: () => void
 }
 
 type ManualAdvanceConfirmAction = 'approve' | 'void' | 'unvoid'
@@ -69,7 +71,11 @@ type ManualAdvanceConfirmState = {
   row: AdvanceListItem
 }
 
-export default function ManualAdvancesSection({ token, canApprove }: ManualAdvancesSectionProps) {
+export default function ManualAdvancesSection({
+  token,
+  canApprove,
+  onImportTemplate,
+}: ManualAdvancesSectionProps) {
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -288,6 +294,10 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
       setFieldError('advanceDate', 'Vui lòng chọn ngày trả hộ.')
       hasError = true
     }
+    if (!advanceNo.trim()) {
+      setFieldError('advanceNo', 'Vui lòng nhập số chứng từ.')
+      hasError = true
+    }
     const amountValue = Number(amount)
     if (!Number.isFinite(amountValue) || amountValue <= 0) {
       setFieldError('amount', 'Số tiền không hợp lệ.')
@@ -301,7 +311,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
     return {
       sellerTaxCode: sellerTaxCode.trim(),
       customerTaxCode: customerTaxCode.trim(),
-      advanceNo: advanceNo.trim() || null,
+      advanceNo: advanceNo.trim(),
       advanceDate: advanceDate.trim(),
       amount: amountValue,
       description: description.trim() || undefined,
@@ -506,7 +516,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
   const hasSelectedRows = selectedAdvanceIds.length > 0
   const quickCreateModeLabel = canApprove
     ? 'Hồ sơ đủ thông tin có thể tạo và phê duyệt ngay trên cùng một nhịp thao tác.'
-    : 'Tài khoản hiện tại chỉ tạo nháp; bước phê duyệt sẽ do Admin hoặc Supervisor xử lý.'
+    : 'Tài khoản hiện tại chỉ tạo nháp; cần bật quyền Duyệt và quản lý trả hộ để phê duyệt ngay.'
 
   const handleBulkAction = (action: ManualAdvanceConfirmAction) => {
     if (action === 'approve' && selectedApproveCount === 0) return
@@ -662,13 +672,22 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
       <section className="card">
         <div className="advances-create-shell">
           <div className="advances-create-main">
-            <div className="advances-section-header">
-              <span className="advances-section-kicker">Tạo nhanh</span>
-              <h3>Tạo khoản trả hộ KH</h3>
-              <p className="muted advances-section-lead">
-                Ưu tiên hoàn thành MST bên bán, MST bên mua, ngày trả hộ và số tiền trước. Số chứng từ
-                và ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
-              </p>
+            <div className="advances-section-header advances-section-header--split">
+              <div className="advances-section-header__copy">
+                <span className="advances-section-kicker">Tạo nhanh</span>
+                <h3>Tạo khoản trả hộ KH</h3>
+                <p className="muted advances-section-lead">
+                  Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền
+                  trước. Ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
+                </p>
+              </div>
+              {onImportTemplate ? (
+                <div className="advances-section-header__actions">
+                  <button className="btn btn-ghost" type="button" onClick={onImportTemplate}>
+                    Import từ template
+                  </button>
+                </div>
+              ) : null}
             </div>
 
             <div className="advances-create-toolbar" aria-label="Trạng thái tạo nhanh">
@@ -679,7 +698,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
                 <span className="muted">{quickCreateModeLabel}</span>
               </div>
               <p className="muted advances-create-tip">
-                Điền 4 trường bắt buộc trước, trường phụ chỉ bổ sung khi cần đối chiếu hoặc truy vết.
+                Điền đủ các trường bắt buộc trước, trường phụ chỉ bổ sung khi cần đối chiếu hoặc truy vết.
               </p>
             </div>
 
@@ -748,14 +767,11 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
               </label>
               <label className={fieldErrors.amount ? 'field field--error advances-field-primary' : 'field advances-field-primary'}>
                 <span>Số tiền</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={amount}
-                  onChange={(event) => {
-                    setAmount(event.target.value)
-                    const amountValue = Number(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setAmount(nextValue)
+                    const amountValue = Number(nextValue)
                     if (Number.isFinite(amountValue) && amountValue > 0) {
                       setFieldError('amount')
                     }
@@ -770,13 +786,30 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
                 />
                 {fieldErrors.amount && <span className="field-error">{fieldErrors.amount}</span>}
               </label>
-              <label className="field advances-field-secondary">
+              <label
+                className={
+                  fieldErrors.advanceNo
+                    ? 'field field--error advances-field-secondary'
+                    : 'field advances-field-secondary'
+                }
+              >
                 <span>Số chứng từ</span>
                 <input
                   value={advanceNo}
-                  onChange={(event) => setAdvanceNo(event.target.value)}
+                  onChange={(event) => {
+                    setAdvanceNo(event.target.value)
+                    if (event.target.value.trim()) {
+                      setFieldError('advanceNo')
+                    }
+                  }}
+                  onBlur={() => {
+                    if (!advanceNo.trim()) {
+                      setFieldError('advanceNo', 'Vui lòng nhập số chứng từ.')
+                    }
+                  }}
                   placeholder="VD: CT-001"
                 />
+                {fieldErrors.advanceNo && <span className="field-error">{fieldErrors.advanceNo}</span>}
               </label>
               <label className="field field-span-full advances-field-secondary advances-field-notes">
                 <span>Ghi chú</span>
@@ -792,7 +825,7 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
 
             <div className="advances-submit-row">
               <div className="advances-submit-row__copy">
-                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp để chuyển người duyệt.'}</strong>
+                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp khi chưa bật quyền duyệt.'}</strong>
                 <span className="muted">{quickCreateModeLabel}</span>
               </div>
               <div className="advances-submit-row__buttons">
@@ -965,26 +998,20 @@ export default function ManualAdvancesSection({ token, canApprove }: ManualAdvan
               </label>
               <label className="field">
                 <span>Số tiền từ</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={listAmountMin}
-                  onChange={(event) => {
-                    setListAmountMin(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setListAmountMin(nextValue)
                     setListPage(1)
                   }}
                 />
               </label>
               <label className="field">
                 <span>Số tiền đến</span>
-                <input
-                  type="number"
-                  min="0"
-                  inputMode="decimal"
+                <MoneyInput
                   value={listAmountMax}
-                  onChange={(event) => {
-                    setListAmountMax(event.target.value)
+                  onValueChange={(nextValue) => {
+                    setListAmountMax(nextValue)
                     setListPage(1)
                   }}
                 />

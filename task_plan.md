@@ -121,3 +121,108 @@ Hoàn tất UX validation cho Import dropzone theo bead `cng-9y1`: báo lỗi s�
 - [x] `npm run test -- --run src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` pass (`4/4`).
 - [x] `npm run lint` pass.
 - [x] `bd show cng-9y1` ở trạng thái `CLOSED`.
+
+---
+
+## Goal (Update 2026-03-17 - cng-huj)
+Hoàn tất feature import hóa đơn điều chỉnh giảm từ dòng âm: staging chấp nhận dòng âm hợp lệ, commit tạo chứng từ `ADJUSTMENT_REDUCTION`, phân bổ theo unique direct match hoặc FIFO theo root MST, và phần giảm trừ vượt công nợ mở được chuyển sang held credit.
+
+## Tasks (Update 2026-03-17 - cng-huj)
+- [x] Mở bead `cng-huj`, chuyển `in_progress`, và đồng bộ tracker root files.
+- [x] Viết failing tests cho parser/staging/preview với dòng âm `Hóa đơn điều chỉnh giảm` và dòng `0` chỉ mang tính thông tin.
+- [x] Viết failing tests cho commit `ADJUSTMENT_REDUCTION`, root-MST grouping, FIFO fallback, và residual held credit.
+- [x] Implement thay đổi backend import/allocation/reconcile để đáp ứng nghiệp vụ mới.
+- [x] Nếu preview UI cần thay đổi, cập nhật frontend regression cho skip reason và hiển thị document type hợp lệ.
+- [x] Chạy targeted verification và cập nhật lại bead/task sau khi hoàn tất.
+
+## Done When (Update 2026-03-17 - cng-huj)
+- [x] Negative adjustment rows không còn bị reject ở staging.
+- [x] Commit không tạo open negative invoice; phần vượt chuyển held credit/carry-forward credit.
+- [x] Root MST grouping xử lý đúng case `0310226744-003` với customer gốc `0310226744`.
+- [x] Preview hiển thị lý do skip cho các dòng giá trị `0`.
+- [x] Test suite targeted cho import/allocate/held-credit pass và bead `cng-huj` được cập nhật đúng trạng thái.
+
+---
+
+## Goal (Update 2026-03-18 - cng-z39)
+Đóng bead fix ADVANCE import missing-customer sau khi runtime Docker đang chạy được rebuild lại và có bằng chứng E2E cho đúng luồng nghiệp vụ accountant import -> preview -> commit -> tra cứu ở Advances.
+
+## Tasks (Update 2026-03-18 - cng-z39)
+- [x] Thêm Playwright E2E tạo file `ADVANCE` tạm từ template với customer mới và description duy nhất.
+- [x] Verify preview modal, commit success alert, và dòng dữ liệu vừa import xuất hiện trong `/advances` với filter `Nguồn dữ liệu = IMPORT`.
+- [x] Rebuild/redeploy `api` từ snapshot `HEAD` sạch để tránh kéo theo thay đổi ngoài phạm vi bead.
+- [x] Chạy backend targeted verification + health check runtime + Playwright E2E sau rebuild.
+
+## Done When (Update 2026-03-18 - cng-z39)
+- [x] Runtime `congno-api` restart thành công trên stack hiện hành.
+- [x] `/health` và `/health/ready` đều `ok`.
+- [x] Targeted backend tests pass.
+- [x] E2E business flow import `ADVANCE` với customer mới pass.
+
+---
+
+## Goal (Update 2026-03-18 - cng-p9o)
+Hoàn tất quick fix cho import recovery UX khi batch `STAGING` còn lỗi: kế toán phải nhìn thấy trạng thái bị chặn rõ ràng, biết bước tiếp theo cần làm gì, và không thể bấm commit trong trạng thái dead-end.
+
+## Tasks (Update 2026-03-18 - cng-p9o)
+- [x] Reproduce luồng stuck hiện tại từ UI thật và chốt pain points của kế toán.
+- [x] Tạo batch recovery state dùng chung để đổi CTA/copy cho `blocked/review/ready`.
+- [x] Chặn commit khi còn dòng lỗi và dẫn người dùng sang preview để xem lỗi thay vì cho commit tiếp.
+- [x] Bổ sung banner/alert hướng dẫn tiếng Việt trong workspace + preview + history.
+- [x] Chạy targeted verification frontend và đồng bộ tracker/notebook.
+
+## Done When (Update 2026-03-18 - cng-p9o)
+- [x] Batch lỗi hiển thị trạng thái bị chặn rõ ràng ngay trong workspace/history.
+- [x] Commit không còn khả dụng khi batch vẫn có dòng lỗi.
+- [x] Người dùng thấy rõ recovery path tối thiểu: xem lỗi, rà soát, hoặc hủy lô.
+- [x] Test/frontend build pass và bead `cng-p9o` đủ điều kiện đóng.
+
+---
+
+## Goal (Planned 2026-03-18 - cng-0ye)
+Thiết kế lại import recovery workflow theo hướng accountant-first để history/workspace thể hiện đúng mức độ nghiêm trọng và hành động ưu tiên mà không phụ thuộc quá nhiều vào preview modal.
+
+## Tasks (Planned 2026-03-18 - cng-0ye)
+- [ ] Mở rộng API/history với validation counts hoặc staging sub-status đủ giàu.
+- [ ] Thiết kế lại history/workspace theo nhóm trạng thái `Có lỗi cần sửa` / `Cần rà soát` / `Sẵn sàng ghi`.
+- [ ] Đưa next-best-action lên primary CTA theo từng trạng thái.
+- [ ] Bổ sung regression/e2e coverage cho workflow mới và lộ trình rollout từ quick fix hiện tại.
+
+## Done When (Planned 2026-03-18 - cng-0ye)
+- [ ] Kế toán có thể hiểu tình trạng lô và bước tiếp theo ngay từ history/workspace.
+- [ ] Commit chỉ là CTA chính khi batch thực sự sẵn sàng ghi.
+- [ ] UI/API/tests phản ánh nhất quán staging sub-status mới.
+
+---
+
+## Goal (Update 2026-03-18 - cng-z25)
+Đóng regression của import INVOICE dạng template: dòng âm có ghi chú `Hóa đơn điều chỉnh giảm` phải được stage như `ADJUSTMENT_REDUCTION`, không còn bị skip với lỗi `Số tiền âm không hợp lệ`.
+
+## Tasks (Update 2026-03-18 - cng-z25)
+- [x] Xác định root cause bằng cách đối chiếu parser `ReportDetail` và parser `template`.
+- [x] Viết failing test cho `ImportInvoiceTemplateParser` với dòng âm adjustment.
+- [x] Cập nhật parser template để mirror rule của `cng-huj`: chấp nhận dòng âm hợp lệ, preserve branch MST, thêm root matching MST và `invoice_type`.
+- [x] Chạy lại targeted unit tests cho cả hai parser và đồng bộ tracker/notebook.
+
+## Done When (Update 2026-03-18 - cng-z25)
+- [x] Template import không còn gắn `NEGATIVE_AMOUNT` cho dòng `Hóa đơn điều chỉnh giảm`.
+- [x] RawData chứa `invoice_type = ADJUSTMENT_REDUCTION` và `customer_tax_code_matching`.
+- [x] Targeted parser tests pass và bead `cng-z25` đủ điều kiện đóng.
+
+---
+
+## Goal (Update 2026-03-18 - cng-h1d)
+Tiếp tục Phase 110 theo hướng permission-first: loại dần các heuristic hardcode theo role ở frontend/backend, ưu tiên những điểm gây lệch hành vi thực tế cho accountant khi auth state đã có `permissions`.
+
+## Tasks (Update 2026-03-18 - cng-h1d)
+- [x] Xác định slice frontend còn lệch: `pageLoaders.ts`/`AppShell.tsx` vẫn prefetch theo `roles` dù gating đã dựa trên `permissions`.
+- [x] Viết regression test cho permission-only users ở prefetch target selection và prefetch plan.
+- [x] Refactor prefetch planner để suy ra effective role từ `roles + permissions`, đồng thời truyền `state.permissions` từ `AppShell`.
+- [x] Tiếp tục rà các gate còn hardcode role trong customer edit, import commit, và admin permission management.
+- [x] Chạy broader verification cho các slice tiếp theo rồi mới cập nhật bead/task trạng thái hoàn tất.
+- [x] Đồng bộ notebook sau verify xanh và chuẩn bị đóng bead `cng-h1d`.
+
+## Done When (Update 2026-03-18 - cng-h1d)
+- [x] Permission-only accountant-like users không còn rơi về generic prefetch fallback.
+- [x] App shell truyền đủ context `permissions` cho page prefetch planner.
+- [x] Các flow business chính của Phase 110 đều chạy theo permission matrix thay vì role cứng, có test backend/frontend tương ứng.

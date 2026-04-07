@@ -36,6 +36,7 @@ public static class ImportInvoiceTemplateParser
             var vat = ImportStagingHelpers.ParseDecimal(GetCellCell(row, map, "vat_amount"));
             var total = ImportStagingHelpers.ParseDecimal(GetCellCell(row, map, "total_amount"));
             var note = GetCell(row, map, "note");
+            var isReductionAdjustment = ImportStagingHelpers.IsReductionAdjustmentNote(note);
 
             if (total <= 0)
             {
@@ -50,7 +51,7 @@ public static class ImportInvoiceTemplateParser
             {
                 messages.Add("ISSUE_DATE_REQUIRED");
             }
-            if (revenue < 0 || vat < 0 || total < 0)
+            if (!isReductionAdjustment && (revenue < 0 || vat < 0 || total < 0))
             {
                 messages.Add("NEGATIVE_AMOUNT");
             }
@@ -69,6 +70,11 @@ public static class ImportInvoiceTemplateParser
                 ["total_amount"] = total,
                 ["note"] = note
             };
+            if (isReductionAdjustment)
+            {
+                raw["customer_tax_code_matching"] = ImportStagingHelpers.GetRootCustomerTaxCode(customer);
+                raw["invoice_type"] = "ADJUSTMENT_REDUCTION";
+            }
 
             var dedupKey = ImportStagingHelpers.BuildKey(
                 seller,

@@ -8,7 +8,12 @@ public sealed record BackupSettingsDto(
     string ScheduleTime,
     string Timezone,
     string PgBinPath,
-    DateTimeOffset? LastRunAt);
+    DateTimeOffset? LastRunAt,
+    bool UsesContainerPaths,
+    string? HostBackupPath,
+    string? HostBackupPathConfigKey,
+    bool CanEditBackupPath,
+    bool CanEditPgBinPath);
 
 public sealed record BackupSettingsUpdateRequest(
     bool Enabled,

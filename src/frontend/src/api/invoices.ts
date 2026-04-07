@@ -6,6 +6,10 @@ export type InvoiceVoidResult = {
   version: number
   outstandingAmount: number
   replacementInvoiceId?: string | null
+  heldCreditAmount: number
+  heldCreditCount: number
+  restoredHeldCreditAmount: number
+  restoredHeldCreditCount: number
 }
 
 export const voidInvoice = async (
@@ -13,7 +17,6 @@ export const voidInvoice = async (
   invoiceId: string,
   payload: {
     reason: string
-    replacementInvoiceId?: string | null
     force?: boolean
     version: number
   },
@@ -23,7 +26,6 @@ export const voidInvoice = async (
     token,
     body: {
       reason: payload.reason,
-      replacementInvoiceId: payload.replacementInvoiceId ?? null,
       force: payload.force ?? false,
       version: payload.version,
     },

@@ -101,8 +101,17 @@ public class ImportInvoiceTemplateParserTests
 
         var messages = ReadMessages(rows[0].ValidationMessages);
         Assert.DoesNotContain("ISSUE_DATE_REQUIRED", messages);
+        Assert.Equal("2300328765", ReadRawString(rows[0].RawData, "seller_tax_code"));
+        Assert.Equal("0101000002", ReadRawString(rows[0].RawData, "customer_tax_code"));
         Assert.Equal("2026-01-15", ReadRawString(rows[0].RawData, "issue_date"));
         Assert.Equal("Cong ty TNHH Mau", ReadRawString(rows[0].RawData, "customer_name"));
+        Assert.Equal("1C25THK", ReadRawString(rows[0].RawData, "invoice_template_code"));
+        Assert.Equal("AA/26E", ReadRawString(rows[0].RawData, "invoice_series"));
+        Assert.Equal("0000123", ReadRawString(rows[0].RawData, "invoice_no"));
+        Assert.Equal(10000000m, ReadRawDecimal(rows[0].RawData, "revenue_excl_vat"));
+        Assert.Equal(800000m, ReadRawDecimal(rows[0].RawData, "vat_amount"));
+        Assert.Equal(10800000m, ReadRawDecimal(rows[0].RawData, "total_amount"));
+        Assert.Equal("Hoa don mau cho doi soat", ReadRawString(rows[0].RawData, "note"));
     }
 
     private static void WriteHeaderMissingIssueDate(IXLWorksheet sheet)
@@ -137,6 +146,12 @@ public class ImportInvoiceTemplateParserTests
     {
         using var doc = JsonDocument.Parse(raw ?? "{}");
         return doc.RootElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+    }
+
+    private static decimal ReadRawDecimal(string? raw, string property)
+    {
+        using var doc = JsonDocument.Parse(raw ?? "{}");
+        return doc.RootElement.TryGetProperty(property, out var value) ? value.GetDecimal() : 0m;
     }
 
     private static string FindRepoFile(params string[] relativeSegments)

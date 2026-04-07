@@ -243,6 +243,55 @@ public class ImportTemplateParserTests
         Assert.Contains("DUP_IN_FILE", ReadMessages(rows[1].ValidationMessages));
     }
 
+    [Fact]
+    public void Advance_SystemTemplateFile_Parses_All_SnakeCase_Columns()
+    {
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "advance_template.xlsx");
+
+        using var workbook = new XLWorkbook(templatePath);
+        var sheet = workbook.Worksheet("Data");
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Advance);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusOk, rows[0].ValidationStatus);
+
+        var messages = ReadMessages(rows[0].ValidationMessages);
+        Assert.DoesNotContain("ADVANCE_DATE_REQUIRED", messages);
+        Assert.Equal("2300328765", ReadRawString(rows[0].RawData, "seller_tax_code"));
+        Assert.Equal("0101000002", ReadRawString(rows[0].RawData, "customer_tax_code"));
+        Assert.Equal("TH-2026-0001", ReadRawString(rows[0].RawData, "advance_no"));
+        Assert.Equal("2026-01-10", ReadRawString(rows[0].RawData, "advance_date"));
+        Assert.Equal(1500000m, ReadRawDecimal(rows[0].RawData, "amount"));
+        Assert.Equal("Tra ho cuoc van chuyen", ReadRawString(rows[0].RawData, "description"));
+    }
+
+    [Fact]
+    public void Receipt_SystemTemplateFile_Parses_All_SnakeCase_Columns()
+    {
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "receipt_template.xlsx");
+
+        using var workbook = new XLWorkbook(templatePath);
+        var sheet = workbook.Worksheet("Data");
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusOk, rows[0].ValidationStatus);
+
+        var messages = ReadMessages(rows[0].ValidationMessages);
+        Assert.DoesNotContain("RECEIPT_DATE_REQUIRED", messages);
+        Assert.DoesNotContain("APPLIED_PERIOD_REQUIRED", messages);
+        Assert.Equal("2300328765", ReadRawString(rows[0].RawData, "seller_tax_code"));
+        Assert.Equal("0101000002", ReadRawString(rows[0].RawData, "customer_tax_code"));
+        Assert.Equal("PT-2026-0001", ReadRawString(rows[0].RawData, "receipt_no"));
+        Assert.Equal("2026-01-12", ReadRawString(rows[0].RawData, "receipt_date"));
+        Assert.Equal("2026-01-01", ReadRawString(rows[0].RawData, "applied_period_start"));
+        Assert.Equal(2500000m, ReadRawDecimal(rows[0].RawData, "amount"));
+        Assert.Equal("BANK", ReadRawString(rows[0].RawData, "method"));
+        Assert.Equal("Thu cong no thang 01/2026", ReadRawString(rows[0].RawData, "description"));
+    }
+
     private static void WriteReceiptHeader(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";
@@ -285,5 +334,29 @@ public class ImportTemplateParserTests
     {
         using var doc = JsonDocument.Parse(raw ?? "{}");
         return doc.RootElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+    }
+
+    private static decimal ReadRawDecimal(string? raw, string property)
+    {
+        using var doc = JsonDocument.Parse(raw ?? "{}");
+        return doc.RootElement.TryGetProperty(property, out var value) ? value.GetDecimal() : 0m;
+    }
+
+    private static string FindRepoFile(params string[] relativeSegments)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeSegments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Không tìm thấy file kiểm thử cần thiết: {Path.Combine(relativeSegments)}");
     }
 }

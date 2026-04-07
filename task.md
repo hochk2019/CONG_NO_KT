@@ -40,6 +40,18 @@
   - `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests"`: pass.
   - `dotnet test src\\backend\\Tests.Integration\\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests.StageInvoice_SystemTemplateFile_Preserves_IssueDate"`: pass.
 
+## Phase 123 - Audit generic import parser normalization and protect snake_case system templates (2026-04-07) [bead: cng-qf6]
+- [x] Rà lại parser import generic đang dùng cho `ADVANCE` và `RECEIPT`, xác nhận logic match header vẫn còn dò token snake_case thô trên chuỗi header đã normalize.
+- [x] Sửa `ImportTemplateParser` để normalize cả token trước khi `Contains`, đồng bộ hành vi với fix đã áp cho `ImportInvoiceTemplateParser`.
+- [x] Bổ sung regression tests dùng file template hệ thống thật (`advance_template.xlsx`, `receipt_template.xlsx`, `invoice_template.xlsx`) để khóa toàn bộ cột snake_case quan trọng.
+- [x] Mở rộng integration tests `ImportStagingDuplicateDetectionTests` để xác nhận các file template thật đi qua staging vẫn preserve đầy đủ raw field snake_case.
+- [x] Chạy verify sau thay đổi và đồng bộ lại bead + `task.md`.
+
+### Verification evidence (2026-04-07, phase 123 / cng-qf6)
+- [x] `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportTemplateParserTests" -v minimal` => pass (`12/12`).
+- [x] `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests" -v minimal` => pass (`4/4`).
+- [x] `dotnet test src\\backend\\Tests.Integration\\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests" -v minimal` => pass (`6/6`).
+
 ## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
 - [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
 - [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.
@@ -1818,4 +1830,13 @@
   - Kết quả: chỉ còn 2 file dump backup untracked:
     - `data/backup/dumps/congno_pre_balance_cleanup_20260321_103132.dump`
     - `data/backup/dumps/congno_pre_purge_20260321_102424.dump`
+
+## Phase 124 - Stabilize full backend suite after import permission enforcement (2026-04-07) [bead: cng-3g8]
+- [x] Xác nhận root cause của full suite fail: ba integration test `ImportCommit*` vẫn seed `ICurrentUser` chỉ có `Roles`, trong khi `ImportCommitService` nay gate theo `Permissions` cụ thể cho từng loại batch.
+- [x] Cập nhật các test `ImportCommitNotificationTests` và `ImportCommitPeriodLockTests` để cấp explicit permission `import.commit.advance` / `import.commit.invoice`, bám đúng contract runtime mới thay vì dựa vào role ngầm định.
+- [x] Chạy lại targeted integration tests cho hai nhóm trên, sau đó rerun toàn bộ backend suite trước khi commit/push/deploy Docker.
+
+### Verification
+- [x] `dotnet test src\backend\Tests.Integration\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitNotificationTests|FullyQualifiedName~ImportCommitPeriodLockTests" -v minimal` => pass `3/3`.
+- [x] `dotnet test src\backend\CongNoGolden.sln -v minimal` => pass `304/304` (`Tests.Unit 205/205`, `CongNoGolden.Tests.Integration 99/99`).
 

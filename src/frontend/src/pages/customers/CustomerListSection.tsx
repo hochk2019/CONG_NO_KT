@@ -26,6 +26,19 @@ const customerStatusLabels: Record<string, string> = {
   ACTIVE: 'Đang hoạt động',
   INACTIVE: 'Ngừng hoạt động',
 }
+const customerDebtSortOptions = [
+  { value: '', label: 'Mặc định' },
+  { value: 'balance_asc', label: 'Nợ tăng dần' },
+  { value: 'balance_desc', label: 'Nợ giảm dần' },
+  { value: 'debt_oldest', label: 'Nợ lâu nhất' },
+  { value: 'debt_newest', label: 'Nợ mới nhất' },
+] as const
+const customerDebtSortLabels: Record<string, string> = {
+  balance_asc: 'Nợ tăng dần',
+  balance_desc: 'Nợ giảm dần',
+  debt_oldest: 'Nợ lâu nhất',
+  debt_newest: 'Nợ mới nhất',
+}
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 const CUSTOMER_STATUS_KEY = 'pref.customers.status'
@@ -72,6 +85,7 @@ export default function CustomerListSection({
   const debouncedSearch = useDebouncedValue(search, 400)
   const [status, setStatus] = useState(() => getStoredFilter(CUSTOMER_STATUS_KEY))
   const [ownerId, setOwnerId] = useState('')
+  const [sort, setSort] = useState('')
   const [ownerOptions, setOwnerOptions] = useState<LookupOption[]>([])
   const [ownerLoading, setOwnerLoading] = useState(false)
   const [ownerError, setOwnerError] = useState<string | null>(null)
@@ -119,6 +133,7 @@ export default function CustomerListSection({
           search: debouncedSearch.trim() || undefined,
           ownerId: ownerId || undefined,
           status: status || undefined,
+          sort: sort || undefined,
           page,
           pageSize,
         })
@@ -149,7 +164,7 @@ export default function CustomerListSection({
     return () => {
       isActive = false
     }
-  }, [token, debouncedSearch, status, ownerId, page, pageSize, listReload])
+  }, [token, debouncedSearch, status, ownerId, sort, page, pageSize, listReload])
   useEffect(() => {
     if (!token) return
     let isActive = true
@@ -271,12 +286,13 @@ export default function CustomerListSection({
     setEditManagerId(detail.managerId ?? '')
   }, [detail, isEditOpen])
 
-  const hasFilters = Boolean(search.trim() || status || ownerId)
+  const hasFilters = Boolean(search.trim() || status || ownerId || sort)
 
   const handleClearFilters = useCallback(() => {
     setSearch('')
     setStatus('')
     setOwnerId('')
+    setSort('')
     setPage(1)
     storeFilter(CUSTOMER_STATUS_KEY, '')
   }, [])
@@ -628,8 +644,8 @@ export default function CustomerListSection({
             )}
           </div>
         </div>
-        <div className="filters-grid">
-          <label className="field">
+        <div className="filters-grid filters-grid--compact">
+          <label className="field field--compact">
             <span>Tìm kiếm</span>
             <input
               value={search}
@@ -640,7 +656,7 @@ export default function CustomerListSection({
               placeholder="MST hoặc tên"
             />
           </label>
-          <label className="field">
+          <label className="field field--compact">
             <span>Trạng thái</span>
             <select
               value={status}
@@ -656,7 +672,7 @@ export default function CustomerListSection({
               <option value="INACTIVE">Ngừng hoạt động</option>
             </select>
           </label>
-          <label className="field">
+          <label className="field field--compact">
             <span>Phụ trách</span>
             <select
               value={ownerId}
@@ -674,6 +690,22 @@ export default function CustomerListSection({
             </select>
             <span className="muted">Danh sách lấy từ Admin &gt; Người dùng.</span>
           </label>
+          <label className="field field--compact">
+            <span>Sắp xếp dư nợ</span>
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value)
+                setPage(1)
+              }}
+            >
+              {customerDebtSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
         </div>
         <div className="filters-actions">
           {hasFilters ? (
@@ -689,9 +721,14 @@ export default function CustomerListSection({
                   Phụ trách: {ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId}
                 </span>
               )}
+              {sort && (
+                <span className="filter-chip">
+                  Sắp xếp: {customerDebtSortLabels[sort] ?? sort}
+                </span>
+              )}
             </div>
           ) : (
-            <span className="muted">Bạn có thể lọc theo trạng thái hoặc phụ trách.</span>
+            <span className="muted">Bạn có thể lọc theo trạng thái, phụ trách hoặc sắp xếp theo dư nợ.</span>
           )}
         </div>
         {ownerError && <div className="alert alert--error" role="alert">{ownerError}</div>}

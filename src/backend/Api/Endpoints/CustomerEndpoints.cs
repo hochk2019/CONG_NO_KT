@@ -15,6 +15,7 @@ public static class CustomerEndpoints
             string? search,
             Guid? ownerId,
             string? status,
+            string? sort,
             int? page,
             int? pageSize,
             ICustomerService service,
@@ -25,6 +26,7 @@ public static class CustomerEndpoints
                     search,
                     ownerId,
                     status,
+                    sort,
                     page.GetValueOrDefault(1),
                     pageSize.GetValueOrDefault(20)),
                 ct);

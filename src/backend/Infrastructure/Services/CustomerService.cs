@@ -2,6 +2,7 @@ using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -53,6 +54,71 @@ public sealed class CustomerService : ICustomerService
         return (term, mode.Length == 0 ? null : mode);
     }
 
+    private static string? NormalizeCustomerListSort(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "balance_asc" => "balance_asc",
+            "balance_desc" => "balance_desc",
+            "debt_oldest" => "debt_oldest",
+            "debt_newest" => "debt_newest",
+            _ => null
+        };
+    }
+
+    private IQueryable<Customer> ApplyCustomerListSort(IQueryable<Customer> query, string? sort)
+    {
+        return NormalizeCustomerListSort(sort) switch
+        {
+            "balance_asc" => query
+                .OrderBy(c => c.CurrentBalance)
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "balance_desc" => query
+                .OrderByDescending(c => c.CurrentBalance)
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "debt_oldest" => query
+                .OrderBy(c => !_db.Invoices.Any(i =>
+                    i.DeletedAt == null &&
+                    i.CustomerTaxCode == c.TaxCode &&
+                    i.OutstandingAmount > 0m &&
+                    i.Status != "VOID"))
+                .ThenBy(c => _db.Invoices
+                    .Where(i =>
+                        i.DeletedAt == null &&
+                        i.CustomerTaxCode == c.TaxCode &&
+                        i.OutstandingAmount > 0m &&
+                        i.Status != "VOID")
+                    .Min(i => (DateOnly?)i.IssueDate))
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "debt_newest" => query
+                .OrderBy(c => !_db.Invoices.Any(i =>
+                    i.DeletedAt == null &&
+                    i.CustomerTaxCode == c.TaxCode &&
+                    i.OutstandingAmount > 0m &&
+                    i.Status != "VOID"))
+                .ThenByDescending(c => _db.Invoices
+                    .Where(i =>
+                        i.DeletedAt == null &&
+                        i.CustomerTaxCode == c.TaxCode &&
+                        i.OutstandingAmount > 0m &&
+                        i.Status != "VOID")
+                    .Max(i => (DateOnly?)i.IssueDate))
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            _ => query
+                .OrderBy(c => c.Name)
+                .ThenBy(c => c.TaxCode)
+        };
+    }
+
     public async Task<PagedResult<CustomerListItem>> ListAsync(CustomerListRequest request, CancellationToken ct)
     {
         var page = request.Page <= 0 ? 1 : request.Page;
@@ -84,10 +150,9 @@ public sealed class CustomerService : ICustomerService
         }
 
         var total = await query.CountAsync(ct);
+        query = ApplyCustomerListSort(query, request.Sort);
 
         var rows = await query
-            .OrderBy(c => c.Name)
-            .ThenBy(c => c.TaxCode)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(c => new

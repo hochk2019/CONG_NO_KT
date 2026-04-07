@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { vi } from 'vitest'
+import type { CustomerInvoice } from '../../../api/customers'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
 import CustomerEditModal from '../CustomerEditModal'
 import CustomerListSection from '../CustomerListSection'
@@ -40,6 +41,35 @@ const detail = {
   managerName: 'Lê Thị B',
   createdAt: '2025-01-01',
   updatedAt: '2025-01-01',
+}
+
+const invoiceWithReductionRefs: CustomerInvoice = {
+  id: 'inv-1',
+  invoiceNo: 'INV-1',
+  issueDate: '2025-01-01',
+  totalAmount: 1000000,
+  outstandingAmount: 500000,
+  status: 'OPEN',
+  version: 1,
+  sellerTaxCode: '2301098313',
+  sellerShortName: 'Hoàng Minh',
+  receiptRefs: [],
+  reductionInvoiceRefs: [
+    {
+      id: 'inv-red-1',
+      invoiceNo: 'DCG-001',
+      issueDate: '2025-01-03',
+      amount: 200000,
+    },
+  ],
+  reducedInvoiceRefs: [
+    {
+      id: 'inv-base-1',
+      invoiceNo: 'HD-GOC-001',
+      issueDate: '2024-12-20',
+      amount: 150000,
+    },
+  ],
 }
 
 describe('customers modules', () => {
@@ -163,6 +193,11 @@ describe('customers modules', () => {
       />,
     )
     expect(screen.getByText('Danh sách khách hàng')).toBeInTheDocument()
+    expect(screen.getByLabelText('Sắp xếp dư nợ')).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Nợ tăng dần' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Nợ giảm dần' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Nợ lâu nhất' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Nợ mới nhất' })).toBeInTheDocument()
   })
 
   it('renders customer transactions section with tabs', () => {
@@ -240,34 +275,7 @@ describe('customers modules', () => {
       <CustomerTransactionModals
         invoiceModal={{
           mode: 'view',
-          row: {
-            id: 'inv-1',
-            invoiceNo: 'INV-1',
-            issueDate: '2025-01-01',
-            totalAmount: 1000000,
-            outstandingAmount: 500000,
-            status: 'OPEN',
-            version: 1,
-            sellerTaxCode: '2301098313',
-            sellerShortName: 'Hoàng Minh',
-            receiptRefs: [],
-            reductionInvoiceRefs: [
-              {
-                id: 'inv-red-1',
-                invoiceNo: 'DCG-001',
-                issueDate: '2025-01-03',
-                amount: 200000,
-              },
-            ],
-            reducedInvoiceRefs: [
-              {
-                id: 'inv-base-1',
-                invoiceNo: 'HD-GOC-001',
-                issueDate: '2024-12-20',
-                amount: 150000,
-              },
-            ],
-          } as any,
+          row: invoiceWithReductionRefs,
         }}
         advanceModal={null}
         receiptModal={null}

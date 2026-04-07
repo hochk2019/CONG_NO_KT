@@ -19,6 +19,17 @@
   - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerPermissionEvaluatorTests|FullyQualifiedName~ImportPermissionEvaluatorTests|FullyQualifiedName~CurrentUserServiceTests|FullyQualifiedName~JwtTokenServiceTests" -v minimal` => pass (`20/20`).
   - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-page.permissions.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/imports/__tests__/importValidationMessages.test.ts src/pages/imports/__tests__/importBatchRecovery.test.ts` => pass (`13/13`).
 
+## Phase 121 - Customer debt sort filter (2026-04-07) [bead: cng-99r]
+- [x] Mở rộng contract danh sách khách hàng để nhận sort dư nợ từ API (`balance_asc`, `balance_desc`, `debt_oldest`, `debt_newest`).
+- [x] Bổ sung logic sort ở `CustomerService` cho 4 trường hợp: nợ tăng dần, nợ giảm dần, nợ lâu nhất, nợ mới nhất; giữ fallback mặc định theo tên/MST.
+- [x] Cập nhật `/customers` frontend với bộ lọc `Sắp xếp dư nợ` gọn hơn, đồng bộ chip filter và reset filter.
+- [x] Bổ sung regression test backend cho 4 chế độ sort và cập nhật test frontend module Customers theo UI mới.
+
+### Verification evidence (2026-04-07, phase 121 / cng-99r)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerServiceListTests|FullyQualifiedName~CustomerService360Tests" -v minimal` => pass (`6/6`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-modules.test.tsx` => pass (`11/11`).
+- [x] `npm --prefix src/frontend run lint` => pass (`0` error; còn `1` warning cũ, không liên quan tại `src/pages/receipts/ReceiptListSection.tsx:196`).
+
 ## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
 - [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
 - [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.

@@ -172,6 +172,7 @@ export const fetchCustomers = async (params: {
   search?: string
   ownerId?: string
   status?: string
+  sort?: string
   page: number
   pageSize: number
 }) => {
@@ -182,6 +183,7 @@ export const fetchCustomers = async (params: {
   if (params.search) query.append('search', params.search)
   if (params.ownerId) query.append('ownerId', params.ownerId)
   if (params.status) query.append('status', params.status)
+  if (params.sort) query.append('sort', params.sort)
 
   return apiFetch<PagedResult<CustomerListItem>>(`/customers?${query.toString()}`, {
     token: params.token,

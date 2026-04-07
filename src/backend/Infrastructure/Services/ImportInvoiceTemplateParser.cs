@@ -187,7 +187,7 @@ public static class ImportInvoiceTemplateParser
 
         foreach (var token in tokens)
         {
-            if (norm.Contains(token))
+            if (norm.Contains(ImportStagingHelpers.Normalize(token)))
             {
                 map[key] = col;
                 return;

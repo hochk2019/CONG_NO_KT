@@ -87,6 +87,24 @@ public class ImportInvoiceTemplateParserTests
         Assert.Equal("ADJUSTMENT_REDUCTION", ReadRawString(rows[0].RawData, "invoice_type"));
     }
 
+    [Fact]
+    public void Invoice_SystemTemplateFile_Parses_IssueDate_From_Data_Sheet()
+    {
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "invoice_template.xlsx");
+
+        using var workbook = new XLWorkbook(templatePath);
+        var sheet = workbook.Worksheet("Data");
+
+        var rows = ImportInvoiceTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid());
+
+        Assert.Single(rows);
+
+        var messages = ReadMessages(rows[0].ValidationMessages);
+        Assert.DoesNotContain("ISSUE_DATE_REQUIRED", messages);
+        Assert.Equal("2026-01-15", ReadRawString(rows[0].RawData, "issue_date"));
+        Assert.Equal("Cong ty TNHH Mau", ReadRawString(rows[0].RawData, "customer_name"));
+    }
+
     private static void WriteHeaderMissingIssueDate(IXLWorksheet sheet)
     {
         sheet.Cell(1, 1).Value = "SellerTaxCode";
@@ -119,5 +137,23 @@ public class ImportInvoiceTemplateParserTests
     {
         using var doc = JsonDocument.Parse(raw ?? "{}");
         return doc.RootElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+    }
+
+    private static string FindRepoFile(params string[] relativeSegments)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeSegments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Không tìm thấy file kiểm thử cần thiết: {Path.Combine(relativeSegments)}");
     }
 }

@@ -30,6 +30,16 @@
 - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-modules.test.tsx` => pass (`11/11`).
 - [x] `npm --prefix src/frontend run lint` => pass (`0` error; còn `1` warning cũ, không liên quan tại `src/pages/receipts/ReceiptListSection.tsx:196`).
 
+## Phase 122 - Invoice template issue_date import bug (2026-04-07) [bead: cng-gpr]
+- [x] Tái hiện lỗi import `invoice_template.xlsx` khi cột `issue_date` có dữ liệu nhưng preview staging vẫn trả `null` và báo `Thiếu ngày phát hành`.
+- [x] Bổ sung regression test với file template hệ thống và/hoặc luồng `ImportStagingService` để khóa hành vi đúng.
+- [x] Xác định root cause trong parser / luồng staging / upload và triển khai fix tối thiểu.
+- [x] Chạy lại test liên quan, ghi nhận kết quả và cập nhật bead + `task.md`.
+- Kết quả: so khớp header trong `ImportInvoiceTemplateParser` dùng chuỗi đã normalize cho cột Excel nhưng lại dò token snake_case thô như `issue_date`, `customer_name`, `revenue_excl_vat`, khiến các cột này không được map và `issue_date` rơi về `null`.
+- Test xác nhận:
+  - `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests"`: pass.
+  - `dotnet test src\\backend\\Tests.Integration\\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests.StageInvoice_SystemTemplateFile_Preserves_IssueDate"`: pass.
+
 ## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
 - [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
 - [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.

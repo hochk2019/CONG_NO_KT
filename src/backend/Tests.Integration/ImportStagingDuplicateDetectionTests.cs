@@ -126,6 +126,42 @@ public class ImportStagingDuplicateDetectionTests
         Assert.Contains("DUP_IN_DB", messages);
     }
 
+    [Fact]
+    public async Task StageInvoice_SystemTemplateFile_Preserves_IssueDate()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "2300328765");
+        await SeedCustomerAsync(db, "0101000002", "Cong ty TNHH Mau");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "INVOICE",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "invoice_template.xlsx");
+        await using var stream = File.OpenRead(templatePath);
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "INVOICE", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.DoesNotContain("ISSUE_DATE_REQUIRED", messages);
+        Assert.Equal("2026-01-15", ReadRawString(row.RawData, "issue_date"));
+        Assert.Equal("Cong ty TNHH Mau", ReadRawString(row.RawData, "customer_name"));
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -362,5 +398,29 @@ public class ImportStagingDuplicateDetectionTests
     private static IReadOnlyList<string> ReadMessages(string? raw)
     {
         return JsonSerializer.Deserialize<string[]>(raw ?? "[]") ?? Array.Empty<string>();
+    }
+
+    private static string? ReadRawString(string? raw, string property)
+    {
+        using var doc = JsonDocument.Parse(raw ?? "{}");
+        return doc.RootElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+    }
+
+    private static string FindRepoFile(params string[] relativeSegments)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeSegments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Không tìm thấy file kiểm thử cần thiết: {Path.Combine(relativeSegments)}");
     }
 }

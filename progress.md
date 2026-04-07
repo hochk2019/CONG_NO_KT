@@ -15,6 +15,24 @@
   WHEN: Update after completing each phase or encountering errors. More detailed than task_plan.md.
 -->
 
+## Session: 2026-04-06
+
+### Phase 96: Customer owner/manager import from Excel
+- **Status:** complete
+- **Started:** 2026-04-06
+- Actions taken:
+  - Đọc `người phụ trách.xlsx`, chuẩn hóa dữ liệu import theo MST/tên khách hàng/địa chỉ/tài khoản phụ trách.
+  - Đối chiếu trực tiếp với PostgreSQL trong container `congno-db` thay vì sửa code ứng dụng.
+  - Preview trước khi ghi DB cho thấy: `138` create, `238` update, không có username phụ trách thiếu trong database.
+  - Import dữ liệu vào bảng `congno.customers`, gán `manager_user_id` cho toàn bộ phạm vi import về `kt.ngat`.
+  - Chạy hậu kiểm sau import cho toàn bộ `376` dòng Excel và xác nhận không còn sai lệch.
+- Files created/modified:
+  - `tmp_customer_assignments.csv` (created for import staging)
+  - `tmp_import_customer_assignments.sql` (created for import execution)
+  - `task.md` (updated)
+  - `progress.md` (updated)
+  - `findings.md` (updated)
+
 ## Session: 2026-01-29
 <!-- 
   WHAT: The date of this work session.

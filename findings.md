@@ -1,5 +1,19 @@
 # Findings - 2026-02-23
 
+## Customer Assignment Import (2026-04-06)
+- Nguồn dữ liệu: `người phụ trách.xlsx`, `376` dòng hữu hiệu, không có MST trùng trong file.
+- Mapping tài khoản phụ trách trong DB hợp lệ cho toàn bộ phạm vi import:
+  - `kt.ngat`, `kt.trang`, `kt.tranghp`, `kt.diem`, `kt.linh`
+- Kết quả ghi dữ liệu:
+  - Tạo mới `138` khách hàng.
+  - Cập nhật `238` khách hàng hiện có.
+  - Gán toàn bộ quản lý về `kt.ngat` (`Phạm Thị Hồng Ngát`).
+- Hậu kiểm sau import:
+  - Không còn khách hàng nào trong file bị thiếu trên DB.
+  - Không còn lệch `accountant_owner_id`.
+  - Không còn lệch `manager_user_id`.
+  - Không còn trường hợp thiếu tên/địa chỉ trong phạm vi yêu cầu nếu DB trước đó để trống.
+
 ## Tracker / Task State
 - `task.md`: không còn checkbox mở (`- [ ]`).
 - Bead còn mở trước khi xử lý: `cng-fwg` (`in_progress`) dù nội dung Phase 60 đã hoàn thành.

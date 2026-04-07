@@ -11,6 +11,12 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
+- [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
+- [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.
+- [x] Gán phụ trách theo username ở cột `E` (`kt.ngat`, `kt.trang`, `kt.tranghp`, `kt.diem`, `kt.linh`) và gán toàn bộ quản lý về `kt.ngat`.
+- [x] Hậu kiểm toàn bộ `376` dòng Excel: không còn lệch phụ trách/quản lý, không còn thiếu khách hàng trong phạm vi import.
+
 ## Phase 52 - Import UX dedup (2026-03-06)
 - [x] `cng-s7d` Gom import template về `/imports`, bỏ tab import khỏi `/advances`, thêm deep-link `/imports?tab=batch&type=ADVANCE`, cập nhật test trang Advances/Imports.
 
@@ -1771,4 +1777,16 @@
   - [x] Static search `src/backend/**/*.cs`: không còn `InvoiceType = "SALE"`, `InvoiceType = "GTGT"`, `InvoiceType = "VAT"`; không còn invoice fixture giữ `Status = "APPROVED"`.
   - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~InvoiceSchemaCompatibilityTests|FullyQualifiedName~CustomerBalanceReconcileServiceTests|FullyQualifiedName~CustomerService360Tests|FullyQualifiedName~GlobalSearchServiceTests" -v minimal` => pass (`10/10`).
   - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptDraftAndBulkApproveTests|FullyQualifiedName~ReminderRunTests|FullyQualifiedName~DashboardOverdueGroupTests|FullyQualifiedName~DashboardOverviewTests|FullyQualifiedName~GlobalSearchServiceIntegrationTests|FullyQualifiedName~InvoiceHeldCreditFlowTests|FullyQualifiedName~ReceiptAutomationServiceTests|FullyQualifiedName~ReceiptLifecycleRbacTests|FullyQualifiedName~ReceiptSurplusQueueTests|FullyQualifiedName~ReminderEscalationPolicyTests|FullyQualifiedName~ReportAgingTests|FullyQualifiedName~ReportPagedTests|FullyQualifiedName~RiskDeltaAlertsTests|FullyQualifiedName~RiskRulesTests" -v minimal` => pass (`42/42`).
+
+## Phase 119 - Roll back rejected Stitch redesign spike (2026-03-24) [bead: cng-9a1]
+- [x] Theo yêu cầu người dùng, hủy toàn bộ thay đổi frontend/design chưa commit thuộc nhánh thử nghiệm redesign theo Stitch hiện tại.
+- [x] Khôi phục `src/frontend` và `task.md` về đúng baseline đã commit, không giữ lại hero/workspace/modules/test mới của spike vừa bị bác bỏ.
+- [x] Giữ nguyên hai file dump backup ngoài phạm vi rollback để tránh đụng vào artefact dữ liệu.
+- [x] Ghi chú lại trong sổ tay rằng hướng thiết kế Stitch hiện tại đã bị loại bỏ; nếu làm lại redesign thì cần một hướng mới từ baseline commit.
+
+### Verification
+- [x] `git status --short`
+  - Kết quả: chỉ còn 2 file dump backup untracked:
+    - `data/backup/dumps/congno_pre_balance_cleanup_20260321_103132.dump`
+    - `data/backup/dumps/congno_pre_purge_20260321_102424.dump`
 

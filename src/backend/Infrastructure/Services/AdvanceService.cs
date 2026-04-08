@@ -405,6 +405,14 @@ public sealed class AdvanceService : IAdvanceService
 
         await EnsureCanApproveAdvance(advance, ct);
 
+        var customer = await _db.Customers.FirstOrDefaultAsync(
+            c => c.TaxCode == advance.CustomerTaxCode,
+            ct);
+        if (customer is null)
+        {
+            throw new InvalidOperationException("Customer not found.");
+        }
+
         var effectiveAdvanceNo = string.IsNullOrWhiteSpace(request.AdvanceNo)
             ? advance.AdvanceNo?.Trim()
             : request.AdvanceNo.Trim();
@@ -448,6 +456,23 @@ public sealed class AdvanceService : IAdvanceService
             : advance.Status == "DRAFT"
                 ? "DRAFT"
                 : "APPROVED";
+        var now = DateTimeOffset.UtcNow;
+        var previousContributesToBalance = advance.Status is "APPROVED" or "PAID";
+        var nextContributesToBalance = nextStatus is "APPROVED" or "PAID";
+        var balanceDelta = 0m;
+
+        if (previousContributesToBalance && nextContributesToBalance)
+        {
+            balanceDelta = effectiveAmount - advance.Amount;
+        }
+        else if (previousContributesToBalance)
+        {
+            balanceDelta = -advance.Amount;
+        }
+        else if (nextContributesToBalance)
+        {
+            balanceDelta = effectiveAmount;
+        }
 
         var before = new
         {
@@ -467,16 +492,31 @@ public sealed class AdvanceService : IAdvanceService
             advance.Id,
             ct);
 
+        await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
         advance.AdvanceNo = effectiveAdvanceNo;
         advance.AdvanceDate = effectiveAdvanceDate;
         advance.Amount = effectiveAmount;
         advance.OutstandingAmount = nextOutstandingAmount;
         advance.Description = nextDescription;
         advance.Status = nextStatus;
-        advance.UpdatedAt = DateTimeOffset.UtcNow;
+        advance.UpdatedAt = now;
         advance.Version += 1;
 
+        if (balanceDelta != 0m)
+        {
+            customer.CurrentBalance += balanceDelta;
+            customer.UpdatedAt = now;
+            customer.Version += 1;
+        }
+
+        if (advance.Status != "DRAFT" && advance.OutstandingAmount > 0)
+        {
+            await ApplyReceiptCreditsToAdvanceAsync(advance, now, ct);
+        }
+
         await DocumentDuplicateGuard.SaveAdvanceChangesAsync(_db, ct);
+        await transaction.CommitAsync(ct);
 
         await _auditService.LogAsync(
             "ADVANCE_CORRECT",

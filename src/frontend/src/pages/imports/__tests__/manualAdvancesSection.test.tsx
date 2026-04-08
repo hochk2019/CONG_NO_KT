@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ManualAdvancesSection from '../ManualAdvancesSection'
@@ -132,6 +132,7 @@ describe('ManualAdvancesSection', () => {
         version: 1,
       }),
     )
+    await waitFor(() => expect(mocks.listAdvancesMock).toHaveBeenCalledTimes(2))
     expect(await screen.findByText('Đã cập nhật khoản trả hộ adv-1.')).toBeInTheDocument()
   })
 

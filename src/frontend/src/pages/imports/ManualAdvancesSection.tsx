@@ -485,6 +485,7 @@ export default function ManualAdvancesSection({
       )
       setActionMessage(`Đã cập nhật khoản trả hộ ${shortAdvanceId(correctionAdvance.id)}.`)
       setCorrectionAdvance(null)
+      setListReload((value) => value + 1)
     } catch (err) {
       if (err instanceof ApiError) {
         setCorrectionError(err.message)

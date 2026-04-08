@@ -82,6 +82,9 @@ public class AdvanceCorrectionTests
         Assert.Equal("after", persisted.Description);
         Assert.Equal("APPROVED", persisted.Status);
 
+        var persistedCustomer = await db.Customers.AsNoTracking().FirstAsync(c => c.TaxCode == customer.TaxCode);
+        Assert.Equal(150m, persistedCustomer.CurrentBalance);
+
         var audit = await db.AuditLogs.AsNoTracking()
             .SingleAsync(log => log.EntityType == "Advance" && log.EntityId == advance.Id.ToString());
 
@@ -89,6 +92,94 @@ public class AdvanceCorrectionTests
         Assert.Equal(500m, ReadDecimal(audit.BeforeData, "Amount"));
         Assert.Equal(650m, ReadDecimal(audit.AfterData, "Amount"));
         Assert.Equal("correction reason", ReadString(audit.AfterData, "Reason"));
+    }
+
+    [Fact]
+    public async Task UpdateAsync_ReallocatesExistingReceiptCredits_WhenCorrectionIncreasesOutstanding()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+        var allocatedReceipt = await SeedApprovedReceiptAsync(
+            db,
+            seller.SellerTaxCode,
+            customer.TaxCode,
+            300m,
+            "RCPT-ADV-ALLOC-USED");
+        var availableReceipt = await SeedApprovedReceiptAsync(
+            db,
+            seller.SellerTaxCode,
+            customer.TaxCode,
+            120m,
+            "RCPT-ADV-ALLOC-FREE",
+            allocationMode: "AUTO",
+            allocationStatus: "UNALLOCATED",
+            autoAllocateEnabled: true,
+            unallocatedAmount: 120m,
+            receiptDate: new DateOnly(2026, 2, 2));
+
+        var advance = new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = seller.SellerTaxCode,
+            CustomerTaxCode = customer.TaxCode,
+            AdvanceNo = "TH-APPROVED-ALLOC",
+            AdvanceDate = new DateOnly(2026, 2, 1),
+            Amount = 500m,
+            OutstandingAmount = 200m,
+            Description = "before",
+            Status = "APPROVED",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Advances.Add(advance);
+        await db.SaveChangesAsync();
+
+        db.ReceiptAllocations.Add(new ReceiptAllocation
+        {
+            Id = Guid.NewGuid(),
+            ReceiptId = allocatedReceipt.Id,
+            AdvanceId = advance.Id,
+            TargetType = "ADVANCE",
+            Amount = 300m,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(new[] { "Admin" });
+        var service = new AdvanceService(db, user, new AuditService(db, user));
+
+        var result = await service.UpdateAsync(
+            advance.Id,
+            new AdvanceUpdateRequest(
+                AdvanceNo: advance.AdvanceNo,
+                AdvanceDate: advance.AdvanceDate,
+                Amount: 650m,
+                Description: "after",
+                Reason: "topup",
+                Version: advance.Version),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.Version);
+
+        var persistedAdvance = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        Assert.Equal(230m, persistedAdvance.OutstandingAmount);
+        Assert.Equal("APPROVED", persistedAdvance.Status);
+
+        var persistedReceipt = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == availableReceipt.Id);
+        Assert.Equal(0m, persistedReceipt.UnallocatedAmount);
+        Assert.Equal("ALLOCATED", persistedReceipt.AllocationStatus);
+
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.AdvanceId == advance.Id)
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync();
+
+        Assert.Equal(2, allocations.Count);
+        Assert.Contains(allocations, allocation => allocation.ReceiptId == availableReceipt.Id && allocation.Amount == 120m);
     }
 
     [Fact]
@@ -240,7 +331,12 @@ public class AdvanceCorrectionTests
         string sellerTaxCode,
         string customerTaxCode,
         decimal amount,
-        string receiptNo)
+        string receiptNo,
+        string allocationMode = "MANUAL",
+        string allocationStatus = "ALLOCATED",
+        bool autoAllocateEnabled = false,
+        decimal? unallocatedAmount = null,
+        DateOnly? receiptDate = null)
     {
         var receipt = new Receipt
         {
@@ -248,13 +344,14 @@ public class AdvanceCorrectionTests
             SellerTaxCode = sellerTaxCode,
             CustomerTaxCode = customerTaxCode,
             ReceiptNo = receiptNo,
-            ReceiptDate = new DateOnly(2026, 1, 20),
+            ReceiptDate = receiptDate ?? new DateOnly(2026, 1, 20),
             Amount = amount,
             Method = "BANK",
-            AllocationMode = "MANUAL",
-            AllocationStatus = "ALLOCATED",
+            AllocationMode = allocationMode,
+            AllocationStatus = allocationStatus,
             AllocationPriority = "ISSUE_DATE",
-            UnallocatedAmount = 0m,
+            AutoAllocateEnabled = autoAllocateEnabled,
+            UnallocatedAmount = unallocatedAmount ?? 0m,
             Status = "APPROVED",
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,

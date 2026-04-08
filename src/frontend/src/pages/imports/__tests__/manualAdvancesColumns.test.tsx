@@ -43,7 +43,10 @@ describe('manualAdvancesColumns', () => {
     const renderAction = actionColumn?.render as ((row: AdvanceListItem) => ReactNode) | undefined
     expect(renderAction).toBeTypeOf('function')
 
-    render(<>{renderAction!(baseRow)}</>)
+    const { container } = render(<>{renderAction!(baseRow)}</>)
+
+    expect(container.querySelector('.advances-row-actions')).not.toBeNull()
+    expect(container.querySelector('.advances-row-actions__lane--commit')).not.toBeNull()
 
     await user.click(screen.getByRole('button', { name: 'Sửa' }))
     await user.click(screen.getByRole('button', { name: 'Lịch sử sửa' }))
@@ -82,5 +85,17 @@ describe('manualAdvancesColumns', () => {
 
     expect(screen.getByRole('button', { name: 'Hủy' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Bỏ hủy' })).not.toBeInTheDocument()
+  })
+
+  it('renders muted placeholder when row is not manageable', () => {
+    const columns = buildColumns()
+    const actionColumn = columns.find((col) => col.key === 'actions')
+    const renderAction = actionColumn?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+    expect(renderAction).toBeTypeOf('function')
+
+    render(<>{renderAction!({ ...baseRow, canManage: false })}</>)
+
+    expect(screen.getByText('-')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument()
   })
 })

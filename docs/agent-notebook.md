@@ -13,82 +13,76 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-952`
-- Task phase: `Phase 127` trong `task.md`
-- Last updated: `2026-04-08`
-- Current status: Phase 127 da hoan tat; bead `cng-952` da dong sau khi correction flow, history va verification duoc chot
+- Bead: `cng-79p`
+- Task phase: `Phase 128` trong `task.md`
+- Last updated: `2026-04-09`
+- Current status: Phase 128 da hoan tat; bead `cng-79p` da dong sau khi verify va doi chieu `detect_changes`
 
 ## Goal
 
-Cho phep ke toan chinh sua du lieu da nhap cho:
+Chot follow-up cho correction flow khoan tra ho sau Phase 127:
 
-- khoan tra ho
-- phieu thu
-
-Yeu cau:
-
-- co audit reason bat buoc
-- xem duoc lich su sua ngay tren tung chung tu
-- thay doi anh huong phan bo cua phieu thu phai quay ve `DRAFT`
-- co co che chong quen viec dang lam ngay trong repo
+- cap nhat lai `current_balance` / `status` / `outstanding_amount` dung khi sua chung tu da `APPROVED`
+- tu dong tai phan bo receipt credit con ranh neu correction lam tang outstanding
+- reload lai workspace sau khi sua de tranh stale data
+- lam gon cum action `Sua`, `Lich su sua`, `Phe duyet`, `Huy`
+- khoa lai bang regression tests
 
 ## Locked Business Decisions
 
-- Khoan tra ho v1 cho sua: `advanceNo`, `advanceDate`, `amount`, `description`.
-- Khoan tra ho khong duoc giam `amount` thap hon tong da phan bo.
-- Khoan tra ho v1 khong mo cho doi doi tuong cong no/tax code lien ket.
-- Phieu thu neu chi sua metadata (`receiptNo`, `receiptDate`, `method`, `description`) thi cap nhat tai cho.
-- Phieu thu neu sua truong anh huong phan bo (`amount`, `allocationMode`, `allocationPriority`, `appliedPeriodStart`, `selectedTargets`) thi dua ve `DRAFT` de duyet lai.
-- V1 khong them status moi; tai su dung `DRAFT`.
-- Moi correction bat buoc co `reason`.
-- Lich su sua phai xem duoc ngay tren chung tu, khong bat nguoi dung vao trang audit admin chung.
+- Correction khoan tra ho da `APPROVED` phai tinh lai so du khach hang ngay trong transaction, khong de state trung gian sai lech.
+- Neu correction lam tang outstanding cua khoan tra ho dang `APPROVED` va khach hang con receipt credit auto-allocatable, he thong duoc phep tu dong ap dung phan credit con ranh do.
+- Auto-allocation follow-up chi dung cho receipt thuc su dang `AUTO` + `UNALLOCATED`; test fixture da duoc khoa lai de khong vo tinh bien receipt da dung thanh receipt con ranh.
+- Sau khi correction thanh cong, UI phai reload lai danh sach ngay thay vi cho user tu refresh.
+- 4 action o danh sach khoan tra ho duoc nhom thanh 2 lane: utility (`Sua`, `Lich su sua`) va commit (`Phe duyet`, `Huy`/`Bo huy`) de nhin nhanh hon.
 
 ## Known Code Areas
 
-- Advances endpoint/service:
-  - `src/backend/Api/Endpoints/AdvanceEndpoints.cs`
-  - `src/backend/Application/Advances/AdvanceUpdateRequest.cs`
+- Backend correction logic:
   - `src/backend/Infrastructure/Services/AdvanceService.cs`
-- Receipts endpoint/service:
-  - `src/backend/Api/Endpoints/ReceiptEndpoints.cs`
-  - `src/backend/Application/Receipts/ReceiptDraftUpdateRequest.cs`
-  - `src/backend/Infrastructure/Services/ReceiptService.Draft.cs`
-- Audit/history:
-  - `src/backend/Api/Admin/AdminAuditEndpoints.cs`
-  - `src/frontend/src/pages/AdminAuditPage.tsx`
-- Frontend:
+  - `src/backend/Tests.Integration/AdvanceCorrectionTests.cs`
+- Frontend advances workspace:
   - `src/frontend/src/pages/imports/ManualAdvancesSection.tsx`
-  - `src/frontend/src/pages/receipts/ReceiptListSection.tsx`
+  - `src/frontend/src/pages/imports/manualAdvancesColumns.tsx`
+  - `src/frontend/src/pages/advances/advances.css`
+  - `src/frontend/src/pages/imports/__tests__/manualAdvancesColumns.test.tsx`
+  - `src/frontend/src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
 
 ## Work Log
 
-### 2026-04-08
+### 2026-04-09
 
-- User chap thuan implement plan correction flow va bo sung co che chong quen task.
-- Da tao bead `cng-952` va chuyen sang `in_progress`.
-- Da them `Phase 127` vao `task.md`.
-- Da xac nhan GitNexus index `CONG_NO_KT` con moi trong ngay.
-- Da mo rong backend correction/history cho advances va receipts, bao gom audit reason bat buoc va rule reopen receipt ve `DRAFT` khi sua truong anh huong phan bo.
-- Da cap nhat frontend de ke toan co the `Sua` va `Lich su sua` ngay tren danh sach khoan tra ho va phieu thu.
-- Da bo sung regression tests backend/frontend cho correction flow va history.
-- Da fix lint React cho 2 correction modal bang cach doi sang keyed form state, tranh `set-state-in-effect`.
-- Verification da pass:
-  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -v minimal` => pass (`206/206`)
-  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal` => pass (`6/6`)
-  - `npm --prefix src/frontend run lint` => pass
-  - `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass
-  - `npm --prefix src/frontend run build` => pass
-- Da chay `mcp__gitnexus__detect_changes(repo=\"CONG_NO_KT\", scope=\"unstaged\")`; ket qua risk `critical` do workspace dang co nhieu thay doi unstaged rong hon rieng Phase 127, khong phai do 1 fix nho cuoi cung.
-- Da dong bead `cng-952` sau khi dong bo `task.md` va notebook.
+- User yeu cau tiep tuc thuc hien ke hoach follow-up sau Phase 127.
+- Da tiep tuc tren bead `cng-79p` voi muc tieu chot correction flow khoan tra ho.
+- Da sua `AdvanceService.UpdateAsync` de:
+  - load customer truoc correction
+  - tinh `balanceDelta` theo transition status/value
+  - wrap update trong transaction
+  - cap nhat `Customer.CurrentBalance`
+  - tu dong goi `ApplyReceiptCreditsToAdvanceAsync` khi correction giu trang thai non-draft va con outstanding
+- Da mo rong integration tests `AdvanceCorrectionTests`:
+  - khoa assertion `current_balance` sau correction
+  - them regression test cho case correction lam tang outstanding va receipt credit con ranh duoc auto-reallocate
+  - sua helper `SeedApprovedReceiptAsync` de mac dinh quay ve fixture receipt da allocate, chi bat auto/unallocated khi goi ro rang
+- Da sua frontend `ManualAdvancesSection` de tang `listReload` ngay sau correction thanh cong.
+- Da redesign cum action trong `manualAdvancesColumns.tsx` + `advances.css` thanh 2 lane, co accent ro cho nut `Phe duyet`.
+- Da cap nhat frontend tests de khoa layout moi va xac nhan list reload sau correction.
+- Verification da xanh:
+  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal` => pass (`4/4`)
+  - `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`8/8`)
+  - `docker compose config -q` => pass
+  - `docker compose build api web` => pass
+- Da chay `mcp__gitnexus__detect_changes(repo="CONG_NO_KT", scope="unstaged")`; ket qua risk `high` do anh huong cua service dung chung `AdvanceService` va ca file tracker (`task.md`), khong lo blocker moi rieng cho correction follow-up.
+- Da dong bead `cng-79p`.
 
 ## Next Action
 
-Neu user mo rong them correction scope hoac audit workflow, tao bead/phase moi thay vi tiep tuc chong len Phase 127 da dong.
+Neu user mo rong them correction scope cho khoan tra ho/phieu thu, tao bead moi thay vi tiep tuc chong len Phase 128 da dong.
 
 ## Resume Checklist
 
-- Chay `bd show cng-952`
-- Mo `task.md` va tim `Phase 127`
+- Chay `bd show cng-79p`
+- Mo `task.md` va tim `Phase 128`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`

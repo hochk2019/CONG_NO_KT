@@ -1882,3 +1882,23 @@
 - [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`21/21`).
 - [x] `npm --prefix src/frontend run build` => pass.
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => scope anh huong workspace hien tai duoc danh gia `critical` vi dang co nhieu thay doi unstaged rong hon rieng Phase 127; da doi chieu va khong thay blocker rieng cho correction flow.
+
+## Phase 128 - Finish advance correction follow-up after phase 127 (2026-04-09) [bead: cng-79p]
+- [x] Sua `AdvanceService.UpdateAsync` de correction tren khoan tra ho da `APPROVED` cap nhat lai `current_balance`, `status`, `outstanding_amount` nhat quan trong mot transaction.
+- [x] Bo sung rule tu dong dung receipt credit con ranh khi correction lam tang outstanding cua khoan tra ho dang `APPROVED`.
+- [x] Cap nhat workspace nhap lieu tra ho de reload list ngay sau khi sua, tranh stale state sau correction modal.
+- [x] Gom cum 4 action `Sua` / `Lich su sua` / `Phe duyet` / `Huy` thanh layout 2 lane gon hon va de doc trang thai hon.
+- [x] Bo sung/cap nhat regression tests backend + frontend cho balance correction, auto-reallocation, action layout va post-edit reload.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+  - [x] `docker compose config -q`
+  - [x] `docker compose build api web`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged`
+
+### Verification evidence (2026-04-09, phase 128 / cng-79p)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal` => pass (`4/4`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`8/8`).
+- [x] `docker compose config -q` => pass.
+- [x] `docker compose build api web` => pass (rebuild thanh cong `congno-api:latest`, `congno-web:latest`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => risk `high`; pham vi bi doi rong vi `AdvanceService.cs` la service dung chung va phase nay dong thoi cap nhat `task.md`/notebook, khong lo blocker moi rieng cho correction follow-up.

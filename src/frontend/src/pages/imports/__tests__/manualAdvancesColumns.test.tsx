@@ -24,12 +24,8 @@ const baseRow: AdvanceListItem = {
 
 const buildColumns = (handlers?: Partial<Parameters<typeof buildManualAdvanceColumns>[0]>) =>
   buildManualAdvanceColumns({
-    editingId: null,
-    editingDescription: '',
-    setEditingDescription: vi.fn(),
-    onStartEdit: vi.fn(),
-    onSaveEdit: vi.fn(),
-    onCancelEdit: vi.fn(),
+    onOpenCorrection: vi.fn(),
+    onOpenHistory: vi.fn(),
     onApprove: vi.fn(),
     onVoid: vi.fn(),
     onUnvoid: vi.fn(),
@@ -38,6 +34,24 @@ const buildColumns = (handlers?: Partial<Parameters<typeof buildManualAdvanceCol
   })
 
 describe('manualAdvancesColumns', () => {
+  it('opens correction and history actions for editable rows', async () => {
+    const user = userEvent.setup()
+    const onOpenCorrection = vi.fn()
+    const onOpenHistory = vi.fn()
+    const columns = buildColumns({ onOpenCorrection, onOpenHistory })
+    const actionColumn = columns.find((col) => col.key === 'actions')
+    const renderAction = actionColumn?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+    expect(renderAction).toBeTypeOf('function')
+
+    render(<>{renderAction!(baseRow)}</>)
+
+    await user.click(screen.getByRole('button', { name: 'Sửa' }))
+    await user.click(screen.getByRole('button', { name: 'Lịch sử sửa' }))
+
+    expect(onOpenCorrection).toHaveBeenCalledWith(baseRow)
+    expect(onOpenHistory).toHaveBeenCalledWith(baseRow)
+  })
+
   it('renders unvoid action for VOID status', async () => {
     const user = userEvent.setup()
     const onUnvoid = vi.fn()
@@ -50,6 +64,8 @@ describe('manualAdvancesColumns', () => {
 
     const unvoidButton = screen.getByRole('button', { name: 'Bỏ hủy' })
     expect(unvoidButton).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lịch sử sửa' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Hủy' })).not.toBeInTheDocument()
 
     await user.click(unvoidButton)

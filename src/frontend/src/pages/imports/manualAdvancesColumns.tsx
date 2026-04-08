@@ -1,4 +1,3 @@
-import type { Dispatch, SetStateAction } from 'react'
 import type { AdvanceListItem } from '../../api/advances'
 import { formatDate, formatMoney } from '../../utils/format'
 
@@ -23,12 +22,8 @@ export const formatAdvanceStatus = (status: string) => {
 export const shortAdvanceId = (id: string) => (id.length > 8 ? id.slice(0, 8) : id)
 
 type ManualAdvanceColumnsOptions = {
-  editingId: string | null
-  editingDescription: string
-  setEditingDescription: Dispatch<SetStateAction<string>>
-  onStartEdit: (row: AdvanceListItem) => void
-  onSaveEdit: (row: AdvanceListItem) => void
-  onCancelEdit: () => void
+  onOpenCorrection: (row: AdvanceListItem) => void
+  onOpenHistory: (row: AdvanceListItem) => void
   onApprove: (row: AdvanceListItem) => void
   onVoid: (row: AdvanceListItem) => void
   onUnvoid: (row: AdvanceListItem) => void
@@ -36,12 +31,8 @@ type ManualAdvanceColumnsOptions = {
 }
 
 export const buildManualAdvanceColumns = ({
-  editingId,
-  editingDescription,
-  setEditingDescription,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
+  onOpenCorrection,
+  onOpenHistory,
   onApprove,
   onVoid,
   onUnvoid,
@@ -101,19 +92,8 @@ export const buildManualAdvanceColumns = ({
   {
     key: 'description',
     label: 'Ghi chú',
-    render: (row: AdvanceListItem) => {
-      if (editingId === row.id) {
-        return (
-          <input
-            value={editingDescription}
-            onChange={(event) => setEditingDescription(event.target.value)}
-            placeholder="Nhập ghi chú"
-            style={{ width: '100%' }}
-          />
-        )
-      }
-      return row.description?.trim() ? row.description : <span className="muted">-</span>
-    },
+    render: (row: AdvanceListItem) =>
+      row.description?.trim() ? row.description : <span className="muted">-</span>,
   },
   {
     key: 'amount',
@@ -139,7 +119,6 @@ export const buildManualAdvanceColumns = ({
       if (!row.canManage) {
         return <span className="muted">-</span>
       }
-      const isEditing = editingId === row.id
       const status = row.status.toUpperCase()
       const canEdit = status !== 'VOID'
       const canApprove = row.status.toUpperCase() === 'DRAFT'
@@ -151,17 +130,14 @@ export const buildManualAdvanceColumns = ({
             <button
               className="btn btn-ghost"
               type="button"
-              onClick={() => (isEditing ? onSaveEdit(row) : onStartEdit(row))}
-              disabled={loadingAction === `update:${row.id}`}
+              onClick={() => onOpenCorrection(row)}
             >
-              {loadingAction === `update:${row.id}` ? 'Đang lưu...' : isEditing ? 'Lưu' : 'Sửa'}
+              Sửa
             </button>
           )}
-          {isEditing && (
-            <button className="btn btn-ghost" type="button" onClick={onCancelEdit}>
-              Bỏ
-            </button>
-          )}
+          <button className="btn btn-ghost" type="button" onClick={() => onOpenHistory(row)}>
+            Lịch sử sửa
+          </button>
           <button
             className="btn btn-outline"
             type="button"

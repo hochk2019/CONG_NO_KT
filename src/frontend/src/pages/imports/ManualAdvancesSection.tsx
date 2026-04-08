@@ -3,10 +3,12 @@ import { ApiError } from '../../api/client'
 import {
   approveAdvance,
   createAdvance,
+  fetchAdvanceHistory,
   listAdvances,
   unvoidAdvance,
   updateAdvance,
   voidAdvance,
+  type AdvanceHistoryItem,
   type AdvanceListItem,
 } from '../../api/advances'
 import {
@@ -20,6 +22,8 @@ import LookupInput from '../../components/LookupInput'
 import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import AdvanceCorrectionModal from './AdvanceCorrectionModal'
+import AdvanceHistoryModal from './AdvanceHistoryModal'
 import {
   advanceStatusLabels,
   buildManualAdvanceColumns,
@@ -111,8 +115,12 @@ export default function ManualAdvancesSection({
   const [actionError, setActionError] = useState<string | null>(null)
   const [loadingAction, setLoadingAction] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingDescription, setEditingDescription] = useState('')
+  const [correctionAdvance, setCorrectionAdvance] = useState<AdvanceListItem | null>(null)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
+  const [historyAdvance, setHistoryAdvance] = useState<AdvanceListItem | null>(null)
+  const [historyItems, setHistoryItems] = useState<AdvanceHistoryItem[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [confirmState, setConfirmState] = useState<ManualAdvanceConfirmState | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<string[]>([])
@@ -444,44 +452,75 @@ export default function ManualAdvancesSection({
     }
   }
 
-  const handleStartEdit = (row: AdvanceListItem) => {
+  const handleOpenCorrection = (row: AdvanceListItem) => {
     resetMessages()
-    setEditingId(row.id)
-    setEditingDescription(row.description ?? '')
+    setCorrectionError(null)
+    setCorrectionAdvance(row)
   }
 
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setEditingDescription('')
+  const handleCloseCorrection = () => {
+    if (correctionAdvance && loadingAction === `update:${correctionAdvance.id}`) return
+    setCorrectionAdvance(null)
+    setCorrectionError(null)
   }
 
-  const handleSaveEdit = async (row: AdvanceListItem) => {
-    if (!token || !row.canManage) return
+  const handleSubmitCorrection = async (payload: {
+    advanceNo?: string | null
+    advanceDate?: string | null
+    amount?: number | null
+    description?: string | null
+    reason: string
+    version: number
+  }) => {
+    if (!token || !correctionAdvance?.canManage) return
     resetMessages()
-    setLoadingAction(`update:${row.id}`)
+    setCorrectionError(null)
+    setLoadingAction(`update:${correctionAdvance.id}`)
     try {
-      const result = await updateAdvance(token, row.id, {
-        description: editingDescription.trim() || null,
-        version: row.version,
-      })
+      const result = await updateAdvance(token, correctionAdvance.id, payload)
       setListRows((prev) =>
         prev.map((item) =>
-          item.id === row.id
-            ? { ...item, description: result.description ?? null, version: result.version }
-            : item,
+          item.id === correctionAdvance.id ? { ...item, ...result } : item,
         ),
       )
-      setActionMessage(`Đã cập nhật ghi chú cho ${shortAdvanceId(row.id)}.`)
-      setEditingId(null)
-      setEditingDescription('')
+      setActionMessage(`Đã cập nhật khoản trả hộ ${shortAdvanceId(correctionAdvance.id)}.`)
+      setCorrectionAdvance(null)
     } catch (err) {
       if (err instanceof ApiError) {
-        setActionError(err.message)
+        setCorrectionError(err.message)
       } else {
-        setActionError('Không cập nhật được ghi chú.')
+        setCorrectionError('Không cập nhật được khoản trả hộ.')
       }
     } finally {
       setLoadingAction('')
+    }
+  }
+
+  const handleCloseHistory = () => {
+    if (historyLoading) return
+    setHistoryAdvance(null)
+    setHistoryItems([])
+    setHistoryError(null)
+  }
+
+  const handleOpenHistory = async (row: AdvanceListItem) => {
+    if (!token || !row.canManage) return
+    resetMessages()
+    setHistoryAdvance(row)
+    setHistoryItems([])
+    setHistoryError(null)
+    setHistoryLoading(true)
+    try {
+      const result = await fetchAdvanceHistory(token, row.id)
+      setHistoryItems(result)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setHistoryError(err.message)
+      } else {
+        setHistoryError('Không tải được lịch sử điều chỉnh.')
+      }
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -599,12 +638,8 @@ export default function ManualAdvancesSection({
   }
 
   const listColumns = buildManualAdvanceColumns({
-    editingId,
-    editingDescription,
-    setEditingDescription,
-    onStartEdit: handleStartEdit,
-    onSaveEdit: handleSaveEdit,
-    onCancelEdit: handleCancelEdit,
+    onOpenCorrection: handleOpenCorrection,
+    onOpenHistory: handleOpenHistory,
     onApprove: handleApprove,
     onVoid: handleVoid,
     onUnvoid: handleUnvoid,
@@ -1156,6 +1191,26 @@ export default function ManualAdvancesSection({
           setConfirmError(null)
         }}
         onConfirm={handleConfirmAction}
+      />
+
+      <AdvanceCorrectionModal
+        open={Boolean(correctionAdvance)}
+        advance={correctionAdvance}
+        error={correctionError}
+        loading={
+          Boolean(correctionAdvance) && loadingAction === `update:${correctionAdvance?.id}`
+        }
+        onClose={handleCloseCorrection}
+        onSubmit={handleSubmitCorrection}
+      />
+
+      <AdvanceHistoryModal
+        open={Boolean(historyAdvance)}
+        advance={historyAdvance}
+        items={historyItems}
+        error={historyError}
+        loading={historyLoading}
+        onClose={handleCloseHistory}
       />
 
       <ActionConfirmModal

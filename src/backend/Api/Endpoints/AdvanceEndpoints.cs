@@ -1,7 +1,9 @@
 using CongNoGolden.Api;
 using CongNoGolden.Application.Advances;
 using CongNoGolden.Application.Common;
+using CongNoGolden.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Api.Endpoints;
 
@@ -150,6 +152,35 @@ public static class AdvanceEndpoints
             }
         })
         .WithName("AdvanceUpdate")
+        .WithTags("Advances")
+        .RequireAuthorization("AdvanceManage");
+
+        app.MapGet("/advances/{id:guid}/history", async (
+            Guid id,
+            [FromServices] ConGNoDbContext db,
+            CancellationToken ct) =>
+        {
+            var advanceId = id.ToString();
+            var logs = await (
+                from log in db.AuditLogs.AsNoTracking()
+                join user in db.Users.AsNoTracking() on log.UserId equals user.Id into users
+                from user in users.DefaultIfEmpty()
+                where log.EntityType == "ADVANCE" && log.EntityId == advanceId
+                orderby log.CreatedAt descending
+                select new AuditLogListItem(
+                    log.Id,
+                    log.Action,
+                    log.EntityType,
+                    log.EntityId,
+                    user != null ? user.Username : null,
+                    log.CreatedAt,
+                    log.BeforeData,
+                    log.AfterData))
+                .ToListAsync(ct);
+
+            return Results.Ok(logs);
+        })
+        .WithName("AdvanceHistory")
         .WithTags("Advances")
         .RequireAuthorization("AdvanceManage");
 

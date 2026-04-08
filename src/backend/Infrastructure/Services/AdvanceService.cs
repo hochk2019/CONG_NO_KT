@@ -382,7 +382,7 @@ public sealed class AdvanceService : IAdvanceService
     {
         _currentUser.EnsureUser();
 
-        var advance = await _db.Advances.FirstOrDefaultAsync(a => a.Id == advanceId && a.DeletedAt == null, ct);
+        var advance = await _db.Advances.FirstOrDefaultAsync(a => a.Id == advanceId, ct);
         if (advance is null)
         {
             throw new InvalidOperationException("Advance not found.");
@@ -400,28 +400,99 @@ public sealed class AdvanceService : IAdvanceService
 
         if (advance.Status == "VOID")
         {
-            throw new InvalidOperationException("Advance already voided.");
+            throw new InvalidOperationException("Void advances cannot be edited.");
         }
 
         await EnsureCanApproveAdvance(advance, ct);
 
-        var before = new { advance.Description };
+        var effectiveAdvanceNo = string.IsNullOrWhiteSpace(request.AdvanceNo)
+            ? advance.AdvanceNo?.Trim()
+            : request.AdvanceNo.Trim();
+        if (string.IsNullOrWhiteSpace(effectiveAdvanceNo))
+        {
+            throw new InvalidOperationException("Advance number is required.");
+        }
+
+        var effectiveAdvanceDate = request.AdvanceDate ?? advance.AdvanceDate;
+        if (effectiveAdvanceDate == default)
+        {
+            throw new InvalidOperationException("Advance date is required.");
+        }
+
+        var effectiveAmount = request.Amount ?? advance.Amount;
+        if (effectiveAmount <= 0)
+        {
+            throw new InvalidOperationException("Advance amount must be greater than zero.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Reason))
+        {
+            throw new InvalidOperationException("Correction reason is required.");
+        }
+
+        var allocatedTotal = await _db.ReceiptAllocations
+            .Where(a => a.AdvanceId == advance.Id)
+            .SumAsync(a => (decimal?)a.Amount, ct) ?? 0m;
+
+        if (effectiveAmount < allocatedTotal)
+        {
+            throw new InvalidOperationException("Advance amount cannot be lower than allocated total.");
+        }
+
         var nextDescription = string.IsNullOrWhiteSpace(request.Description)
             ? null
             : request.Description.Trim();
+        var nextOutstandingAmount = effectiveAmount - allocatedTotal;
+        var nextStatus = nextOutstandingAmount == 0
+            ? "PAID"
+            : advance.Status == "DRAFT"
+                ? "DRAFT"
+                : "APPROVED";
 
+        var before = new
+        {
+            advance.AdvanceNo,
+            advance.AdvanceDate,
+            advance.Amount,
+            advance.OutstandingAmount,
+            advance.Description,
+            advance.Status
+        };
+
+        await DocumentDuplicateGuard.EnsureAdvanceNumberAvailableAsync(
+            _db,
+            advance.SellerTaxCode,
+            advance.CustomerTaxCode,
+            effectiveAdvanceNo,
+            advance.Id,
+            ct);
+
+        advance.AdvanceNo = effectiveAdvanceNo;
+        advance.AdvanceDate = effectiveAdvanceDate;
+        advance.Amount = effectiveAmount;
+        advance.OutstandingAmount = nextOutstandingAmount;
         advance.Description = nextDescription;
+        advance.Status = nextStatus;
         advance.UpdatedAt = DateTimeOffset.UtcNow;
         advance.Version += 1;
 
-        await _db.SaveChangesAsync(ct);
+        await DocumentDuplicateGuard.SaveAdvanceChangesAsync(_db, ct);
 
         await _auditService.LogAsync(
-            "ADVANCE_UPDATE",
+            "ADVANCE_CORRECT",
             "Advance",
             advance.Id.ToString(),
             before,
-            new { advance.Description },
+            new
+            {
+                advance.AdvanceNo,
+                advance.AdvanceDate,
+                advance.Amount,
+                advance.OutstandingAmount,
+                advance.Description,
+                advance.Status,
+                request.Reason
+            },
             ct);
 
         return new AdvanceUpdateResult(advance.Id, advance.Version, advance.Description);

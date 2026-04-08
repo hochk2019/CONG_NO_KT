@@ -1861,3 +1861,24 @@
 - [x] Verify:
   - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CustomerServiceListTests`
   - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.unassigned-filter.test.tsx`
+
+## Phase 127 - Accountant correction flow for advances and receipts with persistent work notebook (2026-04-08) [bead: cng-952]
+- [x] Tạo bead và khóa trạng thái công việc vào notebook trong repo để có thể resume đúng việc đang làm khi vô tình tắt phiên hoặc đổi tài khoản.
+- [x] Bổ sung correction flow riêng cho khoản trả hộ, cho phép kế toán sửa các trường cốt lõi có kiểm soát và audit reason bắt buộc.
+- [x] Bổ sung correction flow riêng cho phiếu thu, tách rõ sửa metadata với sửa trường ảnh hưởng phân bổ; các thay đổi ảnh hưởng phân bổ phải đưa chứng từ về `DRAFT`.
+- [x] Bổ sung history endpoint theo từng chứng từ cho khoản trả hộ và phiếu thu, dùng lại dữ liệu audit nhưng phục vụ trực tiếp UI chứng từ.
+- [x] Cập nhật UI khoản trả hộ và phiếu thu để kế toán có thể `Sửa` và `Lịch sử sửa` ngay trên chứng từ.
+- [x] Bổ sung/cập nhật test backend và frontend theo TDD cho các rule correction, reopen, audit và document history.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -v minimal`
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT`
+
+### Verification evidence (2026-04-08, phase 127 / cng-952)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -v minimal` => pass (`206/206`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`21/21`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => scope anh huong workspace hien tai duoc danh gia `critical` vi dang co nhieu thay doi unstaged rong hon rieng Phase 127; da doi chieu va khong thay blocker rieng cho correction flow.

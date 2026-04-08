@@ -9,6 +9,8 @@ import ReceiptListSection from '../ReceiptListSection'
 import ReceiptAllocationModal from '../ReceiptAllocationModal'
 import ReceiptAdvancedModal from '../ReceiptAdvancedModal'
 import ReceiptCancelModal from '../ReceiptCancelModal'
+import ReceiptCorrectionModal from '../ReceiptCorrectionModal'
+import ReceiptHistoryModal from '../ReceiptHistoryModal'
 import ReceiptViewAllocationsModal from '../ReceiptViewAllocationsModal'
 
 const baseAuth: AuthContextValue = {
@@ -111,6 +113,80 @@ describe('receipts modules', () => {
     expect(screen.getByText('Lý do hủy')).toBeInTheDocument()
   })
 
+  it('renders correction modal', () => {
+    render(
+      <ReceiptCorrectionModal
+        open
+        receipt={{
+          id: 'receipt-1',
+          status: 'APPROVED',
+          version: 2,
+          amount: 1000000,
+          unallocatedAmount: 0,
+          autoAllocateEnabled: true,
+          receiptNo: 'PT-001',
+          receiptDate: '2025-01-05',
+          allocationMode: 'MANUAL',
+          allocationStatus: 'ALLOCATED',
+          allocationPriority: 'ISSUE_DATE',
+          method: 'BANK',
+          description: 'ghi chu cu',
+          sellerTaxCode: '2301098313',
+          customerTaxCode: '2300328765',
+        }}
+        error={null}
+        loading={false}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Điều chỉnh phiếu thu')).toBeInTheDocument()
+    expect(screen.getByLabelText('Lý do điều chỉnh')).toBeInTheDocument()
+  })
+
+  it('renders receipt history modal', () => {
+    render(
+      <ReceiptHistoryModal
+        open
+        receipt={{
+          id: 'receipt-1',
+          status: 'APPROVED',
+          version: 2,
+          receiptNo: 'PT-001',
+          receiptDate: '2025-01-05',
+          amount: 1000000,
+          unallocatedAmount: 0,
+          autoAllocateEnabled: true,
+          allocationMode: 'MANUAL',
+          allocationStatus: 'ALLOCATED',
+          allocationPriority: 'ISSUE_DATE',
+          method: 'BANK',
+          description: null,
+          sellerTaxCode: '2301098313',
+          customerTaxCode: '2300328765',
+          canManage: true,
+        }}
+        items={[
+          {
+            id: 'hist-1',
+            action: 'CORRECTED',
+            entityType: 'RECEIPT',
+            entityId: 'receipt-1',
+            userName: 'tester',
+            createdAt: '2026-03-20T10:30:00Z',
+            beforeData: '{"description":"cu"}',
+            afterData: '{"description":"moi"}',
+          },
+        ]}
+        error={null}
+        loading={false}
+        onClose={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Lịch sử điều chỉnh phiếu thu')).toBeInTheDocument()
+    expect(screen.getByText('CORRECTED')).toBeInTheDocument()
+  })
+
   it('closes cancel modal via scrim', async () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
@@ -143,9 +219,10 @@ describe('receipts modules', () => {
             unallocatedAmount: 200000,
             autoAllocateEnabled: true,
             allocationMode: 'MANUAL',
-            allocationStatus: 'PARTIAL',
-            allocationPriority: 'ISSUE_DATE',
+          allocationStatus: 'PARTIAL',
+          allocationPriority: 'ISSUE_DATE',
             method: 'BANK',
+            description: null,
             sellerTaxCode: '2301098313',
           customerTaxCode: '2300328765',
           canManage: true,

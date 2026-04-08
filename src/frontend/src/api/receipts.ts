@@ -29,6 +29,7 @@ export type ReceiptDto = {
   allocationSuggestedAt?: string | null
   selectedTargets?: ReceiptTargetRef[] | null
   method: string
+  description?: string | null
   sellerTaxCode: string
   customerTaxCode: string
 }
@@ -58,6 +59,31 @@ export type ReceiptDraftUpdateRequest = {
   allocationPriority?: string | null
   selectedTargets?: ReceiptTargetRef[] | null
   version: number
+}
+
+export type ReceiptCorrectionRequest = {
+  receiptNo?: string | null
+  receiptDate?: string | null
+  amount?: number | null
+  allocationMode?: string | null
+  appliedPeriodStart?: string | null
+  method?: string | null
+  description?: string | null
+  allocationPriority?: string | null
+  selectedTargets?: ReceiptTargetRef[] | null
+  reason: string
+  version: number
+}
+
+export type ReceiptHistoryItem = {
+  id: string
+  action: string
+  entityType: string
+  entityId: string
+  userName?: string | null
+  createdAt: string
+  beforeData?: string | null
+  afterData?: string | null
 }
 
 export type ReceiptPreviewResult = {
@@ -90,6 +116,7 @@ export type ReceiptListItem = {
   lastReminderAt?: string | null
   reminderDisabledAt?: string | null
   method: string
+  description?: string | null
   sellerTaxCode: string
   customerTaxCode: string
   customerName?: string | null
@@ -307,6 +334,30 @@ export const updateReceiptDraft = async (
   })
 }
 
+export const correctReceipt = async (
+  token: string,
+  receiptId: string,
+  payload: ReceiptCorrectionRequest,
+) => {
+  return apiFetch<ReceiptDto>(`/receipts/${receiptId}/correct`, {
+    method: 'POST',
+    token,
+    body: {
+      receiptNo: payload.receiptNo ?? null,
+      receiptDate: payload.receiptDate ?? null,
+      amount: payload.amount ?? null,
+      allocationMode: payload.allocationMode ?? null,
+      appliedPeriodStart: payload.appliedPeriodStart ?? null,
+      method: payload.method ?? null,
+      description: payload.description ?? null,
+      allocationPriority: payload.allocationPriority ?? null,
+      selectedTargets: payload.selectedTargets ?? null,
+      reason: payload.reason,
+      version: payload.version,
+    },
+  })
+}
+
 export const approveReceiptsBulk = async (
   token: string,
   payload: {
@@ -374,6 +425,10 @@ export const unvoidReceipt = async (
 
 export const fetchReceiptAllocations = async (token: string, receiptId: string) => {
   return apiFetch<ReceiptAllocationDetail[]>(`/receipts/${receiptId}/allocations`, { token })
+}
+
+export const fetchReceiptHistory = async (token: string, receiptId: string) => {
+  return apiFetch<ReceiptHistoryItem[]>(`/receipts/${receiptId}/history`, { token })
 }
 
 export const fetchReceiptOpenItems = async (params: {

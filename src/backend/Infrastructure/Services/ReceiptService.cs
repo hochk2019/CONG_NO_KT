@@ -393,6 +393,7 @@ public sealed partial class ReceiptService : IReceiptService
             receipt.AllocationSuggestedAt,
             DeserializeTargets(receipt.AllocationTargets),
             receipt.Method,
+            receipt.Description,
             receipt.SellerTaxCode,
             receipt.CustomerTaxCode);
     }

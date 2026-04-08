@@ -1,7 +1,9 @@
 using CongNoGolden.Api;
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Receipts;
+using CongNoGolden.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Api.Endpoints;
 
@@ -160,6 +162,26 @@ public static class ReceiptEndpoints
             }
         })
         .WithName("ReceiptDraftUpdate")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
+        app.MapPost("/receipts/{id:guid}/correct", async (
+            Guid id,
+            [FromBody] ReceiptCorrectionRequest request,
+            IReceiptService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var result = await service.CorrectAsync(id, request, ct);
+                return Results.Ok(result);
+            }
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException or ConcurrencyException)
+            {
+                return ApiErrors.FromException(ex);
+            }
+        })
+        .WithName("ReceiptCorrect")
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 
@@ -359,6 +381,35 @@ public static class ReceiptEndpoints
             }
         })
         .WithName("ReceiptReminderUpdate")
+        .WithTags("Receipts")
+        .RequireAuthorization("ReceiptApprove");
+
+        app.MapGet("/receipts/{id:guid}/history", async (
+            Guid id,
+            [FromServices] ConGNoDbContext db,
+            CancellationToken ct) =>
+        {
+            var receiptId = id.ToString();
+            var logs = await (
+                from log in db.AuditLogs.AsNoTracking()
+                join user in db.Users.AsNoTracking() on log.UserId equals user.Id into users
+                from user in users.DefaultIfEmpty()
+                where log.EntityType == "RECEIPT" && log.EntityId == receiptId
+                orderby log.CreatedAt descending
+                select new AuditLogListItem(
+                    log.Id,
+                    log.Action,
+                    log.EntityType,
+                    log.EntityId,
+                    user != null ? user.Username : null,
+                    log.CreatedAt,
+                    log.BeforeData,
+                    log.AfterData))
+                .ToListAsync(ct);
+
+            return Results.Ok(logs);
+        })
+        .WithName("ReceiptHistory")
         .WithTags("Receipts")
         .RequireAuthorization("ReceiptApprove");
 

@@ -2,7 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   approveReceipt,
   approveReceiptsBulk,
+  correctReceipt,
   fetchReceiptAllocations,
+  fetchReceiptHistory,
   fetchReceiptOpenItems,
   getReceipt,
   listReceipts,
@@ -10,6 +12,8 @@ import {
   updateReceiptReminder,
   voidReceipt,
   type ReceiptAllocationDetail,
+  type ReceiptDto,
+  type ReceiptHistoryItem,
   type ReceiptListItem,
   type ReceiptOpenItem,
   type ReceiptTargetRef,
@@ -28,7 +32,9 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatDate, formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
 import ReceiptAllocationModal from './ReceiptAllocationModal'
+import ReceiptCorrectionModal from './ReceiptCorrectionModal'
 import ReceiptCancelModal from './ReceiptCancelModal'
+import ReceiptHistoryModal from './ReceiptHistoryModal'
 import ReceiptSurplusQueuePanel from './ReceiptSurplusQueuePanel'
 import ReceiptViewAllocationsModal from './ReceiptViewAllocationsModal'
 import {
@@ -141,6 +147,16 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [bulkApproveOpen, setBulkApproveOpen] = useState(false)
   const [bulkApproveError, setBulkApproveError] = useState<string | null>(null)
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false)
+  const [correctionOpen, setCorrectionOpen] = useState(false)
+  const [correctionReceipt, setCorrectionReceipt] = useState<ReceiptDto | null>(null)
+  const [correctionRow, setCorrectionRow] = useState<ReceiptListItem | null>(null)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
+  const [correctionLoading, setCorrectionLoading] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyRow, setHistoryRow] = useState<ReceiptListItem | null>(null)
+  const [historyItems, setHistoryItems] = useState<ReceiptHistoryItem[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const [approvalRow, setApprovalRow] = useState<ReceiptListItem | null>(null)
   const [approvalTargets, setApprovalTargets] = useState<ReceiptTargetRef[]>([])
@@ -193,7 +209,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     return () => {
       isActive = false
     }
-  }, [token, debouncedSellerQuery])
+  }, [token, activeTab, debouncedSellerQuery])
 
   useEffect(() => {
     if (!token) return
@@ -310,6 +326,99 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         )
       } catch (err) {
         setListError(err instanceof ApiError ? err.message : 'Không cập nhật được nhắc duyệt.')
+      }
+    },
+    [token],
+  )
+
+  const handleCloseCorrection = useCallback(() => {
+    if (correctionLoading) return
+    setCorrectionOpen(false)
+    setCorrectionReceipt(null)
+    setCorrectionRow(null)
+    setCorrectionError(null)
+  }, [correctionLoading])
+
+  const handleOpenCorrection = useCallback(
+    async (row: ReceiptListItem) => {
+      if (!token || !row.canManage || row.status === 'VOID') return
+      setListMessage(null)
+      setListError(null)
+      setCorrectionOpen(true)
+      setCorrectionLoading(true)
+      setCorrectionError(null)
+      setCorrectionRow(row)
+      setCorrectionReceipt(null)
+      try {
+        const detail = await getReceipt(token, row.id)
+        setCorrectionReceipt(detail)
+      } catch (err) {
+        setCorrectionError(err instanceof ApiError ? err.message : 'Không tải được phiếu thu.')
+      } finally {
+        setCorrectionLoading(false)
+      }
+    },
+    [token],
+  )
+
+  const handleSubmitCorrection = useCallback(
+    async (payload: {
+      receiptNo?: string | null
+      receiptDate?: string | null
+      amount?: number | null
+      method?: string | null
+      description?: string | null
+      reason: string
+      version: number
+    }) => {
+      if (!token || !correctionRow) return
+      setListMessage(null)
+      setCorrectionLoading(true)
+      setCorrectionError(null)
+      try {
+        const corrected = await correctReceipt(token, correctionRow.id, payload)
+        setListRows((prev) =>
+          prev.map((item) => (item.id === correctionRow.id ? { ...item, ...corrected } : item)),
+        )
+        setCorrectionReceipt(corrected)
+        setCorrectionOpen(false)
+        setCorrectionRow(null)
+        setCorrectionError(null)
+        setListMessage(`Đã cập nhật phiếu thu ${corrected.receiptNo?.trim() || correctionRow.id}.`)
+      } catch (err) {
+        setCorrectionError(err instanceof ApiError ? err.message : 'Không điều chỉnh được phiếu thu.')
+      } finally {
+        setCorrectionLoading(false)
+      }
+    },
+    [correctionRow, token],
+  )
+
+  const handleCloseHistory = useCallback(() => {
+    setHistoryOpen(false)
+    setHistoryRow(null)
+    setHistoryItems([])
+    setHistoryError(null)
+    setHistoryLoading(false)
+  }, [])
+
+  const handleOpenHistory = useCallback(
+    async (row: ReceiptListItem) => {
+      if (!token || !row.canManage) return
+      setListMessage(null)
+      setListError(null)
+      setHistoryOpen(true)
+      setHistoryRow(row)
+      setHistoryItems([])
+      setHistoryError(null)
+      setHistoryLoading(true)
+      try {
+        const items = await fetchReceiptHistory(token, row.id)
+        setHistoryItems(items)
+      } catch (err) {
+        setHistoryError(err instanceof ApiError ? err.message : 'Không tải được lịch sử điều chỉnh.')
+      } finally {
+        setHistoryLoading(false)
       }
     },
     [token],
@@ -546,6 +655,16 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
             <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleOpenView(row)}>
               Xem
             </button>
+            {row.canManage && row.status !== 'VOID' && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void handleOpenCorrection(row)}>
+                Sửa
+              </button>
+            )}
+            {row.canManage && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void handleOpenHistory(row)}>
+                Lịch sử sửa
+              </button>
+            )}
             {row.status === 'DRAFT' && row.canManage && (
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleOpenApprove(row)}>
                 Duyệt
@@ -575,6 +694,8 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     ],
     [
       handleOpenApprove,
+      handleOpenCorrection,
+      handleOpenHistory,
       handleOpenView,
       handleToggleReminder,
       handleUnvoid,
@@ -1024,6 +1145,26 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         onConfirm={handleCancelConfirm}
         loading={cancelLoading}
         error={cancelError}
+      />
+
+      <ReceiptCorrectionModal
+        open={correctionOpen}
+        receipt={correctionReceipt}
+        error={correctionError}
+        loading={correctionLoading}
+        onClose={handleCloseCorrection}
+        onSubmit={(payload) => {
+          void handleSubmitCorrection(payload)
+        }}
+      />
+
+      <ReceiptHistoryModal
+        open={historyOpen}
+        receipt={historyRow}
+        items={historyItems}
+        error={historyError}
+        loading={historyLoading}
+        onClose={handleCloseHistory}
       />
 
       <ReceiptAllocationModal

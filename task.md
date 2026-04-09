@@ -11,6 +11,28 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 124 - Receipt side-effects metadata/version sync (2026-04-09) [bead: cng-d1g]
+- [x] Gom helper side-effects phiếu thu dùng chung sang partial mới `ReceiptService.AllocationEffects.cs` để tránh lặp logic giữa approve/void/correct/auto-allocation.
+- [x] Cập nhật luồng `ApproveAsync`, `VoidAsync`, `CorrectAsync` và auto-allocation để mọi mutation lên `Invoice`, `Advance`, `Customer` đều touch `UpdatedAt` và increment `Version`.
+- [x] Bổ sung/chỉnh regression integration tests để khóa hành vi metadata/version cho các flow approve, void, correction và auto-allocation.
+- [x] Chạy lại verify liên quan và đối chiếu blast radius bằng GitNexus trước khi chốt.
+
+### Verification evidence (2026-04-09, phase 124 / cng-d1g)
+- [x] GitNexus impact:
+  - [x] `ApplyAllocations` => `HIGH`
+  - [x] `ApproveAsync` => `HIGH`
+  - [x] `VoidAsync`, `RestoreInvoice`, `RestoreAdvance`, `ReverseApprovedEffectsAsync`, `CorrectAsync` => `LOW`
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptLifecycleRbacTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal` => pass (`11/11`).
+- [x] `git status --short` sau khi hoàn tất chỉ ra scope sửa trực tiếp ở nhóm file receipt service/test + helper mới; worktree vốn đã bẩn sẵn với `AGENTS.md`, `.claude/`, `CLAUDE.md`.
+- [x] `gitnexus_detect_changes(scope: "all", base_ref: "main")` đã chạy; output tổng thể báo `critical` do worktree đang có thay đổi ngoài task hiện tại, nhưng phần file sửa trực tiếp vẫn giới hạn trong:
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.Void.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.Correction.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.AutoAllocation.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.AllocationEffects.cs`
+  - [x] `src/backend/Tests.Integration/ReceiptLifecycleRbacTests.cs`
+  - [x] `src/backend/Tests.Integration/ReceiptCorrectionTests.cs`
+
 ## Phase 120 - Merge deployed data branch back into main (2026-04-07) [bead: cng-akc]
 - [x] Merge `fix/table-scroll-hint-20260307` vào `main` bằng merge commit để giữ lại cả lịch sử nhánh fix lẫn commit dữ liệu cục bộ `9347540` trên `main`.
 - [x] Đồng bộ regression test sau merge: sửa assertion frontend cũ đang mong đợi nhãn `Xem trước` trong khi copy hiện hành là `Xem trước lần cuối`.

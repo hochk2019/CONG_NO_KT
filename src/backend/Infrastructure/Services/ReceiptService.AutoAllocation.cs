@@ -62,7 +62,7 @@ public sealed partial class ReceiptService
 
         if (request.AutoAllocateEnabled)
         {
-            allocatedTotal = await ApplyApprovedReceiptAutoAllocationAsync(receipt, ct);
+            allocatedTotal = await ApplyApprovedReceiptAutoAllocationAsync(receipt, now, ct);
         }
 
         receipt.UpdatedAt = now;
@@ -178,7 +178,7 @@ public sealed partial class ReceiptService
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-        await ApplyAllocations(receipt, allocation.Lines, ct);
+        await ApplyAllocations(receipt, allocation.Lines, now, ct);
 
         receipt.UnallocatedAmount = allocation.UnallocatedAmount;
         receipt.AllocationMode = "MANUAL";
@@ -250,6 +250,7 @@ public sealed partial class ReceiptService
 
     private async Task<decimal> ApplyApprovedReceiptAutoAllocationAsync(
         Receipt receipt,
+        DateTimeOffset now,
         CancellationToken ct)
     {
         if (receipt.UnallocatedAmount <= 0)
@@ -280,7 +281,7 @@ public sealed partial class ReceiptService
             return 0m;
         }
 
-        await ApplyAllocations(receipt, allocation.Lines, ct);
+        await ApplyAllocations(receipt, allocation.Lines, now, ct);
 
         receipt.UnallocatedAmount = allocation.UnallocatedAmount;
         receipt.AllocationStatus = allocation.UnallocatedAmount > 0

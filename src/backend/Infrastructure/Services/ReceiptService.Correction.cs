@@ -73,6 +73,7 @@ public sealed partial class ReceiptService
         var selectedTargets = request.SelectedTargets is null
             ? DeserializeTargets(receipt.AllocationTargets)?.ToList() ?? []
             : NormalizeSelectedTargets(request.SelectedTargets).ToList();
+        var now = DateTimeOffset.UtcNow;
 
         var allocationFieldsChanged =
             request.Amount != receipt.Amount ||
@@ -85,7 +86,7 @@ public sealed partial class ReceiptService
         {
             await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
-            await ReverseApprovedEffectsAsync(receipt, ct);
+            await ReverseApprovedEffectsAsync(receipt, now, ct);
             await ApplyCorrectionDraftValuesAsync(
                 receipt,
                 normalizedReceiptNo,
@@ -95,6 +96,7 @@ public sealed partial class ReceiptService
                 allocationPriority,
                 appliedPeriodStart,
                 selectedTargets,
+                now,
                 ct);
 
             receipt.Status = ReceiptStatusCodes.Draft;
@@ -125,16 +127,17 @@ public sealed partial class ReceiptService
                     receipt,
                     normalizedReceiptNo,
                     request,
-                    method,
-                    allocationMode,
-                    allocationPriority,
-                    appliedPeriodStart,
-                    selectedTargets,
-                    ct,
-                    ensureDuplicate: false);
+                method,
+                allocationMode,
+                allocationPriority,
+                appliedPeriodStart,
+                selectedTargets,
+                now,
+                ct,
+                ensureDuplicate: false);
             }
 
-            receipt.UpdatedAt = DateTimeOffset.UtcNow;
+            receipt.UpdatedAt = now;
             receipt.Version += 1;
 
             await DocumentDuplicateGuard.SaveReceiptChangesAsync(_db, ct);
@@ -178,6 +181,7 @@ public sealed partial class ReceiptService
         string allocationPriority,
         DateOnly? appliedPeriodStart,
         IReadOnlyList<ReceiptTargetRef> selectedTargets,
+        DateTimeOffset now,
         CancellationToken ct,
         bool ensureDuplicate = true)
     {
@@ -218,11 +222,11 @@ public sealed partial class ReceiptService
             : ReceiptAllocationStatusCodes.Unallocated;
         receipt.AllocationSource = selectedTargets.Count > 0 ? "MANUAL" : null;
         receipt.UnallocatedAmount = 0;
-        receipt.UpdatedAt = DateTimeOffset.UtcNow;
+        receipt.UpdatedAt = now;
         receipt.Version += 1;
     }
 
-    private async Task ReverseApprovedEffectsAsync(Receipt receipt, CancellationToken ct)
+    private async Task ReverseApprovedEffectsAsync(Receipt receipt, DateTimeOffset now, CancellationToken ct)
     {
         var allocations = await _db.ReceiptAllocations
             .Where(a => a.ReceiptId == receipt.Id)
@@ -257,12 +261,12 @@ public sealed partial class ReceiptService
             {
                 if (allocation.InvoiceId.HasValue && invoices.TryGetValue(allocation.InvoiceId.Value, out var invoice))
                 {
-                    RestoreInvoice(invoice, allocation.Amount);
+                    RestoreInvoice(invoice, allocation.Amount, now);
                 }
 
                 if (allocation.AdvanceId.HasValue && advances.TryGetValue(allocation.AdvanceId.Value, out var advance))
                 {
-                    RestoreAdvance(advance, allocation.Amount);
+                    RestoreAdvance(advance, allocation.Amount, now);
                 }
             }
 
@@ -277,7 +281,7 @@ public sealed partial class ReceiptService
         var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
         if (customer is not null)
         {
-            customer.CurrentBalance += receipt.Amount;
+            AdjustCustomerBalance(customer, receipt.Amount, now);
         }
     }
 

@@ -28,6 +28,10 @@ public class ReceiptLifecycleRbacTests
         await SeedUserAsync(db, ownerId, "owner-accountant");
         var (seller, customer) = await SeedMasterAsync(db, ownerId);
         var invoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-1001", 1_000_000m);
+        var invoiceVersionBeforeApprove = invoice.Version;
+        var invoiceUpdatedAtBeforeApprove = invoice.UpdatedAt;
+        var customerVersionBeforeApprove = customer.Version;
+        var customerUpdatedAtBeforeApprove = customer.UpdatedAt;
 
         var service = BuildService(db, ownerId, ["Accountant"]);
         var createResult = await service.CreateAsync(
@@ -63,12 +67,20 @@ public class ReceiptLifecycleRbacTests
         Assert.Equal("ALLOCATED", approvedReceipt.AllocationStatus);
         Assert.Equal(1, approvedReceipt.Version);
 
-        var invoiceAfterApprove = await db.Invoices.FirstAsync(i => i.Id == invoice.Id);
-        var customerAfterApprove = await db.Customers.FirstAsync(c => c.TaxCode == customer.TaxCode);
+        var invoiceAfterApprove = await db.Invoices
+            .AsNoTracking()
+            .FirstAsync(i => i.Id == invoice.Id);
+        var customerAfterApprove = await db.Customers
+            .AsNoTracking()
+            .FirstAsync(c => c.TaxCode == customer.TaxCode);
 
         Assert.Equal(0, invoiceAfterApprove.OutstandingAmount);
         Assert.Equal("PAID", invoiceAfterApprove.Status);
+        Assert.Equal(invoiceVersionBeforeApprove + 1, invoiceAfterApprove.Version);
+        Assert.NotEqual(invoiceUpdatedAtBeforeApprove, invoiceAfterApprove.UpdatedAt);
         Assert.Equal(-1_000_000m, customerAfterApprove.CurrentBalance);
+        Assert.Equal(customerVersionBeforeApprove + 1, customerAfterApprove.Version);
+        Assert.NotEqual(customerUpdatedAtBeforeApprove, customerAfterApprove.UpdatedAt);
 
         var voidResult = await service.VoidAsync(
             createResult.Id,
@@ -78,9 +90,15 @@ public class ReceiptLifecycleRbacTests
         Assert.Equal(1_000_000m, voidResult.ReversedAmount);
         Assert.Equal(1, voidResult.ReversedAllocations);
 
-        var voidedReceipt = await db.Receipts.FirstAsync(r => r.Id == createResult.Id);
-        var invoiceAfterVoid = await db.Invoices.FirstAsync(i => i.Id == invoice.Id);
-        var customerAfterVoid = await db.Customers.FirstAsync(c => c.TaxCode == customer.TaxCode);
+        var voidedReceipt = await db.Receipts
+            .AsNoTracking()
+            .FirstAsync(r => r.Id == createResult.Id);
+        var invoiceAfterVoid = await db.Invoices
+            .AsNoTracking()
+            .FirstAsync(i => i.Id == invoice.Id);
+        var customerAfterVoid = await db.Customers
+            .AsNoTracking()
+            .FirstAsync(c => c.TaxCode == customer.TaxCode);
 
         Assert.Equal("VOID", voidedReceipt.Status);
         Assert.NotNull(voidedReceipt.DeletedAt);
@@ -88,7 +106,11 @@ public class ReceiptLifecycleRbacTests
 
         Assert.Equal(1_000_000m, invoiceAfterVoid.OutstandingAmount);
         Assert.Equal("OPEN", invoiceAfterVoid.Status);
+        Assert.Equal(invoiceAfterApprove.Version + 1, invoiceAfterVoid.Version);
+        Assert.NotEqual(invoiceAfterApprove.UpdatedAt, invoiceAfterVoid.UpdatedAt);
         Assert.Equal(0, customerAfterVoid.CurrentBalance);
+        Assert.Equal(customerAfterApprove.Version + 1, customerAfterVoid.Version);
+        Assert.NotEqual(customerAfterApprove.UpdatedAt, customerAfterVoid.UpdatedAt);
     }
 
     [Fact]
@@ -103,6 +125,10 @@ public class ReceiptLifecycleRbacTests
         var firstInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4001", 400_000m);
         var secondInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4002", 300_000m);
         var advance = await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-4001", 200_000m);
+        var secondInvoiceVersionBeforeManualAllocation = secondInvoice.Version;
+        var secondInvoiceUpdatedAtBeforeManualAllocation = secondInvoice.UpdatedAt;
+        var advanceVersionBeforeManualAllocation = advance.Version;
+        var advanceUpdatedAtBeforeManualAllocation = advance.UpdatedAt;
 
         var service = BuildService(db, ownerId, ["Accountant"]);
         var draft = await service.CreateAsync(
@@ -163,8 +189,12 @@ public class ReceiptLifecycleRbacTests
 
         Assert.Equal("PAID", secondInvoiceAfter.Status);
         Assert.Equal(0m, secondInvoiceAfter.OutstandingAmount);
+        Assert.Equal(secondInvoiceVersionBeforeManualAllocation + 1, secondInvoiceAfter.Version);
+        Assert.NotEqual(secondInvoiceUpdatedAtBeforeManualAllocation, secondInvoiceAfter.UpdatedAt);
         Assert.Equal("PAID", advanceAfter.Status);
         Assert.Equal(0m, advanceAfter.OutstandingAmount);
+        Assert.Equal(advanceVersionBeforeManualAllocation + 1, advanceAfter.Version);
+        Assert.NotEqual(advanceUpdatedAtBeforeManualAllocation, advanceAfter.UpdatedAt);
         Assert.Equal(3, allocations.Count);
     }
 
@@ -180,6 +210,10 @@ public class ReceiptLifecycleRbacTests
         var firstInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4101", 400_000m);
         var secondInvoice = await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-4102", 300_000m);
         var advance = await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-4101", 200_000m);
+        var secondInvoiceVersionBeforeReapply = secondInvoice.Version;
+        var secondInvoiceUpdatedAtBeforeReapply = secondInvoice.UpdatedAt;
+        var advanceVersionBeforeReapply = advance.Version;
+        var advanceUpdatedAtBeforeReapply = advance.UpdatedAt;
 
         var service = BuildService(db, ownerId, ["Accountant"]);
         var draft = await service.CreateAsync(
@@ -236,9 +270,84 @@ public class ReceiptLifecycleRbacTests
 
         Assert.Equal("PAID", secondInvoiceAfter.Status);
         Assert.Equal(0m, secondInvoiceAfter.OutstandingAmount);
+        Assert.Equal(secondInvoiceVersionBeforeReapply + 1, secondInvoiceAfter.Version);
+        Assert.NotEqual(secondInvoiceUpdatedAtBeforeReapply, secondInvoiceAfter.UpdatedAt);
         Assert.Equal("PAID", advanceAfter.Status);
         Assert.Equal(0m, advanceAfter.OutstandingAmount);
+        Assert.Equal(advanceVersionBeforeReapply + 1, advanceAfter.Version);
+        Assert.NotEqual(advanceUpdatedAtBeforeReapply, advanceAfter.UpdatedAt);
         Assert.Equal(3, allocations.Count);
+    }
+
+    [Fact]
+    public async Task CreateApproveVoidFlow_WithAdvanceAllocation_UpdatesAdvanceAndCustomerMetadata()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var ownerId = Guid.Parse("14141414-1414-1414-1414-141414141414");
+        await SeedUserAsync(db, ownerId, "owner-advance-lifecycle");
+        var (seller, customer) = await SeedMasterAsync(db, ownerId);
+        var advance = await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-5001", 300_000m);
+        var advanceVersionBeforeApprove = advance.Version;
+        var advanceUpdatedAtBeforeApprove = advance.UpdatedAt;
+        var customerVersionBeforeApprove = customer.Version;
+        var customerUpdatedAtBeforeApprove = customer.UpdatedAt;
+
+        var service = BuildService(db, ownerId, ["Accountant"]);
+        var createResult = await service.CreateAsync(
+            new ReceiptCreateRequest(
+                seller.SellerTaxCode,
+                customer.TaxCode,
+                "PT-5001",
+                DateOnly.FromDateTime(DateTime.UtcNow.Date),
+                300_000m,
+                "MANUAL",
+                null,
+                "BANK",
+                "Advance lifecycle test",
+                "ISSUE_DATE",
+                [new ReceiptTargetRef(advance.Id, "ADVANCE")]),
+            CancellationToken.None);
+
+        var approveResult = await service.ApproveAsync(
+            createResult.Id,
+            new ReceiptApproveRequest(null, createResult.Version),
+            CancellationToken.None);
+
+        Assert.Equal(0m, approveResult.UnallocatedAmount);
+
+        var approvedReceipt = await service.GetAsync(createResult.Id, CancellationToken.None);
+        var advanceAfterApprove = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var customerAfterApprove = await db.Customers.AsNoTracking().FirstAsync(c => c.TaxCode == customer.TaxCode);
+
+        Assert.Equal("APPROVED", approvedReceipt.Status);
+        Assert.Equal("PAID", advanceAfterApprove.Status);
+        Assert.Equal(0m, advanceAfterApprove.OutstandingAmount);
+        Assert.Equal(advanceVersionBeforeApprove + 1, advanceAfterApprove.Version);
+        Assert.NotEqual(advanceUpdatedAtBeforeApprove, advanceAfterApprove.UpdatedAt);
+        Assert.Equal(-300_000m, customerAfterApprove.CurrentBalance);
+        Assert.Equal(customerVersionBeforeApprove + 1, customerAfterApprove.Version);
+        Assert.NotEqual(customerUpdatedAtBeforeApprove, customerAfterApprove.UpdatedAt);
+
+        var voidResult = await service.VoidAsync(
+            createResult.Id,
+            new ReceiptVoidRequest("Sai cấn trừ tạm ứng", approvedReceipt.Version),
+            CancellationToken.None);
+
+        Assert.Equal(300_000m, voidResult.ReversedAmount);
+        Assert.Equal(1, voidResult.ReversedAllocations);
+
+        var advanceAfterVoid = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var customerAfterVoid = await db.Customers.AsNoTracking().FirstAsync(c => c.TaxCode == customer.TaxCode);
+
+        Assert.Equal("APPROVED", advanceAfterVoid.Status);
+        Assert.Equal(300_000m, advanceAfterVoid.OutstandingAmount);
+        Assert.Equal(advanceAfterApprove.Version + 1, advanceAfterVoid.Version);
+        Assert.NotEqual(advanceAfterApprove.UpdatedAt, advanceAfterVoid.UpdatedAt);
+        Assert.Equal(0m, customerAfterVoid.CurrentBalance);
+        Assert.Equal(customerAfterApprove.Version + 1, customerAfterVoid.Version);
+        Assert.NotEqual(customerAfterApprove.UpdatedAt, customerAfterVoid.UpdatedAt);
     }
 
     [Fact]

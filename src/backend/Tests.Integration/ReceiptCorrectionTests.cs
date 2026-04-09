@@ -54,6 +54,11 @@ public class ReceiptCorrectionTests
         var customer = await db.Customers.FirstAsync(c => c.TaxCode == "CUST01");
         customer.CurrentBalance = -200m;
         await db.SaveChangesAsync();
+        var customerSnapshotBeforeCorrection = await db.Customers
+            .AsNoTracking()
+            .FirstAsync(c => c.TaxCode == "CUST01");
+        var customerVersionBeforeCorrection = customerSnapshotBeforeCorrection.Version;
+        var customerUpdatedAtBeforeCorrection = customerSnapshotBeforeCorrection.UpdatedAt;
 
         var user = new TestCurrentUser(userId, new[] { "Admin" });
         var service = new ReceiptService(db, user, new AuditService(db, user));
@@ -86,6 +91,8 @@ public class ReceiptCorrectionTests
         Assert.Equal("after", persisted.Description);
         Assert.Equal("APPROVED", persisted.Status);
         Assert.Equal(-200m, refreshedCustomer.CurrentBalance);
+        Assert.Equal(customerVersionBeforeCorrection, refreshedCustomer.Version);
+        Assert.Equal(customerUpdatedAtBeforeCorrection, refreshedCustomer.UpdatedAt);
 
         var audit = await db.AuditLogs.AsNoTracking()
             .SingleAsync(log => log.EntityType == "Receipt" && log.EntityId == receipt.Id.ToString());
@@ -103,6 +110,8 @@ public class ReceiptCorrectionTests
         var userId = Guid.Parse("22222222-2222-2222-2222-222222222222");
         await SeedMasterAsync(db, userId);
         var invoice = await SeedInvoiceAsync(db, "SELLER01", "CUST01", 800m);
+        var invoiceVersionBeforeCorrection = invoice.Version;
+        var invoiceUpdatedAtBeforeCorrection = invoice.UpdatedAt;
 
         var receipt = new Receipt
         {
@@ -140,6 +149,8 @@ public class ReceiptCorrectionTests
         invoice.OutstandingAmount = 600m;
         var customer = await db.Customers.FirstAsync(c => c.TaxCode == "CUST01");
         customer.CurrentBalance = -200m;
+        var customerVersionBeforeCorrection = customer.Version;
+        var customerUpdatedAtBeforeCorrection = customer.UpdatedAt;
         await db.SaveChangesAsync();
 
         var user = new TestCurrentUser(userId, new[] { "Admin" });
@@ -178,7 +189,108 @@ public class ReceiptCorrectionTests
         Assert.Equal("SELECTED", persisted.AllocationStatus);
         Assert.Equal(800m, refreshedInvoice.OutstandingAmount);
         Assert.Equal("OPEN", refreshedInvoice.Status);
+        Assert.Equal(invoiceVersionBeforeCorrection + 1, refreshedInvoice.Version);
+        Assert.NotEqual(invoiceUpdatedAtBeforeCorrection, refreshedInvoice.UpdatedAt);
         Assert.Equal(0m, refreshedCustomer.CurrentBalance);
+        Assert.Equal(customerVersionBeforeCorrection + 1, refreshedCustomer.Version);
+        Assert.NotEqual(customerUpdatedAtBeforeCorrection, refreshedCustomer.UpdatedAt);
+        Assert.Empty(allocations);
+    }
+
+    [Fact]
+    public async Task CorrectAsync_ReopensApprovedReceipt_WithAdvanceAllocation_AndRestoresMetadata()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var userId = Guid.Parse("33333333-3333-3333-3333-333333333333");
+        await SeedMasterAsync(db, userId);
+        var advance = await SeedAdvanceAsync(db, "SELLER01", "CUST01", 300m);
+        var advanceVersionBeforeCorrection = advance.Version;
+        var advanceUpdatedAtBeforeCorrection = advance.UpdatedAt;
+
+        var receipt = new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = "SELLER01",
+            CustomerTaxCode = "CUST01",
+            ReceiptNo = "RCPT-ADV-001",
+            ReceiptDate = new DateOnly(2026, 3, 6),
+            Amount = 200m,
+            Method = "BANK",
+            Description = "before",
+            AllocationMode = "MANUAL",
+            AllocationStatus = "ALLOCATED",
+            AllocationPriority = "ISSUE_DATE",
+            AllocationTargets = $"[{{\"id\":\"{advance.Id}\",\"type\":\"ADVANCE\"}}]",
+            Status = "APPROVED",
+            UnallocatedAmount = 0m,
+            CreatedBy = userId,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Receipts.Add(receipt);
+        db.ReceiptAllocations.Add(new ReceiptAllocation
+        {
+            Id = Guid.NewGuid(),
+            ReceiptId = receipt.Id,
+            AdvanceId = advance.Id,
+            TargetType = "ADVANCE",
+            Amount = 200m,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+
+        advance.OutstandingAmount = 100m;
+        advance.Status = "APPROVED";
+        var customer = await db.Customers.FirstAsync(c => c.TaxCode == "CUST01");
+        customer.CurrentBalance = -200m;
+        var customerVersionBeforeCorrection = customer.Version;
+        var customerUpdatedAtBeforeCorrection = customer.UpdatedAt;
+        await db.SaveChangesAsync();
+
+        var user = new TestCurrentUser(userId, new[] { "Admin" });
+        var service = new ReceiptService(db, user, new AuditService(db, user));
+
+        var corrected = await service.CorrectAsync(
+            receipt.Id,
+            new ReceiptCorrectionRequest(
+                ReceiptNo: "RCPT-ADV-EDIT",
+                ReceiptDate: receipt.ReceiptDate,
+                Amount: 250m,
+                AllocationMode: "FIFO",
+                AppliedPeriodStart: new DateOnly(2026, 2, 1),
+                Method: receipt.Method,
+                Description: "after",
+                AllocationPriority: "DUE_DATE",
+                SelectedTargets: new[] { new ReceiptTargetRef(advance.Id, "ADVANCE") },
+                Reason: "advance allocation correction",
+                Version: receipt.Version),
+            CancellationToken.None);
+
+        Assert.Equal("DRAFT", corrected.Status);
+        Assert.Equal(250m, corrected.Amount);
+
+        var persisted = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == receipt.Id);
+        var refreshedAdvance = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        var refreshedCustomer = await db.Customers.AsNoTracking().FirstAsync(c => c.TaxCode == "CUST01");
+        var allocations = await db.ReceiptAllocations.AsNoTracking()
+            .Where(a => a.ReceiptId == receipt.Id)
+            .ToListAsync();
+
+        Assert.Equal("DRAFT", persisted.Status);
+        Assert.Equal(250m, persisted.Amount);
+        Assert.Equal("DUE_DATE", persisted.AllocationPriority);
+        Assert.Equal("MANUAL", persisted.AllocationMode);
+        Assert.Equal("SELECTED", persisted.AllocationStatus);
+        Assert.Equal(300m, refreshedAdvance.OutstandingAmount);
+        Assert.Equal("APPROVED", refreshedAdvance.Status);
+        Assert.Equal(advanceVersionBeforeCorrection + 1, refreshedAdvance.Version);
+        Assert.NotEqual(advanceUpdatedAtBeforeCorrection, refreshedAdvance.UpdatedAt);
+        Assert.Equal(0m, refreshedCustomer.CurrentBalance);
+        Assert.Equal(customerVersionBeforeCorrection + 1, refreshedCustomer.Version);
+        Assert.NotEqual(customerUpdatedAtBeforeCorrection, refreshedCustomer.UpdatedAt);
         Assert.Empty(allocations);
     }
 
@@ -324,6 +436,32 @@ public class ReceiptCorrectionTests
         db.Invoices.Add(invoice);
         await db.SaveChangesAsync();
         return invoice;
+    }
+
+    private static async Task<Advance> SeedAdvanceAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        decimal amount)
+    {
+        var advance = new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            AdvanceNo = $"ADV-{Guid.NewGuid():N}".Substring(0, 12),
+            AdvanceDate = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-7)),
+            Amount = amount,
+            OutstandingAmount = amount,
+            Status = "APPROVED",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+
+        db.Advances.Add(advance);
+        await db.SaveChangesAsync();
+        return advance;
     }
 
     private static string? ReadString(string? json, string propertyName)

@@ -17,6 +17,39 @@
 - [x] Bổ sung/chỉnh regression integration tests để khóa hành vi metadata/version cho các flow approve, void, correction và auto-allocation.
 - [x] Chạy lại verify liên quan và đối chiếu blast radius bằng GitNexus trước khi chốt.
 
+## Phase 129 - Root invoices module with inline manual entry (2026-04-09) [bead: cng-0pv]
+- [x] Tạo page gốc `/invoices` theo pattern mỏng như `/advances`, gắn list/search hóa đơn hiện có và section nhập tay ngay trên cùng module.
+- [x] Cập nhật route loader, điều hướng `AppShell`, và các preferred flows để `/invoices` trở thành entry point chính cho nghiệp vụ hóa đơn.
+- [x] Tách `/imports` về đúng vai trò batch import/history, bỏ tab nhập tay hóa đơn và deep-link CTA từ `/invoices` sang `/imports?tab=batch&type=INVOICE`.
+- [x] Giữ UI compact: nhãn ngắn, hạn chế copy thừa, thêm tooltip nơi cần thiết thay vì đoạn mô tả dài.
+- [x] Cập nhật/bổ sung regression tests cho nav, route loader, `/imports`, và module hóa đơn mới; chốt bằng verify + `gitnexus_detect_changes`.
+
+### Verification evidence (2026-04-09, phase 129 / cng-0pv)
+- [x] Backend verify:
+  - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter InvoiceServiceListTests` => pass (`1/1`).
+- [x] Frontend verify:
+  - [x] `npm test -- --run src/pages/__tests__/invoices-page.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/__tests__/page-loaders.test.ts` (cwd `src/frontend`) => pass (`22/22`).
+  - [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead ở các file invoices/imports/frontend route va backend list API:
+  - [x] `src/backend/Api/Endpoints/InvoiceEndpoints.cs`
+  - [x] `src/backend/Application/Invoices/IInvoiceService.cs`
+  - [x] `src/backend/Application/Invoices/InvoiceListItemDto.cs`
+  - [x] `src/backend/Application/Invoices/InvoiceListRequest.cs`
+  - [x] `src/backend/Infrastructure/Services/InvoiceService.cs`
+  - [x] `src/backend/Tests.Unit/InvoiceServiceListTests.cs`
+  - [x] `src/frontend/src/App.tsx`
+  - [x] `src/frontend/src/api/invoices.ts`
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/pages/InvoicesPage.tsx`
+  - [x] `src/frontend/src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `src/frontend/src/pages/__tests__/page-loaders.test.ts`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/ManualInvoicesSection.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+  - [x] `src/frontend/src/pages/pageLoaders.ts`
+- [x] `gitnexus_detect_changes(scope: "all", base_ref: "main")` da chay; ket qua tong the bao `high` vi worktree dang co sua doi tai `AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, nhung scope code cua bead van gioi han trong cum invoices/imports/backend list API nhu tren.
+
 ### Verification evidence (2026-04-09, phase 124 / cng-d1g)
 - [x] GitNexus impact:
   - [x] `ApplyAllocations` => `HIGH`

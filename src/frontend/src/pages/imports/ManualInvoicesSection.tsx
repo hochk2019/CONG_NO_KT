@@ -12,6 +12,7 @@ import {
 type ManualInvoicesSectionProps = {
   token: string
   canCommit: boolean
+  onImportTemplate?: () => void
 }
 
 type SubmitMode = 'stage' | 'commit'
@@ -54,7 +55,11 @@ const formatNumber = (value: number) => {
   }).format(value)
 }
 
-export default function ManualInvoicesSection({ token, canCommit }: ManualInvoicesSectionProps) {
+export default function ManualInvoicesSection({
+  token,
+  canCommit,
+  onImportTemplate,
+}: ManualInvoicesSectionProps) {
   const [sellerTaxCode, setSellerTaxCode] = useState('')
   const [customerTaxCode, setCustomerTaxCode] = useState('')
   const [customerName, setCustomerName] = useState('')
@@ -240,6 +245,11 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
               nhập liệu hóa đơn.
             </p>
           </div>
+          {typeof onImportTemplate === 'function' ? (
+            <button className="btn btn-secondary" type="button" onClick={onImportTemplate}>
+              Mở import batch
+            </button>
+          ) : null}
         </div>
 
         <div className="form-grid">

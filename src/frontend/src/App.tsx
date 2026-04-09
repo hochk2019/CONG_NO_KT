@@ -16,6 +16,7 @@ import {
   loadDashboardPage,
   loadDashboardPreviewPage,
   loadForbiddenPage,
+  loadInvoicesPage,
   loadImportsPage,
   loadLoginPage,
   loadNotFoundPage,
@@ -37,6 +38,7 @@ const CustomersPage = lazy(loadCustomersPage)
 const DashboardPage = lazy(loadDashboardPage)
 const DashboardPreviewPage = lazy(loadDashboardPreviewPage)
 const ForbiddenPage = lazy(loadForbiddenPage)
+const InvoicesPage = lazy(loadInvoicesPage)
 const ImportsPage = lazy(loadImportsPage)
 const LoginPage = lazy(loadLoginPage)
 const NotFoundPage = lazy(loadNotFoundPage)
@@ -56,6 +58,7 @@ export default function App() {
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/invoices" element={<InvoicesPage />} />
             <Route path="/imports" element={<ImportsPage />} />
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/advances" element={<AdvancesPage />} />

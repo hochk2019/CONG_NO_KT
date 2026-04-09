@@ -53,8 +53,8 @@ const adminPermissions = ['admin.manage']
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   {
-    label: 'Nhập liệu HĐ',
-    to: '/imports',
+    label: 'Hóa đơn',
+    to: '/invoices',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: importPermissions,
   },

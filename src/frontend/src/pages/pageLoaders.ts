@@ -19,6 +19,7 @@ export const loadCustomersPage = () => import('./CustomersPage')
 export const loadDashboardPage = () => import('./DashboardPage')
 export const loadDashboardPreviewPage = () => import('./DashboardPreviewPage')
 export const loadForbiddenPage = () => import('./ForbiddenPage')
+export const loadInvoicesPage = () => import('./InvoicesPage')
 export const loadImportsPage = () => import('./ImportsPage')
 export const loadLoginPage = () => import('./LoginPage')
 export const loadNotFoundPage = () => import('./NotFoundPage')
@@ -33,6 +34,7 @@ const routeLoaders: Record<string, PageLoader> = {
   '/dashboard': loadDashboardPage,
   '/dashboard-preview': loadDashboardPreviewPage,
   '/notifications': loadNotificationsPage,
+  '/invoices': loadInvoicesPage,
   '/imports': loadImportsPage,
   '/customers': loadCustomersPage,
   '/advances': loadAdvancesPage,
@@ -85,7 +87,7 @@ const rolePrefetchPlan: Record<string, { primary: number; deep: number }> = {
 const rolePreferredRoutes: Record<string, string[]> = {
   Admin: [
     '/dashboard',
-    '/imports',
+    '/invoices',
     '/customers',
     '/collections',
     '/receipts',
@@ -95,13 +97,13 @@ const rolePreferredRoutes: Record<string, string[]> = {
   Supervisor: [
     '/dashboard',
     '/receipts',
-    '/imports',
+    '/invoices',
     '/customers',
     '/collections',
     '/reports',
     '/risk',
   ],
-  Accountant: ['/dashboard', '/imports', '/receipts', '/customers', '/collections', '/reports', '/risk'],
+  Accountant: ['/dashboard', '/invoices', '/receipts', '/customers', '/collections', '/reports', '/risk'],
   Viewer: ['/dashboard', '/customers', '/reports', '/risk', '/notifications'],
 }
 
@@ -122,7 +124,7 @@ const roleSecondaryRoutes: Record<string, string[]> = {
 const roleFlows: Record<string, string[]> = {
   Admin: [
     '/dashboard',
-    '/imports',
+    '/invoices',
     '/customers',
     '/collections',
     '/receipts',
@@ -138,7 +140,7 @@ const roleFlows: Record<string, string[]> = {
   ],
   Supervisor: [
     '/dashboard',
-    '/imports',
+    '/invoices',
     '/customers',
     '/collections',
     '/receipts',
@@ -153,7 +155,7 @@ const roleFlows: Record<string, string[]> = {
   ],
   Accountant: [
     '/dashboard',
-    '/imports',
+    '/invoices',
     '/customers',
     '/collections',
     '/receipts',
@@ -165,8 +167,9 @@ const roleFlows: Record<string, string[]> = {
 }
 
 const routeAffinity: Record<string, string[]> = {
-  '/dashboard': ['/imports', '/receipts'],
-  '/imports': ['/customers', '/receipts'],
+  '/dashboard': ['/invoices', '/receipts'],
+  '/invoices': ['/customers', '/receipts'],
+  '/imports': ['/invoices', '/customers'],
   '/customers': ['/collections', '/receipts'],
   '/collections': ['/customers', '/receipts'],
   '/receipts': ['/collections', '/reports'],

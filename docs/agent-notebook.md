@@ -13,76 +13,74 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-79p`
-- Task phase: `Phase 128` trong `task.md`
+- Bead: `cng-0pv`
+- Task phase: `Phase 129` trong `task.md`
 - Last updated: `2026-04-09`
-- Current status: Phase 128 da hoan tat; bead `cng-79p` da dong sau khi verify va doi chieu `detect_changes`
+- Current status: Da hoan tat tach root module `/invoices`, verify backend/frontend xong, con buoc dong bead va ghi nhan ket qua cuoi cung
 
 ## Goal
 
-Chot follow-up cho correction flow khoan tra ho sau Phase 127:
+Thuc thi refactor frontend cho nghiep vu hoa don:
 
-- cap nhat lai `current_balance` / `status` / `outstanding_amount` dung khi sua chung tu da `APPROVED`
-- tu dong tai phan bo receipt credit con ranh neu correction lam tang outstanding
-- reload lai workspace sau khi sua de tranh stale data
-- lam gon cum action `Sua`, `Lich su sua`, `Phe duyet`, `Huy`
-- khoa lai bang regression tests
+- tao route goc `/invoices` song song voi `/advances` va `/receipts`
+- tren `/invoices` hien thi list/search hoa don va form nhap tay gon trong cung workspace
+- giu batch import o `/imports`, co CTA tu `/invoices` deep-link sang `/imports?tab=batch&type=INVOICE`
+- bo tab nhap tay khoi `/imports` de trang nay tap trung vao import/history
+- khoa lai contract dieu huong va UI bang regression tests
 
 ## Locked Business Decisions
 
-- Correction khoan tra ho da `APPROVED` phai tinh lai so du khach hang ngay trong transaction, khong de state trung gian sai lech.
-- Neu correction lam tang outstanding cua khoan tra ho dang `APPROVED` va khach hang con receipt credit auto-allocatable, he thong duoc phep tu dong ap dung phan credit con ranh do.
-- Auto-allocation follow-up chi dung cho receipt thuc su dang `AUTO` + `UNALLOCATED`; test fixture da duoc khoa lai de khong vo tinh bien receipt da dung thanh receipt con ranh.
-- Sau khi correction thanh cong, UI phai reload lai danh sach ngay thay vi cho user tu refresh.
-- 4 action o danh sach khoan tra ho duoc nhom thanh 2 lane: utility (`Sua`, `Lich su sua`) va commit (`Phe duyet`, `Huy`/`Bo huy`) de nhin nhanh hon.
+- `/invoices` la entry point goc cho hoa don, song song vai tro voi `/advances` va `/receipts`.
+- Batch import van nam o `/imports`; manual invoice entry khong nam o day nua.
+- CTA import tu `/invoices` phai deep-link truc tiep den `/imports?tab=batch&type=INVOICE`.
+- UI can gon, nhan ngan, tranh copy dai; thong tin phu dua vao tooltip neu that su can.
+- Uu tien tai su dung list/search hoa don hien co thay vi dung them workspace trung lap.
 
 ## Known Code Areas
 
-- Backend correction logic:
-  - `src/backend/Infrastructure/Services/AdvanceService.cs`
-  - `src/backend/Tests.Integration/AdvanceCorrectionTests.cs`
-- Frontend advances workspace:
-  - `src/frontend/src/pages/imports/ManualAdvancesSection.tsx`
-  - `src/frontend/src/pages/imports/manualAdvancesColumns.tsx`
-  - `src/frontend/src/pages/advances/advances.css`
-  - `src/frontend/src/pages/imports/__tests__/manualAdvancesColumns.test.tsx`
-  - `src/frontend/src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+- Frontend routing/navigation:
+  - `src/frontend/src/App.tsx`
+  - `src/frontend/src/pages/pageLoaders.ts`
+  - `src/frontend/src/layouts/AppShell.tsx`
+- Invoices/imports workspace:
+  - `src/frontend/src/pages/AdvancesPage.tsx`
+  - `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - `src/frontend/src/pages/imports/ManualInvoicesSection.tsx`
+- Frontend tests can tac dong:
+  - `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
+  - `src/frontend/src/pages/__tests__/page-loaders.test.ts`
+  - `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+  - `src/frontend/src/pages/imports/__tests__/manualInvoicesSection.test.tsx`
 
 ## Work Log
 
 ### 2026-04-09
 
-- User yeu cau tiep tuc thuc hien ke hoach follow-up sau Phase 127.
-- Da tiep tuc tren bead `cng-79p` voi muc tieu chot correction flow khoan tra ho.
-- Da sua `AdvanceService.UpdateAsync` de:
-  - load customer truoc correction
-  - tinh `balanceDelta` theo transition status/value
-  - wrap update trong transaction
-  - cap nhat `Customer.CurrentBalance`
-  - tu dong goi `ApplyReceiptCreditsToAdvanceAsync` khi correction giu trang thai non-draft va con outstanding
-- Da mo rong integration tests `AdvanceCorrectionTests`:
-  - khoa assertion `current_balance` sau correction
-  - them regression test cho case correction lam tang outstanding va receipt credit con ranh duoc auto-reallocate
-  - sua helper `SeedApprovedReceiptAsync` de mac dinh quay ve fixture receipt da allocate, chi bat auto/unallocated khi goi ro rang
-- Da sua frontend `ManualAdvancesSection` de tang `listReload` ngay sau correction thanh cong.
-- Da redesign cum action trong `manualAdvancesColumns.tsx` + `advances.css` thanh 2 lane, co accent ro cho nut `Phe duyet`.
-- Da cap nhat frontend tests de khoa layout moi va xac nhan list reload sau correction.
-- Verification da xanh:
-  - `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal` => pass (`4/4`)
-  - `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`8/8`)
-  - `docker compose config -q` => pass
-  - `docker compose build api web` => pass
-- Da chay `mcp__gitnexus__detect_changes(repo="CONG_NO_KT", scope="unstaged")`; ket qua risk `high` do anh huong cua service dung chung `AdvanceService` va ca file tracker (`task.md`), khong lo blocker moi rieng cho correction follow-up.
-- Da dong bead `cng-79p`.
+- User yeu cau "thuc thi ke hoach" cho refactor invoices.
+- Da mo bead `cng-0pv` va doi chieu bead/task tracker; xac nhan bead dang `IN_PROGRESS`.
+- Da doc lai pattern `/advances` de dung page root mong, deep-link import qua `/imports`.
+- Da doc `ImportsPage`, `ManualInvoicesSection`, `App.tsx`, `pageLoaders.ts`, `AppShell.tsx` va test lien quan de chuan bi tach `/invoices`.
+- Da chay GitNexus impact cho cac symbol du kien sua:
+  - `ImportsPage`, `AppShell`, `ManualInvoicesSection`, `MapInvoiceEndpoints`, `InvoiceService`, `IInvoiceService`, `CustomerTransactionsSection` => khong co warning HIGH/CRITICAL blocker cho scope frontend hien tai
+- Da them backend list API `/invoices` va contract frontend de page goc co the tai danh sach hoa don theo filter/search.
+- Da tao `src/frontend/src/pages/InvoicesPage.tsx`, them route `/invoices`, doi nav/AppShell/pageLoaders sang flow invoices-first.
+- Da rut `src/frontend/src/pages/imports/ImportsPage.tsx` ve batch-only, bo tab manual, va them CTA mo import batch tu `ManualInvoicesSection`.
+- Da cap nhat regression tests cho page loader, imports fixed-type, va them test moi cho invoices page.
+- Verify da pass:
+  - `dotnet build src/backend/Api/CongNoGolden.Api.csproj`
+  - `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter InvoiceServiceListTests`
+  - `npm test -- --run src/pages/__tests__/invoices-page.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/__tests__/page-loaders.test.ts` (cwd `src/frontend`)
+  - `npm run build` (cwd `src/frontend`)
+- Da chay `mcp__gitnexus__detect_changes(scope: "all", base_ref: "main")`; output tong the la `high` vi worktree co sua doi tai `AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, nhung phan code cua bead van nam trong cum invoices/imports/backend list API.
 
 ## Next Action
 
-Neu user mo rong them correction scope cho khoan tra ho/phieu thu, tao bead moi thay vi tiep tuc chong len Phase 128 da dong.
+- Dong bead `cng-0pv`, giu nguyen worktree cho user review hoac commit khi duoc yeu cau.
 
 ## Resume Checklist
 
-- Chay `bd show cng-79p`
-- Mo `task.md` va tim `Phase 128`
+- Chay `bd show cng-0pv`
+- Mo `task.md` va tim `Phase 129`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`

@@ -21,6 +21,255 @@ public sealed class InvoiceService : IInvoiceService
         _auditService = auditService;
     }
 
+    public async Task<PagedResult<InvoiceListItemDto>> ListAsync(InvoiceListRequest request, CancellationToken ct)
+    {
+        var page = request.Page <= 0 ? 1 : request.Page;
+        var pageSize = request.PageSize <= 0 ? 20 : Math.Min(request.PageSize, 200);
+
+        var query = _db.Invoices.AsNoTracking()
+            .Where(i => i.DeletedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(request.Status))
+        {
+            var status = request.Status.Trim().ToUpperInvariant();
+            query = query.Where(i => i.Status == status);
+        }
+
+        var (searchTerm, searchMode) = ParseSearch(request.Search);
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var pattern = $"%{searchTerm}%";
+            if (searchMode == "INVOICE")
+            {
+                query = query.Where(i => EF.Functions.ILike(i.InvoiceNo, pattern));
+            }
+            else if (searchMode == "ADVANCE")
+            {
+                return new PagedResult<InvoiceListItemDto>([], page, pageSize, 0);
+            }
+            else
+            {
+                var invoiceIds = await _db.ReceiptAllocations
+                    .AsNoTracking()
+                    .Where(a => a.InvoiceId != null)
+                    .Join(
+                        _db.Receipts.AsNoTracking().Where(r => r.DeletedAt == null),
+                        allocation => allocation.ReceiptId,
+                        receipt => receipt.Id,
+                        (allocation, receipt) => new { allocation.InvoiceId, receipt.ReceiptNo })
+                    .Where(r => r.ReceiptNo != null && EF.Functions.ILike(r.ReceiptNo, pattern))
+                    .Select(r => r.InvoiceId!.Value)
+                    .Distinct()
+                    .ToListAsync(ct);
+
+                if (searchMode == "RECEIPT")
+                {
+                    if (invoiceIds.Count == 0)
+                    {
+                        return new PagedResult<InvoiceListItemDto>([], page, pageSize, 0);
+                    }
+
+                    query = query.Where(i => invoiceIds.Contains(i.Id));
+                }
+                else
+                {
+                    query = query.Where(i => EF.Functions.ILike(i.InvoiceNo, pattern) || invoiceIds.Contains(i.Id));
+                }
+            }
+        }
+        else if (!string.IsNullOrWhiteSpace(request.DocumentNo))
+        {
+            var term = request.DocumentNo.Trim();
+            var pattern = $"%{term}%";
+            query = query.Where(i => EF.Functions.ILike(i.InvoiceNo, pattern));
+        }
+
+        if (request.From.HasValue)
+        {
+            query = query.Where(i => i.IssueDate >= request.From.Value);
+        }
+
+        if (request.To.HasValue)
+        {
+            query = query.Where(i => i.IssueDate <= request.To.Value);
+        }
+
+        if (string.IsNullOrWhiteSpace(searchTerm) && !string.IsNullOrWhiteSpace(request.ReceiptNo))
+        {
+            var term = request.ReceiptNo.Trim();
+            var pattern = $"%{term}%";
+            var invoiceIds = await _db.ReceiptAllocations
+                .AsNoTracking()
+                .Where(a => a.InvoiceId != null)
+                .Join(
+                    _db.Receipts.AsNoTracking().Where(r => r.DeletedAt == null),
+                    allocation => allocation.ReceiptId,
+                    receipt => receipt.Id,
+                    (allocation, receipt) => new { allocation.InvoiceId, receipt.ReceiptNo })
+                .Where(r => r.ReceiptNo != null && EF.Functions.ILike(r.ReceiptNo, pattern))
+                .Select(r => r.InvoiceId!.Value)
+                .Distinct()
+                .ToListAsync(ct);
+
+            if (invoiceIds.Count == 0)
+            {
+                return new PagedResult<InvoiceListItemDto>([], page, pageSize, 0);
+            }
+
+            query = query.Where(i => invoiceIds.Contains(i.Id));
+        }
+
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderByDescending(i => i.IssueDate)
+            .ThenByDescending(i => i.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Join(
+                _db.Customers.AsNoTracking(),
+                invoice => invoice.CustomerTaxCode,
+                customer => customer.TaxCode,
+                (invoice, customer) => new { invoice, customer })
+            .Select(row => new
+            {
+                row.invoice.Id,
+                row.invoice.InvoiceNo,
+                row.invoice.IssueDate,
+                row.invoice.TotalAmount,
+                row.invoice.OutstandingAmount,
+                row.invoice.Status,
+                row.invoice.Version,
+                row.invoice.CustomerTaxCode,
+                CustomerName = row.customer.Name,
+                row.invoice.SellerTaxCode,
+                SellerShortName = _db.Sellers
+                    .Where(s => s.SellerTaxCode == row.invoice.SellerTaxCode)
+                    .Select(s => s.ShortName)
+                    .FirstOrDefault()
+            })
+            .ToListAsync(ct);
+
+        var invoiceIdsPage = items.Select(i => i.Id).ToList();
+        Dictionary<Guid, List<InvoiceReceiptRefDto>> receiptLookup;
+        Dictionary<Guid, List<InvoiceRefDto>> reductionInvoiceLookup;
+        Dictionary<Guid, List<InvoiceRefDto>> reducedInvoiceLookup;
+        if (invoiceIdsPage.Count == 0)
+        {
+            receiptLookup = [];
+            reductionInvoiceLookup = [];
+            reducedInvoiceLookup = [];
+        }
+        else
+        {
+            var receiptRows = await _db.ReceiptAllocations
+                .AsNoTracking()
+                .Where(a => a.InvoiceId != null && invoiceIdsPage.Contains(a.InvoiceId.Value))
+                .Join(
+                    _db.Receipts.AsNoTracking().Where(r => r.DeletedAt == null),
+                    allocation => allocation.ReceiptId,
+                    receipt => receipt.Id,
+                    (allocation, receipt) => new
+                    {
+                        InvoiceId = allocation.InvoiceId!.Value,
+                        receipt.Id,
+                        receipt.ReceiptNo,
+                        receipt.ReceiptDate,
+                        allocation.Amount
+                    })
+                .ToListAsync(ct);
+
+            receiptLookup = receiptRows
+                .GroupBy(r => r.InvoiceId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .Select(r => new InvoiceReceiptRefDto(r.Id, r.ReceiptNo ?? string.Empty, r.ReceiptDate, r.Amount))
+                        .ToList());
+
+            var reductionRows = await _db.InvoiceReductionApplications
+                .AsNoTracking()
+                .Where(application => invoiceIdsPage.Contains(application.AppliedInvoiceId))
+                .Join(
+                    _db.Invoices.AsNoTracking().Where(invoice => invoice.DeletedAt == null),
+                    application => application.ReductionInvoiceId,
+                    invoice => invoice.Id,
+                    (application, invoice) => new
+                    {
+                        application.AppliedInvoiceId,
+                        invoice.Id,
+                        invoice.InvoiceNo,
+                        invoice.IssueDate,
+                        application.Amount
+                    })
+                .ToListAsync(ct);
+
+            reductionInvoiceLookup = reductionRows
+                .GroupBy(row => row.AppliedInvoiceId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .OrderByDescending(row => row.IssueDate)
+                        .ThenBy(row => row.InvoiceNo)
+                        .Select(row => new InvoiceRefDto(
+                            row.Id,
+                            row.InvoiceNo,
+                            row.IssueDate,
+                            row.Amount))
+                        .ToList());
+
+            var reducedRows = await _db.InvoiceReductionApplications
+                .AsNoTracking()
+                .Where(application => invoiceIdsPage.Contains(application.ReductionInvoiceId))
+                .Join(
+                    _db.Invoices.AsNoTracking().Where(invoice => invoice.DeletedAt == null),
+                    application => application.AppliedInvoiceId,
+                    invoice => invoice.Id,
+                    (application, invoice) => new
+                    {
+                        application.ReductionInvoiceId,
+                        invoice.Id,
+                        invoice.InvoiceNo,
+                        invoice.IssueDate,
+                        application.Amount
+                    })
+                .ToListAsync(ct);
+
+            reducedInvoiceLookup = reducedRows
+                .GroupBy(row => row.ReductionInvoiceId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g
+                        .OrderByDescending(row => row.IssueDate)
+                        .ThenBy(row => row.InvoiceNo)
+                        .Select(row => new InvoiceRefDto(
+                            row.Id,
+                            row.InvoiceNo,
+                            row.IssueDate,
+                            row.Amount))
+                        .ToList());
+        }
+
+        var mapped = items
+            .Select(i => new InvoiceListItemDto(
+                i.Id,
+                i.InvoiceNo,
+                i.IssueDate,
+                i.TotalAmount,
+                i.OutstandingAmount,
+                i.Status,
+                i.Version,
+                i.CustomerTaxCode,
+                i.CustomerName,
+                i.SellerTaxCode,
+                i.SellerShortName,
+                receiptLookup.TryGetValue(i.Id, out var receipts) ? receipts : [],
+                reductionInvoiceLookup.TryGetValue(i.Id, out var reductionInvoices) ? reductionInvoices : [],
+                reducedInvoiceLookup.TryGetValue(i.Id, out var reducedInvoices) ? reducedInvoices : []))
+            .ToList();
+
+        return new PagedResult<InvoiceListItemDto>(mapped, page, pageSize, total);
+    }
+
     public async Task<InvoiceVoidResult> VoidAsync(Guid invoiceId, InvoiceVoidRequest request, CancellationToken ct)
     {
         EnsureCanManageInvoices();
@@ -182,6 +431,42 @@ public sealed class InvoiceService : IInvoiceService
             createdHeldCreditCount,
             restoredHeldCreditAmount,
             restoredHeldCreditCount);
+    }
+
+    private static (string? Term, string? Mode) ParseSearch(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return (null, null);
+        }
+
+        var trimmed = raw.Trim();
+        var upper = trimmed.ToUpperInvariant();
+        var mode = string.Empty;
+        var term = trimmed;
+
+        if (upper.StartsWith("HD:") || upper.StartsWith("HĐ:"))
+        {
+            mode = "INVOICE";
+            term = trimmed[3..].Trim();
+        }
+        else if (upper.StartsWith("PT:"))
+        {
+            mode = "RECEIPT";
+            term = trimmed[3..].Trim();
+        }
+        else if (upper.StartsWith("TH:"))
+        {
+            mode = "ADVANCE";
+            term = trimmed[3..].Trim();
+        }
+
+        if (string.IsNullOrWhiteSpace(term))
+        {
+            return (null, mode.Length == 0 ? null : mode);
+        }
+
+        return (term, mode.Length == 0 ? null : mode);
     }
 
     private void EnsureCanManageInvoices()

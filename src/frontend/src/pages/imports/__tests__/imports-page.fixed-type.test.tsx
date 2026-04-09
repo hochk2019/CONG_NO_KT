@@ -1,5 +1,4 @@
 import { render, screen, waitFor } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { vi } from 'vitest'
 import { AuthContext, type AuthContextValue } from '../../../context/AuthStore'
@@ -7,20 +6,12 @@ import ImportsPage from '../ImportsPage'
 
 const mocks = vi.hoisted(() => ({
   importBatchSectionMock: vi.fn(),
-  manualInvoicesSectionMock: vi.fn(),
 }))
 
 vi.mock('../ImportBatchSection', () => ({
   default: (props: unknown) => {
     mocks.importBatchSectionMock(props)
     return <div data-testid="import-batch-section" />
-  },
-}))
-
-vi.mock('../ManualInvoicesSection', () => ({
-  default: (props: unknown) => {
-    mocks.manualInvoicesSectionMock(props)
-    return <div data-testid="manual-invoices-section" />
   },
 }))
 
@@ -62,7 +53,6 @@ function renderPage(initialEntry: string, authOverride?: AuthOverride) {
 describe('ImportsPage deep-link type', () => {
   beforeEach(() => {
     mocks.importBatchSectionMock.mockReset()
-    mocks.manualInvoicesSectionMock.mockReset()
     window.localStorage.clear()
   })
 
@@ -72,7 +62,7 @@ describe('ImportsPage deep-link type', () => {
     expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
     const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as { fixedType?: string }
     expect(latestCall?.fixedType).toBe('ADVANCE')
-    expect(screen.getByRole('tab', { name: 'Nhập file' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
   })
 
   it('maps stage and commit permission by fixed import type', async () => {
@@ -145,27 +135,19 @@ describe('ImportsPage deep-link type', () => {
     expect(latestCall?.canCommit).toBe(false)
   })
 
-  it('keeps manual invoice commit gated by invoice permission', async () => {
-    renderPage('/imports?tab=manual', {
-      permissions: ['import.upload', 'import.commit.advance'],
-    })
-
-    expect(await screen.findByTestId('manual-invoices-section')).toBeInTheDocument()
-    const latestCall = mocks.manualInvoicesSectionMock.mock.calls.at(-1)?.[0] as { canCommit?: boolean }
-    expect(latestCall?.canCommit).toBe(false)
-  })
-
-  it('preserves type query when switching tab and auto-fills missing tab', async () => {
-    const user = userEvent.setup()
+  it('auto-fills missing tab with batch while preserving fixed type', async () => {
     renderPage('/imports?type=ADVANCE')
 
     await waitFor(() => {
       expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
     })
+  })
 
-    await user.click(screen.getByRole('tab', { name: 'Nhập thủ công hóa đơn' }))
+  it('redirects legacy manual tab back to batch while preserving fixed type', async () => {
+    renderPage('/imports?tab=manual&type=ADVANCE')
+
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=manual&type=ADVANCE')
+      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
     })
   })
 })

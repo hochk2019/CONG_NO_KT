@@ -132,7 +132,7 @@ function AdvanceCorrectionModalForm({
               className="input"
               type="number"
               min="0"
-              step="1000"
+              step="1"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
               disabled={loading}

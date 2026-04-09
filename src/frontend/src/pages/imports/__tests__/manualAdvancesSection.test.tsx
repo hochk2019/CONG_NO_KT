@@ -136,6 +136,43 @@ describe('ManualAdvancesSection', () => {
     expect(await screen.findByText('Đã cập nhật khoản trả hộ adv-1.')).toBeInTheDocument()
   })
 
+  it('allows editing advance correction amount by single dong units', async () => {
+    const user = userEvent.setup()
+    mocks.listAdvancesMock.mockResolvedValueOnce({
+      items: [{ ...baseAdvance, amount: 25554, outstandingAmount: 25554 }],
+      total: 1,
+    })
+    mocks.updateAdvanceMock.mockResolvedValue({
+      ...baseAdvance,
+      amount: 25551,
+      outstandingAmount: 25551,
+      version: 2,
+    })
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    await user.click(await screen.findByRole('button', { name: 'Sửa' }))
+
+    const dialog = screen.getByRole('dialog')
+    const amountInput = within(dialog).getByLabelText('Số tiền')
+    expect(amountInput).toHaveAttribute('step', '1')
+
+    await user.clear(amountInput)
+    await user.type(amountInput, '25551')
+    await user.type(within(dialog).getByLabelText('Lý do điều chỉnh'), 'Điều chỉnh lẻ')
+    await user.click(within(dialog).getByRole('button', { name: 'Lưu điều chỉnh' }))
+
+    expect(mocks.updateAdvanceMock).toHaveBeenCalledWith(
+      'token-advance',
+      'adv-1',
+      expect.objectContaining({
+        amount: 25551,
+        reason: 'Điều chỉnh lẻ',
+        version: 1,
+      }),
+    )
+  })
+
   it('loads advance history into the history modal', async () => {
     const user = userEvent.setup()
     mocks.listAdvancesMock.mockResolvedValueOnce({ items: [baseAdvance], total: 1 })

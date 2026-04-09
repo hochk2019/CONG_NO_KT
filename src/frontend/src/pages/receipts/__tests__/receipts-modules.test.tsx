@@ -144,6 +144,45 @@ describe('receipts modules', () => {
     expect(screen.getByLabelText('Lý do điều chỉnh')).toBeInTheDocument()
   })
 
+  it('allows editing receipt correction amount by single dong units', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <ReceiptCorrectionModal
+        open
+        receipt={{
+          id: 'receipt-1',
+          status: 'APPROVED',
+          version: 2,
+          amount: 19440000,
+          unallocatedAmount: 0,
+          autoAllocateEnabled: true,
+          receiptNo: 'PT-001',
+          receiptDate: '2025-01-05',
+          allocationMode: 'MANUAL',
+          allocationStatus: 'ALLOCATED',
+          allocationPriority: 'ISSUE_DATE',
+          method: 'BANK',
+          description: 'ghi chu cu',
+          sellerTaxCode: '2301098313',
+          customerTaxCode: '2300328765',
+        }}
+        error={null}
+        loading={false}
+        onClose={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    )
+
+    const amountInput = screen.getByLabelText('Số tiền')
+    expect(amountInput).toHaveAttribute('step', '1')
+
+    await user.clear(amountInput)
+    await user.type(amountInput, '19440001')
+
+    expect(amountInput).toHaveValue(19440001)
+  })
+
   it('renders receipt history modal', () => {
     render(
       <ReceiptHistoryModal

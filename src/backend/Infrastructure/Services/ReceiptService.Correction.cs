@@ -63,7 +63,9 @@ public sealed partial class ReceiptService
         var allocationPriority = string.IsNullOrWhiteSpace(request.AllocationPriority)
             ? receipt.AllocationPriority
             : NormalizeAllocationPriority(request.AllocationPriority);
-        var allocationMode = NormalizeAllocationMode(request.AllocationMode);
+        var allocationMode = string.IsNullOrWhiteSpace(request.AllocationMode)
+            ? NormalizeAllocationMode(receipt.AllocationMode)
+            : NormalizeAllocationMode(request.AllocationMode);
         var appliedPeriodStart = request.AppliedPeriodStart;
         if (appliedPeriodStart.HasValue && appliedPeriodStart.Value.Day != 1)
         {
@@ -127,13 +129,13 @@ public sealed partial class ReceiptService
                     receipt,
                     normalizedReceiptNo,
                     request,
-                method,
-                allocationMode,
-                allocationPriority,
-                appliedPeriodStart,
-                selectedTargets,
-                now,
-                ct,
+                    method,
+                    allocationMode,
+                    allocationPriority,
+                    appliedPeriodStart,
+                    selectedTargets,
+                    now,
+                    ct,
                 ensureDuplicate: false);
             }
 

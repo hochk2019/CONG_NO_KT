@@ -117,6 +117,10 @@ function ReceiptCorrectionModalForm({
       amount: parsedAmount,
       method: method || null,
       description: description.trim() || null,
+      allocationMode: receipt.allocationMode ?? null,
+      appliedPeriodStart: receipt.appliedPeriodStart ?? null,
+      allocationPriority: receipt.allocationPriority ?? null,
+      selectedTargets: receipt.selectedTargets ?? null,
       reason: trimmedReason,
       version: receipt.version,
     })

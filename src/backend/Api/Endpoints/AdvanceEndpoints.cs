@@ -165,7 +165,7 @@ public static class AdvanceEndpoints
                 from log in db.AuditLogs.AsNoTracking()
                 join user in db.Users.AsNoTracking() on log.UserId equals user.Id into users
                 from user in users.DefaultIfEmpty()
-                where log.EntityType == "ADVANCE" && log.EntityId == advanceId
+                where (log.EntityType == "ADVANCE" || log.EntityType == "Advance") && log.EntityId == advanceId
                 orderby log.CreatedAt descending
                 select new AuditLogListItem(
                     log.Id,

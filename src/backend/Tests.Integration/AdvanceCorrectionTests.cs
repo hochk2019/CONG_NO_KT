@@ -183,7 +183,7 @@ public class AdvanceCorrectionTests
     }
 
     [Fact]
-    public async Task UpdateAsync_Rejects_WhenNewAmountIsLowerThanAllocatedTotal()
+    public async Task UpdateAsync_ReleasesExistingReceiptCredits_WhenCorrectionDecreasesAllocatedAmount()
     {
         await using var db = _fixture.CreateContext();
         await ResetAsync(db);
@@ -223,19 +223,34 @@ public class AdvanceCorrectionTests
         var user = new TestCurrentUser(new[] { "Admin" });
         var service = new AdvanceService(db, user, new AuditService(db, user));
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            service.UpdateAsync(
-                advance.Id,
-                new AdvanceUpdateRequest(
-                    AdvanceNo: advance.AdvanceNo,
-                    AdvanceDate: advance.AdvanceDate,
-                    Amount: 250m,
-                    Description: advance.Description,
-                    Reason: "correction reason",
-                    Version: advance.Version),
-                CancellationToken.None));
+        var result = await service.UpdateAsync(
+            advance.Id,
+            new AdvanceUpdateRequest(
+                AdvanceNo: advance.AdvanceNo,
+                AdvanceDate: advance.AdvanceDate,
+                Amount: 250m,
+                Description: "reduced",
+                Reason: "correction reason",
+                Version: advance.Version),
+            CancellationToken.None);
 
-        Assert.Equal("Advance amount cannot be lower than allocated total.", error.Message);
+        Assert.Equal(1, result.Version);
+
+        var persistedAdvance = await db.Advances.AsNoTracking().FirstAsync(a => a.Id == advance.Id);
+        Assert.Equal(250m, persistedAdvance.Amount);
+        Assert.Equal(0m, persistedAdvance.OutstandingAmount);
+        Assert.Equal("PAID", persistedAdvance.Status);
+
+        var persistedReceipt = await db.Receipts.AsNoTracking().FirstAsync(r => r.Id == receipt.Id);
+        Assert.Equal(50m, persistedReceipt.UnallocatedAmount);
+        Assert.Equal("PARTIAL", persistedReceipt.AllocationStatus);
+
+        var persistedAllocation = await db.ReceiptAllocations.AsNoTracking()
+            .SingleAsync(a => a.AdvanceId == advance.Id && a.ReceiptId == receipt.Id);
+        Assert.Equal(250m, persistedAllocation.Amount);
+
+        var persistedCustomer = await db.Customers.AsNoTracking().FirstAsync(c => c.TaxCode == customer.TaxCode);
+        Assert.Equal(-250m, persistedCustomer.CurrentBalance);
     }
 
     [Fact]

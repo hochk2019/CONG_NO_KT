@@ -394,7 +394,7 @@ public static class ReceiptEndpoints
                 from log in db.AuditLogs.AsNoTracking()
                 join user in db.Users.AsNoTracking() on log.UserId equals user.Id into users
                 from user in users.DefaultIfEmpty()
-                where log.EntityType == "RECEIPT" && log.EntityId == receiptId
+                where (log.EntityType == "RECEIPT" || log.EntityType == "Receipt") && log.EntityId == receiptId
                 orderby log.CreatedAt descending
                 select new AuditLogListItem(
                     log.Id,

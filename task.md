@@ -1924,3 +1924,17 @@
 - [x] `docker compose config -q` => pass.
 - [x] `docker compose build api web` => pass (rebuild thanh cong `congno-api:latest`, `congno-web:latest`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => risk `high`; pham vi bi doi rong vi `AdvanceService.cs` la service dung chung va phase nay dong thoi cap nhat `task.md`/notebook, khong lo blocker moi rieng cho correction follow-up.
+
+## Phase 129 - Rebalance correction side-effects and restore receipt/advance edit history (2026-04-09) [bead: cng-lr7]
+- [x] Sua correction flow cua `AdvanceService` de khi giam amount tren khoan tra ho da duoc phan bo, he thong tu dong release bot allocation thay vi chan thao tac; dong bo lai `outstanding_amount`, `status` va receipt allocation lien quan trong cung transaction.
+- [x] Bo sung helper partial rieng de giam allocation credit tren advances, cap nhat `ReceiptAllocationStatus`, `AllocationSource`, `UpdatedAt`, `Version` cho receipt bi anh huong.
+- [x] Sua correction payload cua receipts tren frontend de gui day du metadata allocation (`allocationMode`, `appliedPeriodStart`, `allocationPriority`, `selectedTargets`) khi ghi sua, tranh lam sai logic side-effects/tong hop sau save.
+- [x] Sua backend correction cua receipts de fallback ve allocation mode hien tai neu request correction khong gui truong nay.
+- [x] Khoi phuc history endpoint cua receipts va advances bang cach chap nhan ca `Receipt`/`Advance` lan `RECEIPT`/`ADVANCE` trong audit filter, de lich su sua hoat dong tro lai voi du lieu audit da ton tai.
+- [x] Cap nhat regression tests backend/frontend cho correction payload, rebalance allocation va semantics version sau correction.
+- [x] Chay verify lien quan va doi chieu scope bang GitNexus truoc khi ket thuc.
+
+### Verification evidence (2026-04-09, phase 129 / cng-lr7)
+- [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx` => pass (`2/2`).
+- [x] `dotnet test src/backend/CongNoGolden.sln --filter "FullyQualifiedName~AdvanceCorrectionTests"` => pass (`4/4`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all base_ref=main` => risk `high`; output co ke them thay doi san co o `AGENTS.md` va `CLAUDE.md`, con scope code cua phase nay tap trung vao `AdvanceService`, `ReceiptService.Correction`, history endpoints, correction modal va test lien quan.

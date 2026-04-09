@@ -53,6 +53,8 @@ describe('ReceiptListSection', () => {
     allocationMode: 'MANUAL',
     allocationStatus: 'ALLOCATED',
     allocationPriority: 'ISSUE_DATE',
+    appliedPeriodStart: '2026-03-01',
+    selectedTargets: [{ id: 'invoice-1', targetType: 'INVOICE' }],
     method: 'BANK',
     description: 'ghi chu cu',
     sellerTaxCode: '0312345678',
@@ -74,6 +76,8 @@ describe('ReceiptListSection', () => {
     allocationMode: 'MANUAL',
     allocationStatus: 'ALLOCATED',
     allocationPriority: 'ISSUE_DATE',
+    appliedPeriodStart: '2026-03-01',
+    selectedTargets: [{ id: 'invoice-1', targetType: 'INVOICE' }],
     method: 'BANK',
     description: 'ghi chu cu',
     sellerTaxCode: '0312345678',
@@ -128,13 +132,17 @@ describe('ReceiptListSection', () => {
     expect(mocks.correctReceiptMock).toHaveBeenCalledWith(
       'token-receipt',
       'receipt-1',
-      expect.objectContaining({
-        description: 'ghi chu moi',
-        method: 'CASH',
-        reason: 'Điều chỉnh test',
-        version: 1,
-      }),
-    )
+        expect.objectContaining({
+          description: 'ghi chu moi',
+          allocationMode: 'MANUAL',
+          appliedPeriodStart: '2026-03-01',
+          allocationPriority: 'ISSUE_DATE',
+          selectedTargets: [{ id: 'invoice-1', targetType: 'INVOICE' }],
+          method: 'CASH',
+          reason: 'Điều chỉnh test',
+          version: 1,
+        }),
+      )
     expect(await screen.findByText('Đã cập nhật phiếu thu PT-001.')).toBeInTheDocument()
   })
 

@@ -1,6 +1,7 @@
 using CongNoGolden.Application.Advances;
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
 using CongNoGolden.Infrastructure.Services.Common;
@@ -8,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
 
-public sealed class AdvanceService : IAdvanceService
+public sealed partial class AdvanceService : IAdvanceService
 {
     private readonly ConGNoDbContext _db;
     private readonly ICurrentUser _currentUser;
@@ -441,38 +442,12 @@ public sealed class AdvanceService : IAdvanceService
         var allocatedTotal = await _db.ReceiptAllocations
             .Where(a => a.AdvanceId == advance.Id)
             .SumAsync(a => (decimal?)a.Amount, ct) ?? 0m;
-
-        if (effectiveAmount < allocatedTotal)
-        {
-            throw new InvalidOperationException("Advance amount cannot be lower than allocated total.");
-        }
+        var now = DateTimeOffset.UtcNow;
 
         var nextDescription = string.IsNullOrWhiteSpace(request.Description)
             ? null
             : request.Description.Trim();
-        var nextOutstandingAmount = effectiveAmount - allocatedTotal;
-        var nextStatus = nextOutstandingAmount == 0
-            ? "PAID"
-            : advance.Status == "DRAFT"
-                ? "DRAFT"
-                : "APPROVED";
-        var now = DateTimeOffset.UtcNow;
         var previousContributesToBalance = advance.Status is "APPROVED" or "PAID";
-        var nextContributesToBalance = nextStatus is "APPROVED" or "PAID";
-        var balanceDelta = 0m;
-
-        if (previousContributesToBalance && nextContributesToBalance)
-        {
-            balanceDelta = effectiveAmount - advance.Amount;
-        }
-        else if (previousContributesToBalance)
-        {
-            balanceDelta = -advance.Amount;
-        }
-        else if (nextContributesToBalance)
-        {
-            balanceDelta = effectiveAmount;
-        }
 
         var before = new
         {
@@ -493,6 +468,33 @@ public sealed class AdvanceService : IAdvanceService
             ct);
 
         await using var transaction = await _db.Database.BeginTransactionAsync(ct);
+
+        if (effectiveAmount < allocatedTotal)
+        {
+            allocatedTotal = await ReduceAdvanceAllocationsAsync(advance, effectiveAmount, now, ct);
+        }
+
+        var nextOutstandingAmount = effectiveAmount - allocatedTotal;
+        var nextStatus = nextOutstandingAmount == 0
+            ? "PAID"
+            : advance.Status == "DRAFT"
+                ? "DRAFT"
+                : "APPROVED";
+        var nextContributesToBalance = nextStatus is "APPROVED" or "PAID";
+        var balanceDelta = 0m;
+
+        if (previousContributesToBalance && nextContributesToBalance)
+        {
+            balanceDelta = effectiveAmount - advance.Amount;
+        }
+        else if (previousContributesToBalance)
+        {
+            balanceDelta = -advance.Amount;
+        }
+        else if (nextContributesToBalance)
+        {
+            balanceDelta = effectiveAmount;
+        }
 
         advance.AdvanceNo = effectiveAdvanceNo;
         advance.AdvanceDate = effectiveAdvanceDate;
@@ -764,7 +766,7 @@ public sealed class AdvanceService : IAdvanceService
             }
 
             receipt.UnallocatedAmount -= allocated;
-            receipt.AllocationStatus = receipt.UnallocatedAmount == 0 ? "ALLOCATED" : "PARTIAL";
+            receipt.AllocationStatus = ResolveReceiptAllocationStatus(receipt.UnallocatedAmount, hasAllocations: true);
             receipt.UpdatedAt = now;
             receipt.Version += 1;
 

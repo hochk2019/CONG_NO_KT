@@ -87,7 +87,7 @@ describe('InvoicesPage', () => {
     renderPage('/invoices')
 
     expect(await screen.findByTestId('manual-invoices-section')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: 'Hóa đơn' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 2, name: 'Nhập hóa đơn' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: 'Danh sách hóa đơn' })).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.getByTestId('location-probe').textContent).toBe('/invoices')

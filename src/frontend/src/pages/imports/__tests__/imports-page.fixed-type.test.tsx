@@ -60,6 +60,7 @@ describe('ImportsPage deep-link type', () => {
     renderPage('/imports?tab=batch&type=ADVANCE')
 
     expect(await screen.findByTestId('import-batch-section')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Import từ Template' })).toBeInTheDocument()
     const latestCall = mocks.importBatchSectionMock.mock.calls.at(-1)?.[0] as { fixedType?: string }
     expect(latestCall?.fixedType).toBe('ADVANCE')
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
@@ -148,6 +149,14 @@ describe('ImportsPage deep-link type', () => {
 
     await waitFor(() => {
       expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch&type=ADVANCE')
+    })
+  })
+
+  it('removes invalid type from deep-link while keeping batch tab stable', async () => {
+    renderPage('/imports?tab=batch&type=foo')
+
+    await waitFor(() => {
+      expect(screen.getByTestId('location-probe').textContent).toBe('/imports?tab=batch')
     })
   })
 })

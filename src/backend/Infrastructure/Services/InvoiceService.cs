@@ -125,29 +125,39 @@ public sealed class InvoiceService : IInvoiceService
             .ThenByDescending(i => i.CreatedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Join(
-                _db.Customers.AsNoTracking(),
-                invoice => invoice.CustomerTaxCode,
-                customer => customer.TaxCode,
-                (invoice, customer) => new { invoice, customer })
-            .Select(row => new
+            .Select(invoice => new
             {
-                row.invoice.Id,
-                row.invoice.InvoiceNo,
-                row.invoice.IssueDate,
-                row.invoice.TotalAmount,
-                row.invoice.OutstandingAmount,
-                row.invoice.Status,
-                row.invoice.Version,
-                row.invoice.CustomerTaxCode,
-                CustomerName = row.customer.Name,
-                row.invoice.SellerTaxCode,
+                invoice.Id,
+                invoice.InvoiceNo,
+                invoice.IssueDate,
+                invoice.TotalAmount,
+                invoice.OutstandingAmount,
+                invoice.Status,
+                invoice.Version,
+                invoice.CustomerTaxCode,
+                invoice.SellerTaxCode,
                 SellerShortName = _db.Sellers
-                    .Where(s => s.SellerTaxCode == row.invoice.SellerTaxCode)
+                    .Where(s => s.SellerTaxCode == invoice.SellerTaxCode)
                     .Select(s => s.ShortName)
                     .FirstOrDefault()
             })
             .ToListAsync(ct);
+
+        var customerNames = items.Count == 0
+            ? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            : await _db.Customers
+                .AsNoTracking()
+                .Where(customer => items.Select(item => item.CustomerTaxCode).Contains(customer.TaxCode))
+                .Select(customer => new
+                {
+                    customer.TaxCode,
+                    customer.Name
+                })
+                .ToDictionaryAsync(
+                    customer => customer.TaxCode,
+                    customer => customer.Name,
+                    StringComparer.OrdinalIgnoreCase,
+                    ct);
 
         var invoiceIdsPage = items.Select(i => i.Id).ToList();
         Dictionary<Guid, List<InvoiceReceiptRefDto>> receiptLookup;
@@ -259,7 +269,9 @@ public sealed class InvoiceService : IInvoiceService
                 i.Status,
                 i.Version,
                 i.CustomerTaxCode,
-                i.CustomerName,
+                customerNames.TryGetValue(i.CustomerTaxCode, out var customerName) && !string.IsNullOrWhiteSpace(customerName)
+                    ? customerName
+                    : i.CustomerTaxCode,
                 i.SellerTaxCode,
                 i.SellerShortName,
                 receiptLookup.TryGetValue(i.Id, out var receipts) ? receipts : [],

@@ -24,6 +24,37 @@
 - [x] Giữ UI compact: nhãn ngắn, hạn chế copy thừa, thêm tooltip nơi cần thiết thay vì đoạn mô tả dài.
 - [x] Cập nhật/bổ sung regression tests cho nav, route loader, `/imports`, và module hóa đơn mới; chốt bằng verify + `gitnexus_detect_changes`.
 
+## Phase 130 - Invoice list fallback + input UX rename (2026-04-09) [bead: cng-vwl]
+- [x] Sửa `InvoiceService.ListAsync()` để danh sách hóa đơn không làm mất bản ghi khi thiếu customer master; giữ đúng total count, thứ tự sort, và pagination.
+- [x] Bổ sung regression test backend khóa hành vi invoice vẫn hiển thị khi không join được customer master.
+- [x] Sửa renderer linked invoices trong `InvoicesPage` để DOM hợp lệ, không còn block element nằm trong `<span>`.
+- [x] Cập nhật UX điều hướng khu vực nhập liệu theo thứ tự và tên mới:
+  - [x] `/imports` -> `Import từ Template`
+  - [x] `/invoices` -> `Nhập hóa đơn`
+  - [x] `/advances` -> `Nhập trả hộ`
+  - [x] `/receipts` -> `Nhập phiếu thu`
+- [x] Làm rõ `/imports` là điểm vào import template, đồng thời normalize deep-link `type` không hợp lệ khi `tab=batch`.
+- [x] Cập nhật regression tests frontend cho shell, invoices page, imports page; chạy verify và đối chiếu `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-09, phase 130 / cng-vwl)
+- [x] Backend verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter InvoiceServiceListTests` => pass (`2/2`).
+- [x] Frontend verify:
+  - [x] `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx` (cwd `src/frontend`) => pass (`22/22`).
+  - [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead:
+  - [x] `src/backend/Infrastructure/Services/InvoiceService.cs`
+  - [x] `src/backend/Tests.Unit/InvoiceServiceListTests.cs`
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
+  - [x] `src/frontend/src/pages/InvoicesPage.tsx`
+  - [x] `src/frontend/src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `src/frontend/src/pages/dashboard/RoleCockpitSection.tsx`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+- [x] Worktree van co file tai lieu da modified san (`AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, `task.md`); khong co commit/push trong phase nay.
+- [x] `gitnexus_detect_changes(scope: "all")` da chay; output tong the bao `high` vi worktree dirty + so symbol bi detect lon, nhung cac execution flow bi anh huong thuc te tap trung dung vao `AppShell`, `InvoicesPage`, va backend `InvoiceService` theo scope du kien.
+
 ### Verification evidence (2026-04-09, phase 129 / cng-0pv)
 - [x] Backend verify:
   - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.

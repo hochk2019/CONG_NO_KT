@@ -75,10 +75,16 @@ const renderLinkedInvoices = (row: InvoiceListItem) => {
   return (
     <div className="stacked-text">
       {row.reductionInvoiceRefs.length > 0 ? (
-        <span>Giảm HĐ: {renderReferenceChips(row.reductionInvoiceRefs, '')}</span>
+        <div className="stacked-text">
+          <span>Giảm HĐ:</span>
+          {renderReferenceChips(row.reductionInvoiceRefs, '')}
+        </div>
       ) : null}
       {row.reducedInvoiceRefs.length > 0 ? (
-        <span>Được giảm bởi: {renderReferenceChips(row.reducedInvoiceRefs, '')}</span>
+        <div className="stacked-text">
+          <span>Được giảm bởi:</span>
+          {renderReferenceChips(row.reducedInvoiceRefs, '')}
+        </div>
       ) : null}
     </div>
   )
@@ -236,8 +242,8 @@ export default function InvoicesPage() {
     <div className="page-stack">
       <div className="page-header">
         <div>
-          <h2>Hóa đơn</h2>
-          <p className="muted">Tra cứu hóa đơn, nhập thủ công từng chứng từ hoặc chuyển sang import batch.</p>
+          <h2>Nhập hóa đơn</h2>
+          <p className="muted">Theo dõi danh sách hóa đơn, nhập thủ công từng chứng từ hoặc chuyển sang Import từ Template.</p>
         </div>
       </div>
 

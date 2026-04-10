@@ -177,6 +177,100 @@ public sealed class InvoiceServiceListTests
         Assert.Empty(olderInvoice.ReducedInvoiceRefs);
     }
 
+    [Fact]
+    public async Task ListAsync_KeepsInvoicesVisible_WhenCustomerMasterIsMissing()
+    {
+        await using var db = CreateDbContext(nameof(ListAsync_KeepsInvoicesVisible_WhenCustomerMasterIsMissing));
+        var now = new DateTimeOffset(2026, 4, 9, 2, 0, 0, TimeSpan.Zero);
+        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var knownInvoiceId = Guid.NewGuid();
+        var missingCustomerInvoiceId = Guid.NewGuid();
+
+        db.Sellers.Add(new Seller
+        {
+            SellerTaxCode = "SELLER-INV",
+            Name = "Seller Invoice",
+            ShortName = "Seller INV",
+            Status = "ACTIVE",
+            CreatedAt = now,
+            UpdatedAt = now,
+            Version = 0
+        });
+
+        db.Customers.Add(new Customer
+        {
+            TaxCode = "CUST-KNOWN",
+            Name = "Customer Known",
+            Status = "ACTIVE",
+            CurrentBalance = 0m,
+            PaymentTermsDays = 30,
+            CreatedAt = now,
+            UpdatedAt = now,
+            Version = 0
+        });
+
+        db.Invoices.AddRange(
+            new Invoice
+            {
+                Id = knownInvoiceId,
+                SellerTaxCode = "SELLER-INV",
+                CustomerTaxCode = "CUST-KNOWN",
+                InvoiceNo = "INV-KNOWN-CUSTOMER",
+                IssueDate = today,
+                RevenueExclVat = 909.09m,
+                VatAmount = 90.91m,
+                TotalAmount = 1_000m,
+                OutstandingAmount = 1_000m,
+                InvoiceType = "NORMAL",
+                Status = "OPEN",
+                CreatedAt = now,
+                UpdatedAt = now,
+                Version = 0
+            },
+            new Invoice
+            {
+                Id = missingCustomerInvoiceId,
+                SellerTaxCode = "SELLER-INV",
+                CustomerTaxCode = "CUST-MISSING",
+                InvoiceNo = "INV-MISSING-CUSTOMER",
+                IssueDate = today.AddDays(-1),
+                RevenueExclVat = 454.55m,
+                VatAmount = 45.45m,
+                TotalAmount = 500m,
+                OutstandingAmount = 500m,
+                InvoiceType = "NORMAL",
+                Status = "OPEN",
+                CreatedAt = now.AddMinutes(-5),
+                UpdatedAt = now.AddMinutes(-5),
+                Version = 1
+            });
+
+        await db.SaveChangesAsync();
+
+        var service = new InvoiceService(db, new StubCurrentUser(), new StubAuditService());
+        var result = await service.ListAsync(
+            new InvoiceListRequest(
+                "OPEN",
+                null,
+                null,
+                null,
+                today.AddDays(-30),
+                today,
+                1,
+                20),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.Total);
+        Assert.Equal(2, result.Items.Count);
+
+        var knownInvoice = result.Items.Single(item => item.InvoiceNo == "INV-KNOWN-CUSTOMER");
+        Assert.Equal("Customer Known", knownInvoice.CustomerName);
+
+        var missingCustomerInvoice = result.Items.Single(item => item.InvoiceNo == "INV-MISSING-CUSTOMER");
+        Assert.Equal("CUST-MISSING", missingCustomerInvoice.CustomerName);
+        Assert.Equal("CUST-MISSING", missingCustomerInvoice.CustomerTaxCode);
+    }
+
     private static ConGNoDbContext CreateDbContext(string name)
     {
         var options = new DbContextOptionsBuilder<ConGNoDbContext>()

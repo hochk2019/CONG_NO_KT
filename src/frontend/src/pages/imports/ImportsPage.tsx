@@ -21,7 +21,9 @@ export default function ImportsPage() {
   const navigate = useNavigate()
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const queryTabParam = useMemo(() => searchParams.get('tab'), [searchParams])
+  const queryTypeParam = useMemo(() => searchParams.get('type'), [searchParams])
   const fixedType = useMemo(() => resolveImportType(searchParams.get('type')), [searchParams])
+  const hasInvalidTypeParam = useMemo(() => Boolean(queryTypeParam) && !fixedType, [fixedType, queryTypeParam])
   const canStage = hasPermission('import.upload')
   const canCommitByType = {
     INVOICE: hasPermission('import.commit.invoice'),
@@ -33,7 +35,7 @@ export default function ImportsPage() {
     : canCommitByType.INVOICE || canCommitByType.ADVANCE || canCommitByType.RECEIPT
 
   useEffect(() => {
-    if (queryTabParam !== 'batch') {
+    if (queryTabParam !== 'batch' || hasInvalidTypeParam) {
       const nextParams = new URLSearchParams()
       nextParams.set('tab', 'batch')
       if (fixedType) {
@@ -41,14 +43,14 @@ export default function ImportsPage() {
       }
       navigate(`/imports?${nextParams.toString()}`, { replace: true })
     }
-  }, [fixedType, navigate, queryTabParam])
+  }, [fixedType, hasInvalidTypeParam, navigate, queryTabParam])
 
   return (
     <div className="page-stack">
       <div className="page-header">
         <div>
-          <h2>Import batch công nợ</h2>
-          <p className="muted">Nhập file template tập trung cho hóa đơn, khoản trả hộ và phiếu thu.</p>
+          <h2>Import từ Template</h2>
+          <p className="muted">Điểm vào tập trung để nhập file template cho hóa đơn, trả hộ và phiếu thu theo đúng flow vận hành.</p>
         </div>
       </div>
       <ImportBatchSection

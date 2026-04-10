@@ -53,19 +53,25 @@ const adminPermissions = ['admin.manage']
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   {
-    label: 'Hóa đơn',
+    label: 'Import từ Template',
+    to: '/imports',
+    roles: ['Admin', 'Supervisor', 'Accountant'],
+    permissions: importPermissions,
+  },
+  {
+    label: 'Nhập hóa đơn',
     to: '/invoices',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: importPermissions,
   },
   {
-    label: 'Nhập liệu Trả hộ',
+    label: 'Nhập trả hộ',
     to: '/advances',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: advancePermissions,
   },
   {
-    label: 'Thu tiền',
+    label: 'Nhập phiếu thu',
     to: '/receipts',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: receiptPermissions,
@@ -128,7 +134,7 @@ const rolePriority = ['Admin', 'Supervisor', 'Accountant', 'Viewer']
 const roleGuidance: Record<string, string> = {
   Admin: 'Theo dõi vận hành, phân quyền và rủi ro hệ thống.',
   Supervisor: 'Ưu tiên xử lý cảnh báo, khóa kỳ và giám sát chất lượng dữ liệu.',
-  Accountant: 'Tập trung nhập liệu chính xác, thu tiền đúng hạn và đối chiếu báo cáo.',
+  Accountant: 'Tập trung import từ template, nhập liệu đúng chứng từ và đối chiếu công nợ theo ngày.',
   Viewer: 'Theo dõi KPI công nợ, cảnh báo quá hạn và biến động theo kỳ.',
 }
 
@@ -170,7 +176,7 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 const onboardingSteps = [
   {
     title: 'Điều hướng nhanh theo nghiệp vụ',
-    description: 'Menu trái tách theo nhóm: nhập liệu, thu tiền, báo cáo và quản trị.',
+    description: 'Menu trái đi theo flow nhập liệu: Import từ Template, Nhập hóa đơn, Nhập trả hộ và Nhập phiếu thu.',
   },
   {
     title: 'Tìm kiếm toàn cục',

@@ -13,20 +13,20 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-ljd`
-- Task phase: `Phase 132` trong `task.md`
+- Bead: `cng-ktd`
+- Task phase: `Phase 133` trong `task.md`
 - Last updated: `2026-04-10`
-- Current status: Dang chot follow-up cuoi cho `/imports`: bo row hero lap lai trong `ImportBatchSection`, dua 2 nut tien ich vao header cua `Buoc 1`, cap nhat test/notebook/task, verify scope bang GitNexus roi commit cung batch follow-up chua commit
+- Current status: Da hoan tat follow-up rut gon header `/invoices`; dang giu worktree o trang thai da verify, cho user yeu cau tiep theo hoac commit rieng neu can.
 
 ## Goal
 
-Chot follow-up toi uu header `/imports` sau phase 131:
+Hoan tat follow-up UI cho `/invoices`:
 
-- bo row hero lap lai con sot lai trong `ImportBatchSection`
-- dua `Tai template` va `Lich su nhap` vao header cua card `Buoc 1`
-- giu shell header `/imports` la noi duy nhat hien copy quy trinh
-- cap nhat regression tests frontend cho layout moi
-- doi chieu lai scope thay doi bang GitNexus, dong bead va commit batch follow-up
+- bo block header lap lai trong page body
+- dua copy huong dan len shell header route `/invoices`
+- giu copy role `Admin` mac dinh tren cac route khac khong bi anh huong
+- cap nhat regression tests frontend cho `AppShell` va `InvoicesPage`
+- doi chieu lai scope bang GitNexus va dong bead tracking
 
 ## Locked Business Decisions
 
@@ -56,6 +56,15 @@ Chot follow-up toi uu header `/imports` sau phase 131:
 ## Work Log
 
 ### 2026-04-10
+
+- User yeu cau ra soat lai review finding tren `/invoices`, doi label nut `Mo import batch` thanh `Import tu Template`, sau do commit ca batch thay doi invoices truoc do + fix moi.
+- Da doc GitNexus context va chay `impact` cho `ManualInvoicesSection`; risk `LOW`, khong co caller/process bi anh huong truc tiep nen co the sua copy an toan.
+- Da kiem tra lai review finding cu ve invalid DOM nesting trong `InvoicesPage`; ket qua canh bao da stale vi code hien tai khong con pattern `span > div` o linked invoices/reference chips.
+- Da thu tao bead moi bang `bd create`, nhung Beads CLI fail voi `cannot use --rig: no routes.jsonl found in any parent .beads directory`; tam thoi phase follow-up nay duoc theo doi bang `task.md` + notebook cho den khi cau hinh CLI duoc sua.
+- Da sua `src/frontend/src/pages/imports/ManualInvoicesSection.tsx` de CTA moi hien `Import tu Template`.
+- Da cap nhat regression tests cho `ManualInvoicesSection` va `InvoicesPage` de khoa dung copy/casing moi cua CTA.
+- Da verify:
+  - `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`9/9`)
 
 - User yeu cau bo hang `Nhap file, kiem tra truoc khi ghi du lieu` con sot lai tren giao dien `/imports`, dua 2 nut `Tai template` va `Lich su nhap` vao goc tren ben phai khu vuc `Buoc 1`, sau do commit toan bo thay doi follow-up hien co.
 - Da refresh GitNexus index bang `npx -y gitnexus@latest analyze` de chac chan graph khop workspace moi nhat.
@@ -96,12 +105,25 @@ Chot follow-up toi uu header `/imports` sau phase 131:
 
 ## Next Action
 
-- Dong bead `cng-ljd`, stage rieng batch follow-up `/imports` (bo qua `AGENTS.md` va `CLAUDE.md`), roi commit theo yeu cau nguoi dung.
+- Chay frontend tests cho CTA `Import tu Template`, doi chieu lai scope bang `gitnexus_detect_changes`, roi stage/commit cac thay doi invoices theo yeu cau user. Khong push neu user chua yeu cau.
 
 ## Resume Checklist
 
 - Chay `bd show cng-ljd`
-- Mo `task.md` va tim `Phase 132`
+- Mo `task.md` va tim `Phase 134`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`
+
+### 2026-04-10
+
+- User yeu cau tren `/invoices`: bo block header lap lai trong page body va doi copy shell header thanh `Theo doi danh sach HD, nhap thu cong HD hoac chuyen sang Import tu Template.`
+- Da chay GitNexus `impact` cho `InvoicesPage` va `AppShell`; ca hai deu `LOW`, khong co caller/process canh bao `HIGH/CRITICAL`.
+- Da tao bead moi `cng-ktd`, chuyen sang `IN_PROGRESS`, va bo sung `Phase 133` vao `task.md`.
+- Huong sua duoc chot: bo header lap ngay trong `InvoicesPage`, them page guidance override rieng cho route `/invoices` trong `AppShell` de khong lam thay doi copy `Admin` toan cuc.
+- Da sua `InvoicesPage` de bo hoan toan block header lap lai phia tren `ManualInvoicesSection`.
+- Da sua `AppShell` de route `/invoices` hien copy shell header moi: `Theo doi danh sach HD, nhap thu cong HD hoac chuyen sang Import tu Template.`
+- Da cap nhat regression tests frontend cho `AppShell` va `InvoicesPage` de khoa copy moi va viec bo header trung lap.
+- Da verify:
+  - `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`16/16`)
+- Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `high` do worktree van co file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) cung tracking files, nhung scope code cua bead chi tap trung vao `AppShell`, `InvoicesPage` va regression tests lien quan.

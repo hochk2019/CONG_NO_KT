@@ -157,6 +157,17 @@ describe('AppShell', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows invoices-specific shell guidance on invoices route', () => {
+    const authValue = buildAuthContext(['Admin'])
+
+    renderInShellRoutes(authValue, ['/invoices'])
+
+    expect(screen.getByRole('heading', { name: 'Nhập hóa đơn' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Theo dõi danh sách HĐ, nhập thủ công HĐ hoặc chuyển sang Import từ Template.'),
+    ).toBeInTheDocument()
+  })
+
   it('toggles mobile navigation state', async () => {
     const authValue = buildAuthContext()
     const user = userEvent.setup()

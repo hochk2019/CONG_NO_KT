@@ -2024,3 +2024,27 @@
 - [x] Verify:
   - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx`
   - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+## Phase 133 - Remove duplicated invoices header copy (2026-04-10) [bead: cng-ktd]
+- [x] Bo block header lap lai trong `InvoicesPage` gom title `Nhap hoa don` va dong mo ta huong dan ngay tren `ManualInvoicesSection`.
+- [x] Cap nhat shell header route `/invoices` thanh copy moi: `Theo doi danh sach HD, nhap thu cong HD hoac chuyen sang Import tu Template.` ma khong anh huong copy mac dinh cua role `Admin` tren trang khac.
+- [x] Don sach regression tests/frontend assertions lien quan den header `/invoices`.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 133 / cng-ktd)
+- [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`16/16`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => output tong the bao `high` do worktree dang co them file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) va thay doi tracking (`task.md`, `docs/agent-notebook.md`); scope code cua phase nay tap trung dung vao `AppShell`, `InvoicesPage` va regression tests frontend lien quan.
+
+## Phase 134 - Align invoices import CTA copy (2026-04-10) [bead: pending-cli-config]
+- [x] Ra soat review finding cu tren `/invoices`; xac nhan canh bao invalid DOM nesting `span > div` da stale, code hien tai khong con loi nay.
+- [x] Sua CTA trong `ManualInvoicesSection` tu `Mo import batch` thanh `Import tu Template` de dong bo voi copy tren cac trang khac.
+- [x] Cap nhat frontend tests/assertions lien quan den CTA moi tren `ManualInvoicesSection` va `InvoicesPage`.
+- [x] Ghi nhan blocker beads: `bd create` fail voi `cannot use --rig: no routes.jsonl found in any parent .beads directory`, nen phase nay tam theo doi bang `task.md` + notebook cho den khi CLI duoc sua.
+- [ ] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx`
+  - [ ] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 134 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`9/9`).

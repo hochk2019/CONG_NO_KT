@@ -247,7 +247,7 @@ export default function ManualInvoicesSection({
           </div>
           {typeof onImportTemplate === 'function' ? (
             <button className="btn btn-secondary" type="button" onClick={onImportTemplate}>
-              Mở import batch
+              Import từ Template
             </button>
           ) : null}
         </div>

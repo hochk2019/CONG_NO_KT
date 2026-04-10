@@ -40,6 +40,15 @@ describe('ManualInvoicesSection', () => {
     expect(screen.getByText('Vui lòng nhập MST bên mua.')).toBeInTheDocument()
   })
 
+  it('renders import template CTA when centralized import handler is provided', () => {
+    const onImportTemplate = vi.fn()
+    render(
+      <ManualInvoicesSection token="token-1" canCommit onImportTemplate={onImportTemplate} />,
+    )
+
+    expect(screen.getByRole('button', { name: 'Import từ Template' })).toBeInTheDocument()
+  })
+
   it('stages one manual invoice via import pipeline', async () => {
     const user = userEvent.setup()
     uploadImportMock.mockResolvedValue({

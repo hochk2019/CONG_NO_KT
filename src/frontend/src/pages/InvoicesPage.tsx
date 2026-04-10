@@ -240,13 +240,6 @@ export default function InvoicesPage() {
 
   return (
     <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h2>Nhập hóa đơn</h2>
-          <p className="muted">Theo dõi danh sách hóa đơn, nhập thủ công từng chứng từ hoặc chuyển sang Import từ Template.</p>
-        </div>
-      </div>
-
       <ManualInvoicesSection
         token={token}
         canCommit={canCommit}

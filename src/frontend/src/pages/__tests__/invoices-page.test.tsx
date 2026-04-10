@@ -26,7 +26,7 @@ vi.mock('../imports/ManualInvoicesSection', () => ({
       <div data-testid="manual-invoices-section">
         {typeof typedProps.onImportTemplate === 'function' ? (
           <button type="button" onClick={typedProps.onImportTemplate}>
-            Import từ template
+            Import từ Template
           </button>
         ) : null}
       </div>
@@ -87,7 +87,6 @@ describe('InvoicesPage', () => {
     renderPage('/invoices')
 
     expect(await screen.findByTestId('manual-invoices-section')).toBeInTheDocument()
-    expect(await screen.findByRole('heading', { level: 2, name: 'Nhập hóa đơn' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { level: 3, name: 'Danh sách hóa đơn' })).toBeInTheDocument()
     expect(screen.queryByRole('tab')).not.toBeInTheDocument()
     expect(screen.getByTestId('location-probe').textContent).toBe('/invoices')
@@ -104,7 +103,7 @@ describe('InvoicesPage', () => {
     const user = userEvent.setup()
     renderPage('/invoices')
 
-    const importButton = await screen.findByRole('button', { name: 'Import từ template' })
+    const importButton = await screen.findByRole('button', { name: 'Import từ Template' })
     await user.click(importButton)
 
     expect(mocks.manualInvoicesSectionMock).toHaveBeenLastCalledWith(

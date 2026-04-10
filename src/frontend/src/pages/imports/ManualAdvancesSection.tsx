@@ -827,7 +827,7 @@ export default function ManualAdvancesSection({
               >
                 <span className="field-label">
                   Số chứng từ
-                  <span className="pill pill-warn" aria-hidden="true">
+                  <span className="advances-required-badge" aria-hidden="true">
                     Bắt buộc
                   </span>
                 </span>
@@ -862,10 +862,6 @@ export default function ManualAdvancesSection({
             {createMessage && <div className="alert alert--success" role="alert" aria-live="assertive">{createMessage}</div>}
 
             <div className="advances-submit-row">
-              <div className="advances-submit-row__copy">
-                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp khi chưa bật quyền duyệt.'}</strong>
-                <span className="muted">{quickCreateModeLabel}</span>
-              </div>
               <div className="advances-submit-row__buttons">
                 {canApprove ? (
                   <>
@@ -907,9 +903,6 @@ export default function ManualAdvancesSection({
           <div className="advances-section-header">
             <span className="advances-section-kicker">Danh sách xử lý</span>
             <h3>Worklist khoản trả hộ KH</h3>
-            <p className="muted advances-section-lead">
-              Tập trung các khoản cần theo dõi, phê duyệt, hủy hoặc bỏ hủy trên cùng một mặt bàn thao tác.
-            </p>
           </div>
 
           <div className="advances-mini-stats" aria-label="Tóm tắt trạng thái hiện tại">
@@ -933,13 +926,11 @@ export default function ManualAdvancesSection({
         </div>
 
         <div className="advances-filter-shell">
-          <div className="advances-filter-head">
-            <div>
-              <p className="filters-block__title">Bộ lọc vận hành</p>
-              <p className="muted">Lọc nhanh theo đối tượng, trạng thái và chỉ mở rộng khi cần truy vết sâu hơn.</p>
+          {listLoading && (
+            <div className="advances-filter-head">
+              <span className="muted">Đang tải...</span>
             </div>
-            {listLoading && <span className="muted">Đang tải...</span>}
-          </div>
+          )}
 
           <div className="filters-grid">
             <LookupInput

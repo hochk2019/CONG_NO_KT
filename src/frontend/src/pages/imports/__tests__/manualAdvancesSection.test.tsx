@@ -88,13 +88,26 @@ describe('ManualAdvancesSection', () => {
     expect(onImportTemplate).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the create header compact and marks advance number as required', () => {
-    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+  it('keeps the advances create and worklist areas compact while marking advance number as required', async () => {
+    render(<ManualAdvancesSection token="token-advance" canApprove />)
+
+    await screen.findByRole('button', { name: 'Tạo & duyệt' })
 
     expect(
       screen.queryByText(
         /Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền trước/i,
       ),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Tạo xong có thể chốt ngay.')).not.toBeInTheDocument()
+    expect(document.querySelector('.advances-submit-row__copy')).toBeNull()
+    expect(
+      screen.queryByText(
+        /Tập trung các khoản cần theo dõi, phê duyệt, hủy hoặc bỏ hủy trên cùng một mặt bàn thao tác\./i,
+      ),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('Bộ lọc vận hành')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Lọc nhanh theo đối tượng, trạng thái và chỉ mở rộng khi cần truy vết sâu hơn\./i),
     ).not.toBeInTheDocument()
 
     const advanceNoInput = screen.getByPlaceholderText('VD: CT-001')

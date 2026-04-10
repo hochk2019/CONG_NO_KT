@@ -115,7 +115,7 @@ Hoan tat follow-up UI cho `/advances`:
 
 ## Next Action
 
-- Chay frontend tests cho `ManualAdvancesSection`, doi chieu lai scope bang `gitnexus_detect_changes`, roi bao lai cho user ket qua ra soat `So chung tu` la truong bat buoc. Khong commit/push neu user chua yeu cau.
+- Chay `mcp__gitnexus__detect_changes` cho worktree hien tai de doi chieu scope sau khi rut gon UI `/advances`, sau do bao lai user. Khong commit/push them neu user chua yeu cau.
 
 ## Resume Checklist
 
@@ -137,3 +137,12 @@ Hoan tat follow-up UI cho `/advances`:
 - Da verify:
   - `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`16/16`)
 - Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `high` do worktree van co file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) cung tracking files, nhung scope code cua bead chi tap trung vao `AppShell`, `InvoicesPage` va regression tests lien quan.
+
+- User yeu cau commit phan thay doi `/advances` truoc do, sau do tiep tuc rut gon them chu tren giao dien advances va dong bo nhan `Bat buoc`.
+- Da commit thanh cong batch thay doi `/advances` truoc do voi commit `3d444da` (`fix(advances): Simplify create copy and mark voucher as required`).
+- Da chay GitNexus `impact` cho `ManualAdvancesSection`; risk `LOW`, khong co caller/process `HIGH/CRITICAL`, nen co the tiep tuc sua component an toan.
+- Da bo block copy cuoi hang action trong `Tao khoan tra ho KH`, bo mo ta o `Danh sach xu ly`, va bo heading/helper copy cua khu `Bo loc van hanh` de giao dien gon hon.
+- Da sua `src/frontend/src/pages/advances/advances.css` de dong bo nhan required sang cung style mau xanh va doi pseudo-label tu `Bat buoc` thanh `Bắt buộc`; dong thoi `So chung tu` khong con dung badge cam `pill-warn`.
+- Da cap nhat regression test `src/frontend/src/pages/imports/__tests__/manualAdvancesSection.test.tsx` de khoa cac doan copy da bo va giu semantics required cho truong `So chung tu`.
+- Da verify:
+  - `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`11/11`)

@@ -2063,3 +2063,16 @@
 
 ### Verification evidence (2026-04-10, phase 134 / bead pending-cli-config)
 - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`9/9`).
+
+## Phase 135 - Trim advances helper copy and unify required badges (2026-04-10) [bead: pending-cli-config]
+- [x] Bo block copy cuoi khu vuc `Tao khoan tra ho KH` de hang action chi con nut thao tac.
+- [x] Bo mo ta cua khu `Danh sach xu ly` va bo heading/helper copy cua `Bo loc van hanh`.
+- [x] Dong bo nhan `Bat buoc` trong form advances ve cung mot style mau xanh, co dau tieng Viet, khong con badge mau cam rieng le cho `So chung tu`.
+- [x] Cap nhat frontend regression tests cho `ManualAdvancesSection`.
+- [x] Ghi nhan tiep tuc blocker beads: phase nay van theo doi bang `task.md` + notebook vi `bd create` chua dung duoc tren workspace hien tai.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 135 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`11/11`).

@@ -111,17 +111,27 @@
   position: relative;
 }
 
+.advances-required-badge,
 .advances-field-primary::after {
-  content: 'Bat buoc';
-  position: absolute;
-  top: -0.35rem;
-  right: 0.2rem;
   padding: 0.12rem 0.45rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent-deep);
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.advances-field-primary::after {
+  content: 'Bắt buộc';
+  position: absolute;
+  top: -0.35rem;
+  right: 0.2rem;
+}
+
+.advances-required-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
 }
 
 .advances-field-secondary {
@@ -134,17 +144,12 @@
 
 .advances-submit-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
   padding-top: 0.9rem;
   border-top: 1px solid var(--advances-border-soft);
-}
-
-.advances-submit-row__copy {
-  display: grid;
-  gap: 0.2rem;
 }
 
 .advances-submit-row__buttons {
@@ -202,7 +207,7 @@
 
 .advances-filter-head {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: var(--space-2);
   flex-wrap: wrap;

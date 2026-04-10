@@ -2076,3 +2076,17 @@
 
 ### Verification evidence (2026-04-10, phase 135 / bead pending-cli-config)
 - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`11/11`).
+
+## Phase 136 - Update advances shell subtitle for pay-on-behalf entry (2026-04-10) [bead: pending-cli-config]
+- [x] Doi subtitle shell route `/advances` tu copy role `Admin` sang copy nghiep vu: `Nhap khoan tra ho cho khach hang vao he thong theo doi cong no`.
+- [x] Giu scope toi thieu bang cach them route guidance override rieng cho `/advances`, khong doi subtitle mac dinh cua cac trang admin khac.
+- [x] Cap nhat regression test frontend cho `AppShell` de khoa subtitle moi o route `/advances`.
+- [x] Ghi nhan khong co code thua nao an toan can loai bo them sau khi doi subtitle; giu nguyen cac override khac de tranh lan scope.
+- [x] Ghi nhan bead van tam theo doi bang `task.md` + notebook vi `bd create` truoc do van bi chan boi cau hinh CLI.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 136 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`17/17`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => output tong the bao `medium` do worktree co them thay doi tracking/doc san co; scope code cua phase nay tap trung vao `AppShell` va regression test shell route `/advances`.

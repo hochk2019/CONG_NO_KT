@@ -141,6 +141,7 @@ const roleGuidance: Record<string, string> = {
 const pageGuidanceOverrides: Record<string, string> = {
   '/imports': 'Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.',
   '/invoices': 'Theo dõi danh sách HĐ, nhập thủ công HĐ hoặc chuyển sang Import từ Template.',
+  '/advances': 'Nhập khoản trả hộ cho khách hàng vào hệ thống theo dõi công nợ',
 }
 
 const hasAnyRole = (requiredRoles: string[], roles: string[]) => {

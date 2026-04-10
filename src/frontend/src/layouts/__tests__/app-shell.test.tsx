@@ -168,6 +168,17 @@ describe('AppShell', () => {
     ).toBeInTheDocument()
   })
 
+  it('shows advances-specific shell guidance on advances route', () => {
+    const authValue = buildAuthContext(['Admin'])
+
+    renderInShellRoutes(authValue, ['/advances'])
+
+    expect(screen.getByRole('heading', { name: 'Nhập trả hộ' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Nhập khoản trả hộ cho khách hàng vào hệ thống theo dõi công nợ'),
+    ).toBeInTheDocument()
+  })
+
   it('toggles mobile navigation state', async () => {
     const authValue = buildAuthContext()
     const user = userEvent.setup()

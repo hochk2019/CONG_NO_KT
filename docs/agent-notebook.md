@@ -14,19 +14,18 @@ Khi quay lai task dang do, doc theo thu tu sau:
 ## Active Work
 
 - Bead: `pending (bd create dang bi chặn bởi routes.jsonl)`
-- Task phase: `Phase 134` trong `task.md`
+- Task phase: `Phase 136` trong `task.md`
 - Last updated: `2026-04-10`
-- Current status: Dang hoan tat follow-up tren `/advances`: bo copy header create nhanh, xac nhan `So chung tu` la bat buoc, va dong bo badge/UI + regression tests.
+- Current status: Da hoan tat follow-up subtitle shell cho `/advances`, test pass, detect_changes da doi chieu; dang chot tracking va commit theo yeu cau user.
 
 ## Goal
 
-Hoan tat follow-up UI cho `/advances`:
+Hoan tat follow-up shell copy cho `/advances`:
 
-- bo dong mo ta dai o khu create nhanh de page gon hon
-- xac nhan `So chung tu` co bat buoc o ca frontend manual, backend, va import template
-- neu bat buoc thi hien thi badge `Bat buoc` ngay tren field `So chung tu`
-- cap nhat regression tests frontend cho `ManualAdvancesSection`
-- doi chieu lai scope bang GitNexus va ghi nho rang Beads CLI tam thoi chua tao duoc bead moi
+- doi subtitle shell route `/advances` sang copy nghiep vu `Nhap khoan tra ho cho khach hang vao he thong theo doi cong no`
+- giu subtitle role `Admin` mac dinh cho cac route khac, chi override rieng `/advances`
+- cap nhat regression test frontend de khoa subtitle moi
+- doi chieu scope bang GitNexus truoc khi commit
 
 ## Locked Business Decisions
 
@@ -113,14 +112,23 @@ Hoan tat follow-up UI cho `/advances`:
   - `npm run build` (frontend) => pass
 - Da chay `gitnexus_detect_changes(scope: "all")`; output tong the bao `high` do worktree co san file tai lieu modified, nhung scope code thuc te tap trung dung vao `InvoiceService`, `AppShell`, `InvoicesPage`, `ImportsPage`.
 
+- User yeu cau tren trang `/advances` doi subtitle shell tu `Theo doi van hanh, phan quyen va rui ro he thong.` thanh `Nhap khoan tra ho cho khach hang vao he thong theo doi cong no`, loai bo code thua neu co va commit ngay sau do.
+- Da chay GitNexus `impact` cho `AppShell`; risk `LOW`, khong co caller/process `HIGH/CRITICAL`.
+- Huong sua duoc chot: chi them page guidance override rieng cho route `/advances` trong `AppShell`, khong thay subtitle mac dinh cua role `Admin` de tranh anh huong dashboard va cac trang quan tri khac.
+- Da sua `src/frontend/src/layouts/AppShell.tsx` de route `/advances` hien subtitle moi.
+- Da cap nhat regression test `src/frontend/src/layouts/__tests__/app-shell.test.tsx` de khoa subtitle moi tren route `/advances`.
+- Da verify:
+  - `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`17/17`)
+- Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `medium` vi worktree co them file doc/tracking, nhung scope code cua request nay chi tap trung vao `AppShell` va regression test shell.
+
 ## Next Action
 
-- Chay `mcp__gitnexus__detect_changes` cho worktree hien tai de doi chieu scope sau khi rut gon UI `/advances`, sau do bao lai user. Khong commit/push them neu user chua yeu cau.
+- Khong co buoc ky thuat dang mo. Neu user tiep tuc voi UI shell/route copy, bat dau lai bang `mcp__gitnexus__impact` cho symbol can sua va doi chieu `task.md` phase moi nhat.
 
 ## Resume Checklist
 
 - Chay `bd show cng-ljd`
-- Mo `task.md` va tim `Phase 134`
+- Mo `task.md` va tim `Phase 136`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`

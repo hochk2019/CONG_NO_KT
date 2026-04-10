@@ -55,6 +55,20 @@
 - [x] Worktree van co file tai lieu da modified san (`AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, `task.md`); khong co commit/push trong phase nay.
 - [x] `gitnexus_detect_changes(scope: "all")` da chay; output tong the bao `high` vi worktree dirty + so symbol bi detect lon, nhung cac execution flow bi anh huong thuc te tap trung dung vao `AppShell`, `InvoicesPage`, va backend `InvoiceService` theo scope du kien.
 
+## Phase 131 - Simplify imports header copy (2026-04-10) [bead: cng-joy]
+- [x] Bỏ block header lặp trong `src/frontend/src/pages/imports/ImportsPage.tsx` để `/imports` chỉ còn một header chính.
+- [x] Chuyển copy quy trình `chuẩn bị template → tải file → xem trước → ghi dữ liệu` lên shell header của route `/imports`, thay cho mô tả vai trò mặc định.
+- [x] Loại bỏ các dòng copy dư thừa ở khu vực header imports để phần mở đầu gọn và không lặp nội dung.
+- [x] Cập nhật regression tests frontend cho `AppShell` và `ImportsPage`, rồi verify lại đúng scope thay đổi bằng GitNexus.
+
+### Verification evidence (2026-04-10, phase 131 / cng-joy)
+- [x] `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx` (cwd `src/frontend`) => pass (`18/18`).
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead:
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+
 ### Verification evidence (2026-04-09, phase 129 / cng-0pv)
 - [x] Backend verify:
   - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
@@ -2002,3 +2016,11 @@
 - [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx` => pass (`2/2`).
 - [x] `dotnet test src/backend/CongNoGolden.sln --filter "FullyQualifiedName~AdvanceCorrectionTests"` => pass (`4/4`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all base_ref=main` => risk `high`; output co ke them thay doi san co o `AGENTS.md` va `CLAUDE.md`, con scope code cua phase nay tap trung vao `AdvanceService`, `ReceiptService.Correction`, history endpoints, correction modal va test lien quan.
+
+## Phase 132 - Move imports utility actions into step 1 card (2026-04-10) [bead: cng-ljd]
+- [x] Bo hang header lap lai tren `ImportBatchSection` gom title `Nhap file, kiem tra truoc khi ghi du lieu` va dong quy trinh ben duoi.
+- [x] Dua 2 nut `Tai template` va `Lich su nhap` vao goc tren ben phai cua khu vuc `Buoc 1`, cung hang voi tieu de `Chuan bi template`.
+- [x] Don sach JSX/code thua sinh ra sau khi bo row cu va bo sung regression test frontend cho layout moi.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`

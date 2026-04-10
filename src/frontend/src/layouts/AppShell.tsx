@@ -138,6 +138,10 @@ const roleGuidance: Record<string, string> = {
   Viewer: 'Theo dõi KPI công nợ, cảnh báo quá hạn và biến động theo kỳ.',
 }
 
+const pageGuidanceOverrides: Record<string, string> = {
+  '/imports': 'Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.',
+}
+
 const hasAnyRole = (requiredRoles: string[], roles: string[]) => {
   return requiredRoles.some((role) => roles.includes(role))
 }
@@ -257,6 +261,7 @@ export default function AppShell() {
     return null
   }, [state.permissions])
   const currentRoleGuidance =
+    pageGuidanceOverrides[location.pathname] ??
     (primaryRole && roleGuidance[primaryRole]) ??
     permissionRoleGuidance ??
     'Theo dõi tiến độ công việc theo quy trình và ưu tiên các mục quá hạn.'

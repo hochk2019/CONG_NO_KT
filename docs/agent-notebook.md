@@ -13,20 +13,20 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-vwl`
-- Task phase: `Phase 130` trong `task.md`
-- Last updated: `2026-04-09`
-- Current status: Da hoan tat phase 130; backend invoice list da fallback dung khi thieu customer master, UX nhap lieu/sidebar da doi ten theo flow moi, tests/build da pass, dang cho lenh tiep theo (chua commit/push)
+- Bead: `cng-ljd`
+- Task phase: `Phase 132` trong `task.md`
+- Last updated: `2026-04-10`
+- Current status: Dang chot follow-up cuoi cho `/imports`: bo row hero lap lai trong `ImportBatchSection`, dua 2 nut tien ich vao header cua `Buoc 1`, cap nhat test/notebook/task, verify scope bang GitNexus roi commit cung batch follow-up chua commit
 
 ## Goal
 
-Thuc thi goi fix invoice list + doi ten UX nhap lieu:
+Chot follow-up toi uu header `/imports` sau phase 131:
 
-- sua `InvoiceService.ListAsync()` de invoice van hien thi du customer master bi thieu
-- sua `InvoicesPage` de khong con invalid DOM nesting o linked invoice renderer
-- doi ten va sap xep lai menu nhap lieu thanh `Import tu Template`, `Nhap hoa don`, `Nhap tra ho`, `Nhap phieu thu`
-- lam ro `/imports` la khu vuc import template va normalize deep-link `type` khong hop le
-- cap nhat regression tests backend/frontend va verify lai scope bang GitNexus
+- bo row hero lap lai con sot lai trong `ImportBatchSection`
+- dua `Tai template` va `Lich su nhap` vao header cua card `Buoc 1`
+- giu shell header `/imports` la noi duy nhat hien copy quy trinh
+- cap nhat regression tests frontend cho layout moi
+- doi chieu lai scope thay doi bang GitNexus, dong bead va commit batch follow-up
 
 ## Locked Business Decisions
 
@@ -46,12 +46,36 @@ Thuc thi goi fix invoice list + doi ten UX nhap lieu:
 - Frontend invoices/imports pages:
   - `src/frontend/src/pages/InvoicesPage.tsx`
   - `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - `src/frontend/src/pages/imports/ImportBatchSection.tsx`
 - Frontend tests can tac dong:
   - `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
   - `src/frontend/src/pages/__tests__/invoices-page.test.tsx`
   - `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+  - `src/frontend/src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx`
 
 ## Work Log
+
+### 2026-04-10
+
+- User yeu cau bo hang `Nhap file, kiem tra truoc khi ghi du lieu` con sot lai tren giao dien `/imports`, dua 2 nut `Tai template` va `Lich su nhap` vao goc tren ben phai khu vuc `Buoc 1`, sau do commit toan bo thay doi follow-up hien co.
+- Da refresh GitNexus index bang `npx -y gitnexus@latest analyze` de chac chan graph khop workspace moi nhat.
+- Da chay GitNexus `impact` cho `ImportBatchSection`; risk `LOW`, khong co caller/process blocker, nen co the sua truc tiep component nay.
+- Da tao bead moi `cng-ljd`, chuyen sang `IN_PROGRESS`, va them `Phase 132` vao `task.md`.
+- Da sua `ImportBatchSection` de bo row hero lap lai va dua 2 nut tien ich vao header card `Buoc 1`; dong thoi bo sung regression test cho layout moi.
+- Da verify:
+  - `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx` => pass (`27/27`)
+- Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `high` do worktree van co them file tai lieu/shell dang modified (`AGENTS.md`, `CLAUDE.md`, notebook, task), nhung scope code cua bead tap trung vao `AppShell`, `ImportsPage`, `ImportBatchSection` va regression tests lien quan.
+
+- User yeu cau commit batch thay doi truoc do, sau do rut gon header trang `/imports` vi copy dang bi lap.
+- Da commit thanh cong batch truoc voi commit `6af5cbf` (`fix(imports): Preserve invoice rows and streamline input UX`).
+- Da chay GitNexus `impact` cho `ImportsPage` va `AppShell`; ca hai deu o muc `LOW`, khong co caller/process blocker canh bao `HIGH/CRITICAL`.
+- Da tao bead moi `cng-joy`, chuyen sang `IN_PROGRESS`, va bo sung `Phase 131` vao `task.md`.
+- Da sua `src/frontend/src/pages/imports/ImportsPage.tsx` de bo hoan toan block header lap lai.
+- Da sua `src/frontend/src/layouts/AppShell.tsx` de route `/imports` hien copy shell header: `Quy trinh: chuan bi template -> tai file -> xem truoc -> ghi du lieu.` thay cho dong mo ta vai tro mac dinh.
+- Da cap nhat frontend regression tests cho `AppShell` va `ImportsPage` de phan anh copy moi va viec xoa header cu.
+- Da verify:
+  - `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx` => pass (`18/18`)
+- Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `medium` do worktree con san `AGENTS.md` va `CLAUDE.md`, nhung scope code cua bead tap trung dung vao `AppShell`, `ImportsPage`, tests lien quan va `task.md`.
 
 ### 2026-04-09
 
@@ -72,12 +96,12 @@ Thuc thi goi fix invoice list + doi ten UX nhap lieu:
 
 ## Next Action
 
-- Neu user yeu cau tiep: tach phan copy/CTA nhap lieu con lai o cac man hinh khac hoac tiep tuc commit/push/PR. Neu resume phase 130, bat dau bang `bd show cng-vwl`, doi chieu `task.md`, va kiem tra worktree truoc khi co thao tac git.
+- Dong bead `cng-ljd`, stage rieng batch follow-up `/imports` (bo qua `AGENTS.md` va `CLAUDE.md`), roi commit theo yeu cau nguoi dung.
 
 ## Resume Checklist
 
-- Chay `bd show cng-vwl`
-- Mo `task.md` va tim `Phase 130`
+- Chay `bd show cng-ljd`
+- Mo `task.md` va tim `Phase 132`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`

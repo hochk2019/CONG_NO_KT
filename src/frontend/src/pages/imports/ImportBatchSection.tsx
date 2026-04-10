@@ -499,24 +499,21 @@ export default function ImportBatchSection({
 
   return (
     <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h2>Nhập file, kiểm tra trước khi ghi dữ liệu</h2>
-          <p className="muted">Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.</p>
-        </div>
-        <div className="header-actions">
-          <a className="btn btn-ghost" href="#templates">
-            Tải template
-          </a>
-          <a className="btn btn-outline" href="#history">
-            Lịch sử nhập
-          </a>
-        </div>
-      </div>
-
       <section className="card" id="templates">
-        <p className="eyebrow">Bước 1</p>
-        <h3>Chuẩn bị template</h3>
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Bước 1</p>
+            <h3>Chuẩn bị template</h3>
+          </div>
+          <div className="header-actions">
+            <a className="btn btn-ghost" href="#templates">
+              Tải template
+            </a>
+            <a className="btn btn-outline" href="#history">
+              Lịch sử nhập
+            </a>
+          </div>
+        </div>
         <p className="muted">
           Giữ nguyên header ở sheet Data. Dòng 1 là header cố định, dòng 2 là dòng mẫu tham chiếu.
           Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy. Với khoản trả hộ KH và phiếu thu,

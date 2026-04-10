@@ -47,12 +47,6 @@ export default function ImportsPage() {
 
   return (
     <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h2>Import từ Template</h2>
-          <p className="muted">Điểm vào tập trung để nhập file template cho hóa đơn, trả hộ và phiếu thu theo đúng flow vận hành.</p>
-        </div>
-      </div>
       <ImportBatchSection
         token={token}
         canStage={canStage}

@@ -146,6 +146,17 @@ describe('AppShell', () => {
     expect(screen.getByText('Điều hướng theo quyền truy cập')).toBeInTheDocument()
   })
 
+  it('shows import workflow guidance on imports route', () => {
+    const authValue = buildAuthContext(['Admin'])
+
+    renderInShellRoutes(authValue, ['/imports?tab=batch'])
+
+    expect(screen.getByRole('heading', { name: 'Import từ Template' })).toBeInTheDocument()
+    expect(
+      screen.getByText('Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.'),
+    ).toBeInTheDocument()
+  })
+
   it('toggles mobile navigation state', async () => {
     const authValue = buildAuthContext()
     const user = userEvent.setup()

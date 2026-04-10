@@ -259,34 +259,26 @@
 
 .advances-row-actions {
   display: grid;
-  gap: 0.4rem;
-  min-width: 14rem;
-}
-
-.advances-row-actions__lane {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
-
-.advances-row-actions__lane--commit {
-  padding-top: 0.15rem;
-  border-top: 1px solid color-mix(in srgb, var(--advances-border-soft) 70%, transparent);
+  grid-template-columns: minmax(8.6rem, 1fr);
+  gap: 0.3rem;
+  min-width: 8.6rem;
+  width: 100%;
 }
 
 .advances-row-actions__button {
-  flex: 1 1 6.4rem;
-  min-height: 2.2rem;
+  width: 100%;
+  min-width: 0;
+  min-height: 1.9rem;
+  padding: 0.28rem 0.68rem;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 
 .advances-row-actions__button--accent:not(:disabled) {
   border-color: color-mix(in srgb, var(--color-primary) 40%, var(--advances-border-strong));
   background: color-mix(in srgb, var(--color-primary) 12%, var(--advances-surface-tint));
   color: color-mix(in srgb, var(--color-primary) 75%, white);
-}
-
-.advances-row-actions--void .advances-row-actions__lane--commit {
-  border-top-color: color-mix(in srgb, var(--color-danger) 24%, var(--advances-border-soft));
 }
 
 @media (max-width: 1200px) {
@@ -330,7 +322,7 @@
     grid-template-columns: 1fr;
   }
 
-  .advances-row-actions {
-    min-width: 0;
+  .advances-row-actions__button {
+    width: 100%;
   }
 }

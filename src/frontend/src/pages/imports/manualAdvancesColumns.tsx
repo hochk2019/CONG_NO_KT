@@ -126,53 +126,49 @@ export const buildManualAdvanceColumns = ({
       const canUnvoid = row.status.toUpperCase() === 'VOID'
       return (
         <div className={`advances-row-actions advances-row-actions--${status.toLowerCase()}`}>
-          <div className="advances-row-actions__lane advances-row-actions__lane--utility">
-            {canEdit && (
-              <button
-                className="btn btn-ghost advances-row-actions__button"
-                type="button"
-                onClick={() => onOpenCorrection(row)}
-              >
-                Sửa
-              </button>
-            )}
+          {canEdit && (
             <button
               className="btn btn-ghost advances-row-actions__button"
               type="button"
-              onClick={() => onOpenHistory(row)}
+              onClick={() => onOpenCorrection(row)}
             >
-              Lịch sử sửa
+              Sửa
             </button>
-          </div>
-          <div className="advances-row-actions__lane advances-row-actions__lane--commit">
+          )}
+          <button
+            className="btn btn-ghost advances-row-actions__button"
+            type="button"
+            onClick={() => onOpenHistory(row)}
+          >
+            Lịch sử sửa
+          </button>
+          <button
+            className="btn btn-outline advances-row-actions__button advances-row-actions__button--accent"
+            type="button"
+            onClick={() => onApprove(row)}
+            disabled={!canApprove || loadingAction === `approve:${row.id}`}
+          >
+            {loadingAction === `approve:${row.id}` ? 'Đang phê duyệt...' : 'Phê duyệt'}
+          </button>
+          {canUnvoid ? (
             <button
-              className="btn btn-outline advances-row-actions__button advances-row-actions__button--accent"
+              className="btn btn-outline advances-row-actions__button"
               type="button"
-              onClick={() => onApprove(row)}
-              disabled={!canApprove || loadingAction === `approve:${row.id}`}
+              onClick={() => onUnvoid(row)}
+              disabled={loadingAction === `unvoid:${row.id}`}
             >
-              {loadingAction === `approve:${row.id}` ? 'Đang phê duyệt...' : 'Phê duyệt'}
+              {loadingAction === `unvoid:${row.id}` ? 'Đang bỏ hủy...' : 'Bỏ hủy'}
             </button>
-            {canUnvoid ? (
-              <button
-                className="btn btn-outline advances-row-actions__button"
-                type="button"
-                onClick={() => onUnvoid(row)}
-                disabled={loadingAction === `unvoid:${row.id}`}
-              >
-                {loadingAction === `unvoid:${row.id}` ? 'Đang bỏ hủy...' : 'Bỏ hủy'}
-              </button>
-            ) : (
-              <button
-                className="btn btn-outline-danger advances-row-actions__button"
-                type="button"
-                onClick={() => onVoid(row)}
-                disabled={!canVoid || loadingAction === `void:${row.id}`}
-              >
-                {loadingAction === `void:${row.id}` ? 'Đang hủy...' : 'Hủy'}
-              </button>
-            )}
-          </div>
+          ) : (
+            <button
+              className="btn btn-outline-danger advances-row-actions__button"
+              type="button"
+              onClick={() => onVoid(row)}
+              disabled={!canVoid || loadingAction === `void:${row.id}`}
+            >
+              {loadingAction === `void:${row.id}` ? 'Đang hủy...' : 'Hủy'}
+            </button>
+          )}
         </div>
       )
     },

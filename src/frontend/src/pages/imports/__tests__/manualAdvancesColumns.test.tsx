@@ -46,7 +46,7 @@ describe('manualAdvancesColumns', () => {
     const { container } = render(<>{renderAction!(baseRow)}</>)
 
     expect(container.querySelector('.advances-row-actions')).not.toBeNull()
-    expect(container.querySelector('.advances-row-actions__lane--commit')).not.toBeNull()
+    expect(container.querySelectorAll('.advances-row-actions__button')).toHaveLength(4)
 
     await user.click(screen.getByRole('button', { name: 'Sửa' }))
     await user.click(screen.getByRole('button', { name: 'Lịch sử sửa' }))

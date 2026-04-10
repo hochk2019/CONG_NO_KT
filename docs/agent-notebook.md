@@ -14,18 +14,18 @@ Khi quay lai task dang do, doc theo thu tu sau:
 ## Active Work
 
 - Bead: `pending (bd create dang bi chặn bởi routes.jsonl)`
-- Task phase: `Phase 136` trong `task.md`
+- Task phase: `Phase 137` trong `task.md`
 - Last updated: `2026-04-10`
-- Current status: Da hoan tat follow-up subtitle shell cho `/advances`, test pass, detect_changes da doi chieu; dang chot tracking va commit theo yeu cau user.
+- Current status: Da hoan tat viec thu gon action cell cua worklist `/advances` theo huong xep 1 cot doc trong o `Thao tac`; test frontend pass va `gitnexus_detect_changes` xac nhan risk `low`, khong con buoc ky thuat dang mo.
 
 ## Goal
 
-Hoan tat follow-up shell copy cho `/advances`:
+Hoan tat follow-up compact UI cho cot `Thao tac` trong worklist `/advances`:
 
-- doi subtitle shell route `/advances` sang copy nghiep vu `Nhap khoan tra ho cho khach hang vao he thong theo doi cong no`
-- giu subtitle role `Admin` mac dinh cho cac route khac, chi override rieng `/advances`
-- cap nhat regression test frontend de khoa subtitle moi
-- doi chieu scope bang GitNexus truoc khi commit
+- dua 4 nut `Sua`, `Phe duyet`, `Lich su sua`, `Huy` / `Bo huy` ve 1 cot doc gon hon trong cung action cell
+- giam footprint tung nut bang CSS, bo lane separator va giu responsive fallback cho man hinh hep
+- cap nhat regression test `manualAdvancesColumns` neu markup action group doi
+- doi chieu scope bang GitNexus truoc khi ket thuc
 
 ## Locked Business Decisions
 
@@ -121,14 +121,23 @@ Hoan tat follow-up shell copy cho `/advances`:
   - `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`17/17`)
 - Da chay `gitnexus_detect_changes(scope: "all")`; output tong the len `medium` vi worktree co them file doc/tracking, nhung scope code cua request nay chi tap trung vao `AppShell` va regression test shell.
 
+- User yeu cau thu gon cot `Thao tac` trong advances worklist. Sau khi xem UI thuc te, user xac nhan huong dung la xep 4 nut thanh 1 cot doc gon trong action cell, khong phai dan ngang tren 1 hang.
+- Da doc GitNexus context cua repo va chay `impact` cho `buildManualAdvanceColumns` va `ManualAdvancesSection`; ca hai deu `LOW`, khong co caller/process `HIGH/CRITICAL`.
+- Da sua `src/frontend/src/pages/imports/manualAdvancesColumns.tsx` de action cell khong con chia 2 lane utility/commit; 4 nut duoc render chung trong mot action row, khong doi logic nghiep vu hien/enable/loading.
+- Da sua `src/frontend/src/pages/advances/advances.css` de action group xep doc gon hon: gap/padding/min-height nho lai, bo separator lane cu, moi nut chiem tron chieu ngang cua cot va fallback an toan o breakpoint hep.
+- Da cap nhat regression test `src/frontend/src/pages/imports/__tests__/manualAdvancesColumns.test.tsx` de bo phu thuoc vao lane class cu va khoa action group moi.
+- Da verify:
+  - `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`15/15`)
+- Da chay `gitnexus_detect_changes(scope: "all")`; output tong the bao `low`, khong co affected process, va scope code tap trung vao `manualAdvancesColumns`, `advances.css`, va regression test lien quan. Worktree van co `AGENTS.md` / `CLAUDE.md` modified san nhung phase nay khong dung vao.
+
 ## Next Action
 
-- Khong co buoc ky thuat dang mo. Neu user tiep tuc voi UI shell/route copy, bat dau lai bang `mcp__gitnexus__impact` cho symbol can sua va doi chieu `task.md` phase moi nhat.
+- Khong co buoc ky thuat dang mo. Neu user tiep tuc voi UI advances worklist, bat dau lai bang `mcp__gitnexus__impact` cho symbol can sua, mo `task.md` o `Phase 137`, va doi chieu `gitnexus_detect_changes` truoc khi chot.
 
 ## Resume Checklist
 
 - Chay `bd show cng-ljd`
-- Mo `task.md` va tim `Phase 136`
+- Mo `task.md` va tim `Phase 137`
 - Mo file nay va tiep tuc tu muc `Next Action`
 - Truoc khi sua symbol hien co: chay `mcp__gitnexus__impact` cho symbol do
 - Truoc khi ket thuc task co sua code: chay `mcp__gitnexus__detect_changes`

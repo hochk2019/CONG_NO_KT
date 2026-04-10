@@ -2090,3 +2090,17 @@
 ### Verification evidence (2026-04-10, phase 136 / bead pending-cli-config)
 - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`17/17`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => output tong the bao `medium` do worktree co them thay doi tracking/doc san co; scope code cua phase nay tap trung vao `AppShell` va regression test shell route `/advances`.
+
+## Phase 137 - Compact advances worklist action buttons (2026-04-10) [bead: pending-cli-config]
+- [x] Chuyen action cell trong advances worklist tu layout 2 lane sang 1 action group xep doc gon hon, giu nguyen toan bo logic hien/enable/loading cua cac nut `Sua`, `Phe duyet`, `Lich su sua`, `Huy` / `Bo huy`.
+- [x] Tinh chinh CSS action group de giam footprint nut: min-height thap hon, padding/gap nho hon, bo lane separator va xep thanh 1 cot doc on dinh trong o `Thao tac`.
+- [x] Giữ responsive fallback cho man hinh hep ma khong lam tran layout bat thuong.
+- [x] Cap nhat regression test `manualAdvancesColumns` de bo phu thuoc vao lane markup cu va khoa action group moi.
+- [x] Ghi nhan tiep tuc blocker beads: phase nay van theo doi bang `task.md` + notebook vi `bd create` chua dung duoc tren workspace hien tai.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 137 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`15/15`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: low`; scope code tap trung vao `src/frontend/src/pages/imports/manualAdvancesColumns.tsx`, `src/frontend/src/pages/advances/advances.css`, va regression test lien quan. Worktree van co file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) nhung phase nay khong dung vao cac file do.

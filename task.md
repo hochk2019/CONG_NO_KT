@@ -2104,3 +2104,20 @@
 ### Verification evidence (2026-04-10, phase 137 / bead pending-cli-config)
 - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`15/15`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: low`; scope code tap trung vao `src/frontend/src/pages/imports/manualAdvancesColumns.tsx`, `src/frontend/src/pages/advances/advances.css`, va regression test lien quan. Worktree van co file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) nhung phase nay khong dung vao cac file do.
+
+## Phase 138 - Add invoice/customer deeplink reveal actions (2026-04-10) [bead: pending-cli-config]
+- [x] Them reveal action tren cot `So hoa don` de nguoi dung bam vao ma hoa don, hien nut `Xem`, va deeplink sang `/customers?taxCode=...&tab=invoices&doc=...`.
+- [x] Them reveal action tren cot `Khach hang` de nguoi dung bam vao ma so thue/ten khach hang, hien nut `Xem`, va deeplink sang `Customer 360 View` theo tax code.
+- [x] Giữ fallback plain text khi invoice row khong co `customerTaxCode`, tranh hien action deeplink sai.
+- [x] Reset reveal state moi lan tai du lieu invoice list de tranh loi stale action sau khi loc/tim kiem.
+- [x] Bo sung regression test frontend cho ca 2 luong deeplink va case khong co tax code.
+- [x] Ghi nhan bead van tam theo doi bang `task.md` vi `bd create` truoc do van bi chan boi cau hinh CLI.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `npm --prefix src/frontend run build`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 138 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx` => pass (`8/8`).
+- [x] `npm --prefix src/frontend run build` => pass (`tsc -b && vite build`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: medium`; scope code tap trung vao `src/frontend/src/pages/InvoicesPage.tsx` va process `InvoicesPage -> RenderReferenceChips`, con tong risk bi doi len boi worktree dang co them thay doi tai lieu san (`AGENTS.md`, `CLAUDE.md`) va file CSS da chinh truoc do (`src/frontend/src/pages/advances/advances.css`).

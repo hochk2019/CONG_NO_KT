@@ -16,6 +16,11 @@ import {
 import ManualInvoicesSection from './imports/ManualInvoicesSection'
 
 const INVOICE_STATUS_STORAGE_KEY = 'pref.invoices.status'
+type RevealTarget = 'invoice' | 'customer'
+type RevealedCell = {
+  rowId: string
+  target: RevealTarget
+} | null
 
 const getStoredStatus = () => {
   if (typeof window === 'undefined') return ''
@@ -90,6 +95,20 @@ const renderLinkedInvoices = (row: InvoiceListItem) => {
   )
 }
 
+const buildCustomerRoute = (customerTaxCode: string) => {
+  const params = new URLSearchParams({ taxCode: customerTaxCode })
+  return `/customers?${params.toString()}`
+}
+
+const buildInvoiceRoute = (customerTaxCode: string, invoiceNo: string) => {
+  const params = new URLSearchParams({
+    taxCode: customerTaxCode,
+    tab: 'invoices',
+    doc: invoiceNo,
+  })
+  return `/customers?${params.toString()}`
+}
+
 export default function InvoicesPage() {
   const { state } = useAuth()
   const token = state.accessToken ?? ''
@@ -108,6 +127,7 @@ export default function InvoicesPage() {
   const [quickRange, setQuickRange] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [revealedCell, setRevealedCell] = useState<RevealedCell>(null)
 
   useEffect(() => {
     const tab = new URLSearchParams(location.search).get('tab')
@@ -135,6 +155,7 @@ export default function InvoicesPage() {
         if (!isActive) return
         setRows(result.items)
         setTotal(result.total)
+        setRevealedCell(null)
       })
       .catch((err) => {
         if (!isActive) return
@@ -166,16 +187,92 @@ export default function InvoicesPage() {
       {
         key: 'invoiceNo',
         label: 'Số hóa đơn',
+        render: (row: InvoiceListItem) => {
+          const canOpenInvoice = Boolean(row.customerTaxCode && row.invoiceNo)
+          const isRevealed =
+            revealedCell?.rowId === row.id && revealedCell.target === 'invoice'
+
+          if (!canOpenInvoice) {
+            return row.invoiceNo
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                type="button"
+                className="btn btn-ghost btn-table"
+                aria-label={row.invoiceNo}
+                onClick={() =>
+                  setRevealedCell((current) =>
+                    current?.rowId === row.id && current.target === 'invoice'
+                      ? null
+                      : { rowId: row.id, target: 'invoice' },
+                  )
+                }
+              >
+                {row.invoiceNo}
+              </button>
+              {isRevealed ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-table"
+                  onClick={() => navigate(buildInvoiceRoute(row.customerTaxCode, row.invoiceNo))}
+                >
+                  Xem
+                </button>
+              ) : null}
+            </div>
+          )
+        },
       },
       {
         key: 'customer',
         label: 'Khách hàng',
-        render: (row: InvoiceListItem) => (
-          <div className="stacked-text">
-            <span>{row.customerTaxCode}</span>
-            <span className="muted">{row.customerName}</span>
-          </div>
-        ),
+        render: (row: InvoiceListItem) => {
+          const canOpenCustomer = Boolean(row.customerTaxCode)
+          const isRevealed =
+            revealedCell?.rowId === row.id && revealedCell.target === 'customer'
+
+          if (!canOpenCustomer) {
+            return (
+              <div className="stacked-text">
+                <span className="muted">-</span>
+                <span className="muted">{row.customerName}</span>
+              </div>
+            )
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                aria-label={`${row.customerTaxCode} ${row.customerName}`}
+                onClick={() =>
+                  setRevealedCell((current) =>
+                    current?.rowId === row.id && current.target === 'customer'
+                      ? null
+                      : { rowId: row.id, target: 'customer' },
+                  )
+                }
+              >
+                <div className="stacked-text">
+                  <span>{row.customerTaxCode}</span>
+                  <span className="muted">{row.customerName}</span>
+                </div>
+              </button>
+              {isRevealed ? (
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-table"
+                  onClick={() => navigate(buildCustomerRoute(row.customerTaxCode))}
+                >
+                  Xem
+                </button>
+              ) : null}
+            </div>
+          )
+        },
       },
       {
         key: 'totalAmount',
@@ -219,7 +316,7 @@ export default function InvoicesPage() {
         render: (row: InvoiceListItem) => renderSellerLabel(row.sellerTaxCode, row.sellerShortName),
       },
     ],
-    [],
+    [navigate, revealedCell],
   )
 
   const hasFilters = Boolean(status || search || dateFrom || dateTo || quickRange)

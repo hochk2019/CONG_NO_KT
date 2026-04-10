@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { InvoiceListItem } from '../../api/invoices'
 import { AuthContext, type AuthContextValue } from '../../context/AuthStore'
 import InvoicesPage from '../InvoicesPage'
 
@@ -70,6 +71,24 @@ function renderPage(
     </MemoryRouter>,
   )
 }
+
+const buildInvoiceListItem = (overrides: Partial<InvoiceListItem> = {}): InvoiceListItem => ({
+  id: 'invoice-1',
+  invoiceNo: 'INV-001',
+  issueDate: '2026-03-15',
+  totalAmount: 5_000_000,
+  outstandingAmount: 2_500_000,
+  status: 'OPEN',
+  version: 1,
+  customerTaxCode: '0312345678',
+  customerName: 'Công ty TNHH Minh An',
+  sellerTaxCode: '0309876543',
+  sellerShortName: 'Seller A',
+  receiptRefs: [],
+  reductionInvoiceRefs: [],
+  reducedInvoiceRefs: [],
+  ...overrides,
+})
 
 describe('InvoicesPage', () => {
   beforeEach(() => {
@@ -144,5 +163,72 @@ describe('InvoicesPage', () => {
         canCommit: true,
       }),
     )
+  })
+
+  it('reveals invoice deeplink action and navigates to the matching customer invoice tab', async () => {
+    const user = userEvent.setup()
+    mocks.listInvoicesMock.mockResolvedValueOnce({
+      items: [buildInvoiceListItem({ invoiceNo: 'INV-693' })],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    })
+
+    renderPage('/invoices')
+
+    const invoiceTrigger = await screen.findByRole('button', { name: 'INV-693' })
+    await user.click(invoiceTrigger)
+
+    const row = invoiceTrigger.closest('tr')
+    expect(row).not.toBeNull()
+    const viewButton = within(row as HTMLTableRowElement).getByRole('button', { name: 'Xem' })
+    await user.click(viewButton)
+
+    expect(screen.getByTestId('location-probe').textContent).toBe(
+      '/customers?taxCode=0312345678&tab=invoices&doc=INV-693',
+    )
+  })
+
+  it('reveals customer deeplink action and navigates to Customer 360 View', async () => {
+    const user = userEvent.setup()
+    mocks.listInvoicesMock.mockResolvedValueOnce({
+      items: [buildInvoiceListItem()],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    })
+
+    renderPage('/invoices')
+
+    const customerTrigger = await screen.findByRole('button', {
+      name: '0312345678 Công ty TNHH Minh An',
+    })
+    await user.click(customerTrigger)
+
+    const row = customerTrigger.closest('tr')
+    expect(row).not.toBeNull()
+    const viewButton = within(row as HTMLTableRowElement).getByRole('button', { name: 'Xem' })
+    await user.click(viewButton)
+
+    expect(screen.getByTestId('location-probe').textContent).toBe('/customers?taxCode=0312345678')
+  })
+
+  it('keeps invoice and customer cells as plain text when tax code is missing', async () => {
+    mocks.listInvoicesMock.mockResolvedValueOnce({
+      items: [buildInvoiceListItem({ customerTaxCode: '' })],
+      page: 1,
+      pageSize: 10,
+      total: 1,
+    })
+
+    renderPage('/invoices')
+
+    expect(await screen.findByText('INV-001')).toBeInTheDocument()
+    expect(screen.getByText('Công ty TNHH Minh An')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'INV-001' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Công ty TNHH Minh An' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem' })).not.toBeInTheDocument()
   })
 })

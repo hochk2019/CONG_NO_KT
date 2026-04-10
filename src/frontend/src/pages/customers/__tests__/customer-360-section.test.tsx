@@ -25,7 +25,10 @@ describe('customer-360-section', () => {
       ownerName: 'Nguyễn Văn A',
       managerName: 'Lê Thị B',
       summary: {
-        totalOutstanding: 450000000,
+        totalOutstanding: 470000000,
+        invoiceOutstanding: 450000000,
+        advanceOutstanding: 50000000,
+        netAdjustment: -30000000,
         overdueAmount: 300000000,
         overdueRatio: 0.6667,
         maxDaysPastDue: 45,
@@ -71,7 +74,10 @@ describe('customer-360-section', () => {
     )
 
     expect(screen.getByText('Customer 360 View')).toBeInTheDocument()
-    await screen.findByText('Tổng công nợ mở')
+    await screen.findByText('Tổng dư nợ hiện tại')
+    expect(screen.getByText('Cấu phần dư nợ')).toBeInTheDocument()
+    expect(screen.getByText('Trả hộ còn mở')).toBeInTheDocument()
+    expect(screen.getByText(/Chỉ số quá hạn, tỷ lệ quá hạn/)).toBeInTheDocument()
     expect(screen.getByText('Risk Snapshot')).toBeInTheDocument()
     expect(screen.getByText('Reminder Timeline')).toBeInTheDocument()
     expect(screen.getByText('Response States')).toBeInTheDocument()

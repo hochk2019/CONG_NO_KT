@@ -140,6 +140,48 @@
   gap: 0.5rem;
 }
 
+.customer-360__summary-panel {
+  border: 1px solid var(--color-border);
+  border-radius: 12px;
+  padding: var(--space-2);
+  display: grid;
+  gap: 0.75rem;
+  background: color-mix(in srgb, var(--color-surface) 95%, var(--color-bg));
+}
+
+.customer-360__summary-breakdown {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.customer-360__summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--color-muted);
+}
+
+.customer-360__summary-value {
+  color: var(--color-text);
+}
+
+.customer-360__summary-value--positive {
+  color: color-mix(in srgb, var(--color-success) 86%, black 14%);
+}
+
+.customer-360__summary-value--negative {
+  color: color-mix(in srgb, var(--color-danger) 90%, black 10%);
+}
+
+.customer-360__summary-value--neutral {
+  color: color-mix(in srgb, var(--color-muted) 85%, var(--color-text));
+}
+
+.customer-360__summary-note {
+  margin: 0;
+}
+
 .customer-360__risk-grid {
   display: grid;
   gap: 0.5rem;

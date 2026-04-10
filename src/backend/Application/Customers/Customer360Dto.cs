@@ -16,6 +16,9 @@ public sealed record Customer360Dto(
 
 public sealed record Customer360SummaryDto(
     decimal TotalOutstanding,
+    decimal InvoiceOutstanding,
+    decimal AdvanceOutstanding,
+    decimal NetAdjustment,
     decimal OverdueAmount,
     decimal OverdueRatio,
     int MaxDaysPastDue,

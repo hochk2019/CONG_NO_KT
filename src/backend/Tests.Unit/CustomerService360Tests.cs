@@ -57,7 +57,7 @@ public sealed class CustomerService360Tests
             TaxCode = "CUST-360",
             Name = "Customer 360",
             Status = "ACTIVE",
-            CurrentBalance = 300m,
+            CurrentBalance = 340m,
             PaymentTermsDays = 30,
             CreditLimit = 1_000m,
             AccountantOwnerId = ownerId,
@@ -119,6 +119,23 @@ public sealed class CustomerService360Tests
                 UpdatedAt = now,
                 Version = 0
             });
+
+        db.Advances.Add(new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = "SELLER-360",
+            CustomerTaxCode = "CUST-360",
+            AdvanceNo = "TH-001",
+            AdvanceDate = today.AddDays(-5),
+            Amount = 80m,
+            OutstandingAmount = 80m,
+            Description = "Tra ho lo hang gap",
+            Status = "APPROVED",
+            ApprovedAt = now.AddDays(-5),
+            CreatedAt = now,
+            UpdatedAt = now,
+            Version = 0
+        });
 
         db.RiskScoreSnapshots.AddRange(
             new RiskScoreSnapshot
@@ -204,7 +221,10 @@ public sealed class CustomerService360Tests
         Assert.NotNull(result);
         Assert.Equal("owner.user", result!.OwnerName);
         Assert.Equal("Manager Name", result.ManagerName);
-        Assert.Equal(300m, result.Summary.TotalOutstanding);
+        Assert.Equal(340m, result.Summary.TotalOutstanding);
+        Assert.Equal(300m, result.Summary.InvoiceOutstanding);
+        Assert.Equal(80m, result.Summary.AdvanceOutstanding);
+        Assert.Equal(-40m, result.Summary.NetAdjustment);
         Assert.Equal(200m, result.Summary.OverdueAmount);
         Assert.Equal(2m / 3m, result.Summary.OverdueRatio);
         Assert.Equal(15, result.Summary.MaxDaysPastDue);

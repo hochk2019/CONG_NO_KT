@@ -299,16 +299,26 @@ public sealed class CustomerService : ICustomerService
             })
             .ToListAsync(ct);
 
+        var openAdvances = await _db.Advances
+            .AsNoTracking()
+            .Where(a =>
+                a.DeletedAt == null &&
+                a.CustomerTaxCode == key &&
+                a.OutstandingAmount > 0m &&
+                (a.Status == "APPROVED" || a.Status == "PAID"))
+            .Select(a => a.OutstandingAmount)
+            .ToListAsync(ct);
+
         var today = DateOnly.FromDateTime(_utcNow());
         var paymentTermsDays = Math.Max(customer.PaymentTermsDays, 0);
 
         var overdueAmount = 0m;
-        var totalOutstanding = 0m;
+        var invoiceOutstanding = 0m;
         var maxDaysPastDue = 0;
         var nextDueDate = (DateOnly?)null;
         foreach (var invoice in openInvoices)
         {
-            totalOutstanding += invoice.OutstandingAmount;
+            invoiceOutstanding += invoice.OutstandingAmount;
 
             var dueDate = invoice.IssueDate.AddDays(paymentTermsDays);
             if (dueDate >= today)
@@ -329,7 +339,10 @@ public sealed class CustomerService : ICustomerService
             }
         }
 
-        var overdueRatio = totalOutstanding <= 0m ? 0m : overdueAmount / totalOutstanding;
+        var advanceOutstanding = openAdvances.Sum();
+        var totalOutstanding = customer.CurrentBalance;
+        var netAdjustment = totalOutstanding - invoiceOutstanding - advanceOutstanding;
+        var overdueRatio = invoiceOutstanding <= 0m ? 0m : overdueAmount / invoiceOutstanding;
 
         var latestSnapshot = await _db.RiskScoreSnapshots
             .AsNoTracking()
@@ -381,6 +394,9 @@ public sealed class CustomerService : ICustomerService
             managerName,
             new Customer360SummaryDto(
                 totalOutstanding,
+                invoiceOutstanding,
+                advanceOutstanding,
+                netAdjustment,
                 overdueAmount,
                 overdueRatio,
                 maxDaysPastDue,

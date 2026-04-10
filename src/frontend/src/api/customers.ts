@@ -29,6 +29,9 @@ export type CustomerDetail = {
 
 export type Customer360Summary = {
   totalOutstanding: number
+  invoiceOutstanding: number
+  advanceOutstanding: number
+  netAdjustment: number
   overdueAmount: number
   overdueRatio: number
   maxDaysPastDue: number

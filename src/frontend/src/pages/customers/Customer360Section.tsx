@@ -9,6 +9,7 @@ type Customer360SectionProps = {
 }
 
 type SummaryTone = 'accent' | 'danger' | 'warning' | 'info' | 'neutral' | 'success'
+type BreakdownTone = 'positive' | 'negative' | 'neutral'
 
 const currencyFormatter = new Intl.NumberFormat('vi-VN', {
   style: 'currency',
@@ -103,7 +104,7 @@ export default function Customer360Section({
       data
         ? [
             {
-              label: 'Tổng công nợ mở',
+              label: 'Tổng dư nợ hiện tại',
               value: currencyFormatter.format(data.summary.totalOutstanding),
               tone: 'accent' as SummaryTone,
             },
@@ -128,9 +129,38 @@ export default function Customer360Section({
               tone: 'neutral' as SummaryTone,
             },
             {
-              label: 'Kỳ hạn gần nhất',
+              label: 'Hạn hóa đơn gần nhất',
               value: formatDate(data.summary.nextDueDate),
               tone: 'success' as SummaryTone,
+            },
+          ]
+        : [],
+    [data],
+  )
+
+  const debtBreakdownItems = useMemo(
+    () =>
+      data
+        ? [
+            {
+              label: 'Hóa đơn còn mở',
+              value: data.summary.invoiceOutstanding,
+              tone: (data.summary.invoiceOutstanding > 0 ? 'positive' : 'neutral') as BreakdownTone,
+            },
+            {
+              label: 'Trả hộ còn mở',
+              value: data.summary.advanceOutstanding,
+              tone: (data.summary.advanceOutstanding > 0 ? 'positive' : 'neutral') as BreakdownTone,
+            },
+            {
+              label: 'Điều chỉnh ròng (phiếu thu/credit)',
+              value: data.summary.netAdjustment,
+              tone:
+                data.summary.netAdjustment < 0
+                  ? ('negative' as BreakdownTone)
+                  : data.summary.netAdjustment > 0
+                    ? ('positive' as BreakdownTone)
+                    : ('neutral' as BreakdownTone),
             },
           ]
         : [],
@@ -167,6 +197,24 @@ export default function Customer360Section({
                 <p className="customer-360__kpi-value">{item.value}</p>
               </article>
             ))}
+          </div>
+
+          <div className="customer-360__summary-panel">
+            <p className="subsection-title">Cấu phần dư nợ</p>
+            <div className="customer-360__summary-breakdown">
+              {debtBreakdownItems.map((item) => (
+                <div className="customer-360__summary-row" key={item.label}>
+                  <span>{item.label}</span>
+                  <strong className={`customer-360__summary-value customer-360__summary-value--${item.tone}`}>
+                    {currencyFormatter.format(item.value)}
+                  </strong>
+                </div>
+              ))}
+            </div>
+            <p className="text-caption customer-360__summary-note">
+              Chỉ số quá hạn, tỷ lệ quá hạn, ngày trễ hạn max và hạn hóa đơn gần nhất chỉ tính trên hóa đơn.
+              Khoản trả hộ và điều chỉnh ròng vẫn được cộng vào tổng dư nợ hiện tại.
+            </p>
           </div>
 
           <div className="customer-360__risk">

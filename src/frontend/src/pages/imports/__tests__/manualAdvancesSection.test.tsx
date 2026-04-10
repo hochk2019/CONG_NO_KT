@@ -88,6 +88,23 @@ describe('ManualAdvancesSection', () => {
     expect(onImportTemplate).toHaveBeenCalledTimes(1)
   })
 
+  it('keeps the create header compact and marks advance number as required', () => {
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    expect(
+      screen.queryByText(
+        /Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền trước/i,
+      ),
+    ).not.toBeInTheDocument()
+
+    const advanceNoInput = screen.getByPlaceholderText('VD: CT-001')
+    const advanceNoField = advanceNoInput.closest('label')
+
+    expect(advanceNoField).not.toBeNull()
+    expect(within(advanceNoField as HTMLLabelElement).getByText('Bắt buộc')).toBeInTheDocument()
+    expect(advanceNoInput).toBeRequired()
+  })
+
   it('requires advance number before creating a draft', async () => {
     const user = userEvent.setup()
 

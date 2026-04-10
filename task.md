@@ -69,6 +69,21 @@
   - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
   - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
 
+## Phase 134 - Advances quick create compact header + required voucher badge (2026-04-10) [bead: pending - bd create blocked]
+- [x] Bỏ đoạn copy hướng dẫn dài ở header `Tạo khoản trả hộ KH` để phần create nhanh gọn hơn.
+- [x] Rà soát rule `Số chứng từ` ở cả manual form, backend validation, và import template; xác nhận đây là trường bắt buộc.
+- [x] Thêm hiển thị `Bắt buộc` cho trường `Số chứng từ` trên form nhập tay, giữ nguyên validation hiện có.
+- [x] Cập nhật regression test frontend khóa việc ẩn copy cũ và giữ badge bắt buộc cho `Số chứng từ`.
+- [x] Ghi chú vận hành: đã thử `bd create` nhưng Beads CLI vẫn lỗi `cannot use --rig: no routes.jsonl found in any parent .beads directory`, nên phase này tạm theo dõi bằng `task.md` + `docs/agent-notebook.md`.
+
+### Verification evidence (2026-04-10, phase 134 / bead pending)
+- [x] Frontend verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass.
+- [x] Domain verification:
+  - [x] Manual form `ManualAdvancesSection` chặn submit khi thiếu `advanceNo`.
+  - [x] Backend integration test `AdvanceCreateValidationTests.CreateAsync_Rejects_EmptyAdvanceNo` xác nhận service reject khi `advanceNo` rỗng.
+  - [x] Template generator `scripts/imports/generate_import_templates.py` đánh dấu cột `advance_no` là bắt buộc.
+
 ### Verification evidence (2026-04-09, phase 129 / cng-0pv)
 - [x] Backend verify:
   - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.

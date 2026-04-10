@@ -712,10 +712,6 @@ export default function ManualAdvancesSection({
               <div className="advances-section-header__copy">
                 <span className="advances-section-kicker">Tạo nhanh</span>
                 <h3>Tạo khoản trả hộ KH</h3>
-                <p className="muted advances-section-lead">
-                  Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền
-                  trước. Ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
-                </p>
               </div>
               {onImportTemplate ? (
                 <div className="advances-section-header__actions">
@@ -829,7 +825,12 @@ export default function ManualAdvancesSection({
                     : 'field advances-field-secondary'
                 }
               >
-                <span>Số chứng từ</span>
+                <span className="field-label">
+                  Số chứng từ
+                  <span className="pill pill-warn" aria-hidden="true">
+                    Bắt buộc
+                  </span>
+                </span>
                 <input
                   value={advanceNo}
                   onChange={(event) => {
@@ -844,6 +845,7 @@ export default function ManualAdvancesSection({
                     }
                   }}
                   placeholder="VD: CT-001"
+                  required
                 />
                 {fieldErrors.advanceNo && <span className="field-error">{fieldErrors.advanceNo}</span>}
               </label>

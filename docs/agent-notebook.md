@@ -13,20 +13,20 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-ktd`
-- Task phase: `Phase 133` trong `task.md`
+- Bead: `pending (bd create dang bi chặn bởi routes.jsonl)`
+- Task phase: `Phase 134` trong `task.md`
 - Last updated: `2026-04-10`
-- Current status: Da hoan tat follow-up rut gon header `/invoices`; dang giu worktree o trang thai da verify, cho user yeu cau tiep theo hoac commit rieng neu can.
+- Current status: Dang hoan tat follow-up tren `/advances`: bo copy header create nhanh, xac nhan `So chung tu` la bat buoc, va dong bo badge/UI + regression tests.
 
 ## Goal
 
-Hoan tat follow-up UI cho `/invoices`:
+Hoan tat follow-up UI cho `/advances`:
 
-- bo block header lap lai trong page body
-- dua copy huong dan len shell header route `/invoices`
-- giu copy role `Admin` mac dinh tren cac route khac khong bi anh huong
-- cap nhat regression tests frontend cho `AppShell` va `InvoicesPage`
-- doi chieu lai scope bang GitNexus va dong bead tracking
+- bo dong mo ta dai o khu create nhanh de page gon hon
+- xac nhan `So chung tu` co bat buoc o ca frontend manual, backend, va import template
+- neu bat buoc thi hien thi badge `Bat buoc` ngay tren field `So chung tu`
+- cap nhat regression tests frontend cho `ManualAdvancesSection`
+- doi chieu lai scope bang GitNexus va ghi nho rang Beads CLI tam thoi chua tao duoc bead moi
 
 ## Locked Business Decisions
 
@@ -56,6 +56,16 @@ Hoan tat follow-up UI cho `/invoices`:
 ## Work Log
 
 ### 2026-04-10
+
+- User yeu cau tren `/advances`: bo dong copy `Uu tien hoan thanh MST ben ban...`, ra soat lai xem `So chung tu` co bat buoc hay khong, neu co thi them badge `Bat buoc` nhu cac o khac, va phai doi chieu ca backend manual + import template.
+- Da doc GitNexus context cua repo va chay `impact` cho symbol `ManualAdvancesSection`; ket qua `LOW`, khong co caller/process blocker nen co the sua truc tiep component.
+- Da doi chieu rule bat buoc:
+  - frontend manual `ManualAdvancesSection` dang chan submit neu `advanceNo` rong va hien loi `Vui long nhap so chung tu.`
+  - backend integration test `AdvanceCreateValidationTests.CreateAsync_Rejects_EmptyAdvanceNo` xac nhan service reject khi `advanceNo` rong
+  - template generator `scripts/imports/generate_import_templates.py` da danh dau cot `advance_no` la `True` / bat buoc
+- Da thu tao bead moi bang `bd create`, nhung Beads CLI van fail voi `cannot use --rig: no routes.jsonl found in any parent .beads directory`; phase nay tam theo doi bang `task.md` + notebook.
+- Da sua `src/frontend/src/pages/imports/ManualAdvancesSection.tsx` de bo copy header dai va them badge `Bat buoc` cho truong `So chung tu`; dong thoi them `required` cho input nay de phan anh dung semantics cua form.
+- Da cap nhat regression test `src/frontend/src/pages/imports/__tests__/manualAdvancesSection.test.tsx` de khoa viec copy cu da bi bo va `So chung tu` van duoc danh dau bat buoc tren UI.
 
 - User yeu cau ra soat lai review finding tren `/invoices`, doi label nut `Mo import batch` thanh `Import tu Template`, sau do commit ca batch thay doi invoices truoc do + fix moi.
 - Da doc GitNexus context va chay `impact` cho `ManualInvoicesSection`; risk `LOW`, khong co caller/process bi anh huong truc tiep nen co the sua copy an toan.
@@ -105,7 +115,7 @@ Hoan tat follow-up UI cho `/invoices`:
 
 ## Next Action
 
-- Chay frontend tests cho CTA `Import tu Template`, doi chieu lai scope bang `gitnexus_detect_changes`, roi stage/commit cac thay doi invoices theo yeu cau user. Khong push neu user chua yeu cau.
+- Chay frontend tests cho `ManualAdvancesSection`, doi chieu lai scope bang `gitnexus_detect_changes`, roi bao lai cho user ket qua ra soat `So chung tu` la truong bat buoc. Khong commit/push neu user chua yeu cau.
 
 ## Resume Checklist
 

@@ -5,6 +5,7 @@ import ReceiptFormSection from '../ReceiptFormSection'
 
 const mocks = vi.hoisted(() => ({
   approveReceiptMock: vi.fn(),
+  createSellerMock: vi.fn(),
   createReceiptMock: vi.fn(),
   fetchReceiptOpenItemsMock: vi.fn(),
   fetchCustomerLookupMock: vi.fn(),
@@ -19,6 +20,7 @@ vi.mock('../../../api/receipts', () => ({
 }))
 
 vi.mock('../../../api/lookups', () => ({
+  createSeller: mocks.createSellerMock,
   fetchCustomerLookup: mocks.fetchCustomerLookupMock,
   fetchSellerLookup: mocks.fetchSellerLookupMock,
   mapTaxCodeOptions: mocks.mapTaxCodeOptionsMock,
@@ -27,6 +29,7 @@ vi.mock('../../../api/lookups', () => ({
 describe('ReceiptFormSection validation', () => {
   beforeEach(() => {
     mocks.approveReceiptMock.mockReset()
+    mocks.createSellerMock.mockReset()
     mocks.createReceiptMock.mockReset()
     mocks.fetchReceiptOpenItemsMock.mockReset()
     mocks.fetchCustomerLookupMock.mockReset()
@@ -77,5 +80,40 @@ describe('ReceiptFormSection validation', () => {
 
     expect(mocks.createReceiptMock).not.toHaveBeenCalled()
     expect(await screen.findByText('Vui lòng nhập số chứng từ.')).toBeInTheDocument()
+  })
+
+  it('allows quick-adding a seller from the receipt form', async () => {
+    const user = userEvent.setup()
+
+    mocks.createSellerMock.mockResolvedValue({
+      taxCode: '2301098313',
+      name: 'Công ty ABC',
+      shortName: 'ABC',
+      address: 'Hà Nội',
+      status: 'ACTIVE',
+    })
+
+    render(<ReceiptFormSection token="token-receipt" onReload={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Thêm bên bán' }))
+
+    await user.clear(screen.getByLabelText('Mã số thuế'))
+    await user.type(screen.getByLabelText('Mã số thuế'), '2301098313')
+    await user.type(screen.getByLabelText('Tên bên bán'), 'Công ty ABC')
+    await user.type(screen.getByLabelText('Tên viết tắt'), 'ABC')
+
+    await user.click(screen.getByRole('button', { name: 'Tạo bên bán' }))
+
+    await waitFor(() => {
+      expect(mocks.createSellerMock).toHaveBeenCalledWith('token-receipt', {
+        taxCode: '2301098313',
+        name: 'Công ty ABC',
+        shortName: 'ABC',
+        address: null,
+        status: 'ACTIVE',
+      })
+    })
+
+    expect(screen.getByPlaceholderText('VD: 2301098313')).toHaveValue('2301098313')
   })
 })

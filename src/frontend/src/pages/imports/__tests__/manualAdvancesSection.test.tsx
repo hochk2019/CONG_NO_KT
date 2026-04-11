@@ -5,6 +5,7 @@ import ManualAdvancesSection from '../ManualAdvancesSection'
 
 const mocks = vi.hoisted(() => ({
   approveAdvanceMock: vi.fn(),
+  createSellerMock: vi.fn(),
   createAdvanceMock: vi.fn(),
   fetchAdvanceHistoryMock: vi.fn(),
   listAdvancesMock: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('../../../api/advances', () => ({
 }))
 
 vi.mock('../../../api/lookups', () => ({
+  createSeller: mocks.createSellerMock,
   fetchCustomerLookup: mocks.fetchCustomerLookupMock,
   fetchSellerLookup: mocks.fetchSellerLookupMock,
   mapTaxCodeOptions: mocks.mapTaxCodeOptionsMock,
@@ -35,6 +37,7 @@ vi.mock('../../../api/lookups', () => ({
 describe('ManualAdvancesSection', () => {
   beforeEach(() => {
     mocks.approveAdvanceMock.mockReset()
+    mocks.createSellerMock.mockReset()
     mocks.createAdvanceMock.mockReset()
     mocks.fetchAdvanceHistoryMock.mockReset()
     mocks.listAdvancesMock.mockReset()
@@ -132,6 +135,41 @@ describe('ManualAdvancesSection', () => {
 
     expect(mocks.createAdvanceMock).not.toHaveBeenCalled()
     expect(await screen.findByText('Vui lòng nhập số chứng từ.')).toBeInTheDocument()
+  })
+
+  it('allows quick-adding a seller from the manual advances form', async () => {
+    const user = userEvent.setup()
+
+    mocks.createSellerMock.mockResolvedValue({
+      taxCode: '0312345678',
+      name: 'Nhà cung cấp mới',
+      shortName: 'NCC',
+      address: 'Hồ Chí Minh',
+      status: 'ACTIVE',
+    })
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    await user.click(screen.getByRole('button', { name: 'Thêm bên bán' }))
+
+    await user.clear(screen.getByLabelText('Mã số thuế'))
+    await user.type(screen.getByLabelText('Mã số thuế'), '0312345678')
+    await user.type(screen.getByLabelText('Tên bên bán'), 'Nhà cung cấp mới')
+    await user.type(screen.getByLabelText('Tên viết tắt'), 'NCC')
+
+    await user.click(screen.getByRole('button', { name: 'Tạo bên bán' }))
+
+    await waitFor(() => {
+      expect(mocks.createSellerMock).toHaveBeenCalledWith('token-advance', {
+        taxCode: '0312345678',
+        name: 'Nhà cung cấp mới',
+        shortName: 'NCC',
+        address: null,
+        status: 'ACTIVE',
+      })
+    })
+
+    expect(screen.getByPlaceholderText('MST bên bán')).toHaveValue('0312345678')
   })
 
   it('submits advance correction from the modal', async () => {

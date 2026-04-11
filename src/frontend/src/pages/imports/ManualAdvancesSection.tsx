@@ -12,6 +12,7 @@ import {
   type AdvanceListItem,
 } from '../../api/advances'
 import {
+  createSeller,
   fetchCustomerLookup,
   fetchSellerLookup,
   mapTaxCodeOptions,
@@ -21,6 +22,7 @@ import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
 import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
+import SellerQuickAddModal from '../../components/SellerQuickAddModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import AdvanceCorrectionModal from './AdvanceCorrectionModal'
 import AdvanceHistoryModal from './AdvanceHistoryModal'
@@ -88,6 +90,9 @@ export default function ManualAdvancesSection({
   const debouncedCustomerQuery = useDebouncedValue(customerQuery, 300)
   const [sellerTaxCode, setSellerTaxCode] = useState('')
   const [customerTaxCode, setCustomerTaxCode] = useState('')
+  const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
+  const [sellerCreateLoading, setSellerCreateLoading] = useState(false)
+  const [sellerCreateError, setSellerCreateError] = useState<string | null>(null)
   const [advanceNo, setAdvanceNo] = useState('')
   const [advanceDate, setAdvanceDate] = useState('')
   const [amount, setAmount] = useState('0')
@@ -497,6 +502,30 @@ export default function ManualAdvancesSection({
     }
   }
 
+  const handleCreateSeller = async (payload: Parameters<typeof createSeller>[1]) => {
+    if (!token) return
+    setSellerCreateLoading(true)
+    setSellerCreateError(null)
+    try {
+      const created = await createSeller(token, payload)
+      const nextTaxCode = created.taxCode.trim()
+      const nextLabel = `${nextTaxCode} - ${created.name}`
+      setSellerTaxCode(nextTaxCode)
+      setSellerQuery(nextTaxCode)
+      setSellerOptions((prev) => [
+        { value: nextTaxCode, label: nextLabel },
+        ...prev.filter((option) => option.value !== nextTaxCode),
+      ])
+      setFieldError('sellerTaxCode')
+      setSellerCreateOpen(false)
+    } catch (err) {
+      if (err instanceof ApiError) setSellerCreateError(err.message)
+      else setSellerCreateError('Không tạo được bên bán.')
+    } finally {
+      setSellerCreateLoading(false)
+    }
+  }
+
   const handleCloseHistory = () => {
     if (historyLoading) return
     setHistoryAdvance(null)
@@ -736,25 +765,37 @@ export default function ManualAdvancesSection({
 
             <div className="form-grid form-grid--advance">
               <div className="advances-field-primary">
-                <LookupInput
-                  label="MST bên bán"
-                  value={sellerTaxCode}
-                  placeholder="MST bên bán"
-                  options={sellerOptions}
-                  onChange={(value) => {
-                    setSellerTaxCode(value)
-                    setSellerQuery(value)
-                    if (value.trim()) {
-                      setFieldError('sellerTaxCode')
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!sellerTaxCode.trim()) {
-                      setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
-                    }
-                  }}
-                  errorText={fieldErrors.sellerTaxCode}
-                />
+                <div className="field-stack">
+                  <LookupInput
+                    label="MST bên bán"
+                    value={sellerTaxCode}
+                    placeholder="MST bên bán"
+                    options={sellerOptions}
+                    onChange={(value) => {
+                      setSellerTaxCode(value)
+                      setSellerQuery(value)
+                      if (value.trim()) {
+                        setFieldError('sellerTaxCode')
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!sellerTaxCode.trim()) {
+                        setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
+                      }
+                    }}
+                    errorText={fieldErrors.sellerTaxCode}
+                  />
+                  <button
+                    className="btn btn-outline btn-table"
+                    type="button"
+                    onClick={() => {
+                      setSellerCreateError(null)
+                      setSellerCreateOpen(true)
+                    }}
+                  >
+                    Thêm bên bán
+                  </button>
+                </div>
               </div>
               <div className="advances-field-primary">
                 <LookupInput
@@ -1232,6 +1273,18 @@ export default function ManualAdvancesSection({
           setBulkConfirmError(null)
         }}
         onConfirm={handleBulkConfirmAction}
+      />
+      <SellerQuickAddModal
+        open={sellerCreateOpen}
+        loading={sellerCreateLoading}
+        error={sellerCreateError}
+        initialTaxCode={sellerTaxCode}
+        onClose={() => {
+          if (sellerCreateLoading) return
+          setSellerCreateOpen(false)
+          setSellerCreateError(null)
+        }}
+        onSubmit={handleCreateSeller}
       />
     </div>
   )

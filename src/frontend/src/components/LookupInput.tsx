@@ -30,14 +30,16 @@ export default function LookupInput({
   errorText,
 }: LookupInputProps) {
   const listId = useId().replace(/:/g, '')
+  const inputId = `${listId}-input`
   const helpId = helpText ? `${listId}-help` : undefined
   const errorId = errorText ? `${listId}-error` : undefined
   const describedBy = [helpId, errorId].filter(Boolean).join(' ') || undefined
 
   return (
-    <label className={errorText ? 'field field--error' : 'field'}>
+    <label htmlFor={inputId} className={errorText ? 'field field--error' : 'field'}>
       <span>{label}</span>
       <input
+        id={inputId}
         type={type}
         list={listId}
         value={value}
@@ -46,6 +48,7 @@ export default function LookupInput({
         autoComplete={autoComplete}
         inputMode={inputMode}
         onBlur={onBlur}
+        aria-label={label}
         aria-invalid={Boolean(errorText)}
         aria-describedby={describedBy}
       />

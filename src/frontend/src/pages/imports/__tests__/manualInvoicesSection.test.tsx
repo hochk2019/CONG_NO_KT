@@ -1,17 +1,30 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { vi } from 'vitest'
+import { beforeEach, vi } from 'vitest'
 import ManualInvoicesSection from '../ManualInvoicesSection'
 
-const { uploadImportMock, commitImportMock } = vi.hoisted(() => ({
+const { uploadImportMock, commitImportMock, fetchCustomerLookupMock, fetchSellerLookupMock } =
+  vi.hoisted(() => ({
   uploadImportMock: vi.fn(),
   commitImportMock: vi.fn(),
+  fetchCustomerLookupMock: vi.fn(),
+  fetchSellerLookupMock: vi.fn(),
 }))
 
 vi.mock('../../../api/imports', () => ({
   uploadImport: uploadImportMock,
   commitImport: commitImportMock,
 }))
+
+vi.mock('../../../api/lookups', async () => {
+  const actual = await vi.importActual<typeof import('../../../api/lookups')>('../../../api/lookups')
+
+  return {
+    ...actual,
+    fetchCustomerLookup: fetchCustomerLookupMock,
+    fetchSellerLookup: fetchSellerLookupMock,
+  }
+})
 
 const fillRequiredFields = async (user: ReturnType<typeof userEvent.setup>) => {
   await user.type(screen.getByLabelText('MST bên bán'), '0312345678')
@@ -26,6 +39,11 @@ describe('ManualInvoicesSection', () => {
   beforeEach(() => {
     uploadImportMock.mockReset()
     commitImportMock.mockReset()
+    fetchCustomerLookupMock.mockReset()
+    fetchSellerLookupMock.mockReset()
+
+    fetchCustomerLookupMock.mockResolvedValue([])
+    fetchSellerLookupMock.mockResolvedValue([])
   })
 
   it('validates required invoice fields before upload', async () => {
@@ -111,5 +129,46 @@ describe('ManualInvoicesSection', () => {
     expect(
       await screen.findByText('Đã ghi 1 hóa đơn vào hệ thống (batch batch-manual-2).'),
     ).toBeInTheDocument()
+  })
+
+  it('uses quick lookup inputs for seller and customer tax codes', async () => {
+    fetchSellerLookupMock.mockResolvedValue([{ taxCode: '0312345678', name: 'Công ty bán A' }])
+    fetchCustomerLookupMock.mockResolvedValue([{ taxCode: '0101234567', name: 'Công ty mua B' }])
+
+    render(<ManualInvoicesSection token="token-lookup" canCommit />)
+
+    await waitFor(() => {
+      expect(fetchSellerLookupMock).toHaveBeenCalledWith({
+        token: 'token-lookup',
+        search: undefined,
+        limit: 200,
+      })
+      expect(fetchCustomerLookupMock).toHaveBeenCalledWith({
+        token: 'token-lookup',
+        search: undefined,
+        limit: 200,
+      })
+    })
+
+    expect(screen.getByLabelText('MST bên bán')).toHaveAttribute('list')
+    expect(screen.getByLabelText('MST bên mua')).toHaveAttribute('list')
+    expect(screen.getByText('0312345678 - Công ty bán A')).toBeInTheDocument()
+    expect(screen.getByText('0101234567 - Công ty mua B')).toBeInTheDocument()
+  })
+
+  it('auto-fills customer name after choosing an existing customer tax code', async () => {
+    const user = userEvent.setup()
+    fetchCustomerLookupMock.mockResolvedValue([{ taxCode: '0101234567', name: 'Công ty mua B' }])
+
+    render(<ManualInvoicesSection token="token-lookup" canCommit />)
+
+    await waitFor(() => expect(fetchCustomerLookupMock).toHaveBeenCalled())
+
+    await user.clear(screen.getByLabelText('MST bên mua'))
+    await user.type(screen.getByLabelText('MST bên mua'), '0101234567')
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Tên bên mua')).toHaveValue('Công ty mua B')
+    })
   })
 })

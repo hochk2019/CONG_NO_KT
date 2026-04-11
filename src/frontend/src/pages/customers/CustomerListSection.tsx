@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CustomerDetail, CustomerListItem } from '../../api/customers'
-import { fetchCustomerDetail, fetchCustomers, updateCustomer } from '../../api/customers'
+import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer } from '../../api/customers'
 import { ApiError } from '../../api/client'
 import {
   fetchOwnerLookup,
@@ -12,6 +12,7 @@ import DataTable from '../../components/DataTable'
 import ActionConfirmModal from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
+import CustomerCreateModal from './CustomerCreateModal'
 import CustomerEditModal from './CustomerEditModal'
 import { getDebtToneClass } from './customerDebtTone'
 type CustomerListSectionProps = {
@@ -106,6 +107,9 @@ export default function CustomerListSection({
   const [detail, setDetail] = useState<CustomerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
@@ -206,7 +210,7 @@ export default function CustomerListSection({
     }
   }, [token])
   useEffect(() => {
-    if (!token || !isEditOpen) return
+    if (!token || (!isEditOpen && !isCreateOpen)) return
     let isActive = true
 
     const load = async () => {
@@ -240,7 +244,7 @@ export default function CustomerListSection({
     return () => {
       isActive = false
     }
-  }, [token, isEditOpen])
+  }, [token, isCreateOpen, isEditOpen])
   useEffect(() => {
     if (!token || !selectedTaxCode) return
     let isActive = true
@@ -325,6 +329,48 @@ export default function CustomerListSection({
     setIsEditOpen(false)
     setCopyMessage(null)
   }, [])
+
+  const handleOpenCreate = useCallback(() => {
+    setCreateError(null)
+    setIsCreateOpen(true)
+  }, [])
+
+  const handleCloseCreate = useCallback(() => {
+    if (createLoading) return
+    setIsCreateOpen(false)
+    setCreateError(null)
+  }, [createLoading])
+
+  const handleCreateCustomer = useCallback(
+    async (payload: Parameters<typeof createCustomer>[1]) => {
+      if (!token) return
+      setCreateLoading(true)
+      setCreateError(null)
+      try {
+        const created = await createCustomer(token, payload)
+        setIsCreateOpen(false)
+        setListReload((value) => value + 1)
+        setDetail(created)
+        setDetailError(null)
+        onSelectCustomer({
+          taxCode: created.taxCode,
+          name: created.name,
+          ownerName: created.ownerName ?? null,
+          currentBalance: created.currentBalance,
+          status: created.status,
+        })
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setCreateError(err.message)
+        } else {
+          setCreateError('Không tạo được khách hàng.')
+        }
+      } finally {
+        setCreateLoading(false)
+      }
+    },
+    [onSelectCustomer, token],
+  )
 
   const handleToggleCustomerStatus = useCallback(
     (row: CustomerListItem) => {
@@ -738,6 +784,11 @@ export default function CustomerListSection({
           ) : (
             <span className="muted">Bạn có thể lọc theo trạng thái, phụ trách hoặc sắp xếp theo dư nợ.</span>
           )}
+          {canManageCustomers ? (
+            <button className="btn btn-primary btn-table" type="button" onClick={handleOpenCreate}>
+              Thêm khách hàng
+            </button>
+          ) : null}
         </div>
         {ownerError && <div className="alert alert--error" role="alert">{ownerError}</div>}
         {listError && (
@@ -771,6 +822,20 @@ export default function CustomerListSection({
           }}
         />
       </section>
+
+      <CustomerCreateModal
+        open={isCreateOpen}
+        loading={createLoading}
+        error={createError}
+        ownerOptions={ownerOptions}
+        managerOptions={managerOptions}
+        ownerLoading={ownerLoading}
+        managerLoading={managerLoading}
+        ownerError={ownerError}
+        managerError={managerError}
+        onClose={handleCloseCreate}
+        onSubmit={handleCreateCustomer}
+      />
 
       <CustomerEditModal
         open={isEditOpen}

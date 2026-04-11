@@ -17,6 +17,19 @@
 - [x] Bổ sung/chỉnh regression integration tests để khóa hành vi metadata/version cho các flow approve, void, correction và auto-allocation.
 - [x] Chạy lại verify liên quan và đối chiếu blast radius bằng GitNexus trước khi chốt.
 
+## Phase 140 - Customer create + seller quick-add flow (2026-04-11) [bead: pending - bd blocked]
+- [x] Mở backend `POST /customers` với validate tax code/name/status/payment terms/credit limit, check duplicate tax code, và verify owner/manager tồn tại trước khi ghi master mới.
+- [x] Mở backend `POST /sellers` để quick-add người bán từ UI, normalize tax code/status, trim optional fields, và chặn duplicate tax code.
+- [x] Gắn flow tạo khách hàng ngay tại `Customers` page bằng modal riêng, refresh list sau khi tạo thành công và giữ filter/search đang dùng.
+- [x] Gắn flow quick-add người bán trong `ReceiptFormSection` và `ManualAdvancesSection`, không đụng `ManualInvoicesSection`, và đồng bộ lookup state sau khi tạo.
+- [x] Bổ sung regression tests frontend cho customer create modal và seller quick-add, đồng thời thêm integration tests backend khóa 2 endpoint POST mới.
+- [x] Chạy verify mục tiêu, cập nhật bằng chứng vào phase này, và chốt lại scope bằng `gitnexus_detect_changes`.
+
+Verification evidence (2026-04-11, phase 140 / bead pending)
+- `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter CustomerSellerCreateEndpointTests` => Passed `4/4`.
+- `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.create.test.tsx src/pages/receipts/__tests__/receipt-form-section.validation.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => Passed `10/10`.
+- `gitnexus_detect_changes(scope: all)` báo `risk_level: high` ở mức worktree tổng thể do còn nhiều file bẩn ngoài scope phase này (`AGENTS.md`, `CLAUDE.md`, `src/frontend/src/pages/InvoicesPage.tsx`, `src/frontend/src/pages/invoices.css`, ...). Các process bị ảnh hưởng trực tiếp bởi diff hiện tại vẫn xoay quanh `MapCustomerEndpoints`, `handleCreate`, `handleCreateAndApprove`, `resetMessages`, `setFieldError`, phù hợp với scope customer create + seller quick-add.
+
 ## Phase 139 - Remove customer name pill background on invoices list (2026-04-10) [bead: cng-2np]
 - [x] Bỏ nền xám bo elip khỏi trigger tên công ty ở cột `Khách hàng` trên `/invoices`, giữ nguyên deeplink reveal action.
 - [x] Tách style riêng cho `InvoicesPage` thay vì sửa global `.btn-ghost`, để không ảnh hưởng các nút khác trong app.

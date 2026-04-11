@@ -97,6 +97,19 @@ export type CustomerUpdateRequest = {
   managerId?: string | null
 }
 
+export type CustomerCreateRequest = {
+  taxCode: string
+  name: string
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  status: string
+  paymentTermsDays: number
+  creditLimit?: number | null
+  ownerId?: string | null
+  managerId?: string | null
+}
+
 export type CustomerInvoice = {
   id: string
   invoiceNo: string
@@ -210,6 +223,14 @@ export const updateCustomer = async (
 ) => {
   return apiFetch<void>(`/customers/${taxCode}`, {
     method: 'PUT',
+    token,
+    body: payload,
+  })
+}
+
+export const createCustomer = async (token: string, payload: CustomerCreateRequest) => {
+  return apiFetch<CustomerDetail>('/customers', {
+    method: 'POST',
     token,
     body: payload,
   })

@@ -14,6 +14,7 @@ import {
   storePageSize,
 } from './customers/transactions/utils'
 import ManualInvoicesSection from './imports/ManualInvoicesSection'
+import './invoices.css'
 
 const INVOICE_STATUS_STORAGE_KEY = 'pref.invoices.status'
 type RevealTarget = 'invoice' | 'customer'
@@ -246,7 +247,7 @@ export default function InvoicesPage() {
             <div className="stacked-text">
               <button
                 type="button"
-                className="btn btn-ghost"
+                className="invoice-customer-trigger"
                 aria-label={`${row.customerTaxCode} ${row.customerName}`}
                 onClick={() =>
                   setRevealedCell((current) =>

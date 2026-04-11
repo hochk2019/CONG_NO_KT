@@ -1,0 +1,40 @@
+.invoice-customer-trigger {
+  display: inline-flex;
+  align-self: flex-start;
+  max-width: 100%;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.invoice-customer-trigger:hover {
+  background: transparent;
+  color: var(--color-accent-deep);
+  box-shadow: none;
+  transform: none;
+}
+
+.invoice-customer-trigger:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.invoice-customer-trigger .stacked-text {
+  gap: 0.15rem;
+}
+
+.invoice-customer-trigger .muted {
+  transition: color 0.2s ease;
+}
+
+.invoice-customer-trigger:hover .muted,
+.invoice-customer-trigger:focus-visible .muted {
+  color: inherit;
+}

@@ -17,6 +17,17 @@
 - [x] Bổ sung/chỉnh regression integration tests để khóa hành vi metadata/version cho các flow approve, void, correction và auto-allocation.
 - [x] Chạy lại verify liên quan và đối chiếu blast radius bằng GitNexus trước khi chốt.
 
+## Phase 139 - Remove customer name pill background on invoices list (2026-04-10) [bead: cng-2np]
+- [x] Bỏ nền xám bo elip khỏi trigger tên công ty ở cột `Khách hàng` trên `/invoices`, giữ nguyên deeplink reveal action.
+- [x] Tách style riêng cho `InvoicesPage` thay vì sửa global `.btn-ghost`, để không ảnh hưởng các nút khác trong app.
+- [x] Bổ sung regression test khóa customer trigger không còn dùng class nền pill cũ.
+- [x] Chạy verify frontend + `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-10, phase 139 / cng-2np)
+- `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx` -> pass (`8 passed`)
+- `npm --prefix src/frontend run build` -> pass
+- `gitnexus_detect_changes(scope: "all")` -> risk `medium`, scope thực tế gom vào `InvoicesPage` / customer trigger styling + regression test
+
 ## Phase 129 - Root invoices module with inline manual entry (2026-04-09) [bead: cng-0pv]
 - [x] Tạo page gốc `/invoices` theo pattern mỏng như `/advances`, gắn list/search hóa đơn hiện có và section nhập tay ngay trên cùng module.
 - [x] Cập nhật route loader, điều hướng `AppShell`, và các preferred flows để `/invoices` trở thành entry point chính cho nghiệp vụ hóa đơn.

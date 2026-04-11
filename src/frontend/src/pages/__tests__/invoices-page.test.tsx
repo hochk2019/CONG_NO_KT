@@ -203,6 +203,8 @@ describe('InvoicesPage', () => {
     const customerTrigger = await screen.findByRole('button', {
       name: '0312345678 Công ty TNHH Minh An',
     })
+    expect(customerTrigger).toHaveClass('invoice-customer-trigger')
+    expect(customerTrigger).not.toHaveClass('btn-ghost')
     await user.click(customerTrigger)
 
     const row = customerTrigger.closest('tr')

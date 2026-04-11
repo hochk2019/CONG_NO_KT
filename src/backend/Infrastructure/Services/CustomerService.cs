@@ -340,8 +340,51 @@ public sealed class CustomerService : ICustomerService
         }
 
         var advanceOutstanding = openAdvances.Sum();
-        var totalOutstanding = customer.CurrentBalance;
-        var netAdjustment = totalOutstanding - invoiceOutstanding - advanceOutstanding;
+        var eligibleUnallocatedReceiptStatuses = new[]
+        {
+            ReceiptAllocationStatusCodes.Unallocated,
+            ReceiptAllocationStatusCodes.Selected,
+            ReceiptAllocationStatusCodes.Suggested,
+            ReceiptAllocationStatusCodes.Partial,
+        };
+        var eligibleHeldCreditStatuses = new[]
+        {
+            ReceiptHeldCreditStatusCodes.Holding,
+            ReceiptHeldCreditStatusCodes.Partial,
+        };
+
+        var receiptUnallocatedAmounts = await _db.Receipts
+            .AsNoTracking()
+            .Where(r =>
+                r.DeletedAt == null &&
+                r.CustomerTaxCode == key &&
+                r.Status == ReceiptStatusCodes.Approved &&
+                r.UnallocatedAmount > 0m &&
+                eligibleUnallocatedReceiptStatuses.Contains(r.AllocationStatus))
+            .Select(r => r.UnallocatedAmount)
+            .ToListAsync(ct);
+
+        var heldCreditAmounts = await _db.ReceiptHeldCredits
+            .AsNoTracking()
+            .Join(
+                _db.Receipts.AsNoTracking().Where(r =>
+                    r.DeletedAt == null &&
+                    r.CustomerTaxCode == key &&
+                    r.Status == ReceiptStatusCodes.Approved),
+                held => held.ReceiptId,
+                receipt => receipt.Id,
+                (held, _) => held)
+            .Where(held =>
+                held.AmountRemaining > 0m &&
+                eligibleHeldCreditStatuses.Contains(held.Status))
+            .Select(held => held.AmountRemaining)
+            .ToListAsync(ct);
+
+        var openOutstanding = invoiceOutstanding + advanceOutstanding;
+        var unallocatedCredit = receiptUnallocatedAmounts.Sum() + heldCreditAmounts.Sum();
+        var netPosition = customer.CurrentBalance;
+        var totalOutstanding = netPosition;
+        var netAdjustment = netPosition - openOutstanding;
         var overdueRatio = invoiceOutstanding <= 0m ? 0m : overdueAmount / invoiceOutstanding;
 
         var latestSnapshot = await _db.RiskScoreSnapshots
@@ -396,6 +439,9 @@ public sealed class CustomerService : ICustomerService
                 totalOutstanding,
                 invoiceOutstanding,
                 advanceOutstanding,
+                openOutstanding,
+                unallocatedCredit,
+                netPosition,
                 netAdjustment,
                 overdueAmount,
                 overdueRatio,

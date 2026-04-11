@@ -30,6 +30,20 @@ Verification evidence (2026-04-11, phase 140 / bead pending)
 - `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.create.test.tsx src/pages/receipts/__tests__/receipt-form-section.validation.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => Passed `10/10`.
 - `gitnexus_detect_changes(scope: all)` báo `risk_level: high` ở mức worktree tổng thể do còn nhiều file bẩn ngoài scope phase này (`AGENTS.md`, `CLAUDE.md`, `src/frontend/src/pages/InvoicesPage.tsx`, `src/frontend/src/pages/invoices.css`, ...). Các process bị ảnh hưởng trực tiếp bởi diff hiện tại vẫn xoay quanh `MapCustomerEndpoints`, `handleCreate`, `handleCreateAndApprove`, `resetMessages`, `setFieldError`, phù hợp với scope customer create + seller quick-add.
 
+## Phase 141 - Customer 360 unallocated credit semantics (2026-04-11) [bead: cng-4qn]
+- [x] Chuẩn hóa summary backend `Customer 360` để tách `openOutstanding`, `unallocatedCredit`, `netPosition`, đồng thời giữ `totalOutstanding`/`netAdjustment` cho tương thích consumer hiện tại.
+- [x] Xác nhận nguồn `customer.CurrentBalance` vẫn là vị thế ròng chuẩn và để `Customer 360` đọc credit chưa phân bổ từ receipt `UnallocatedAmount` + held credit `AmountRemaining`, không vá bằng suy diễn ở UI.
+- [x] Cập nhật UI `Customer 360` đổi KPI chính sang `Vị thế ròng`, thêm `Tiền chưa phân bổ`, và dùng copy “dư tiền/chờ phân bổ” khi `netPosition < 0` thay vì biểu đạt “nợ âm”.
+- [x] Bổ sung regression tests backend/frontend cho 4 scenario summary và wording credit âm/dương trên `Customer 360`.
+- [x] Xác nhận regression import invoice sau receipt dư vẫn auto-allocate như cũ, không thay đổi thuật toán `ReceiptService.AutoAllocation`.
+- [x] Chạy verify mục tiêu và đối chiếu scope thực tế bằng `gitnexus_detect_changes` trước khi chốt.
+
+Verification evidence (2026-04-11, phase 141 / cng-4qn)
+- `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CustomerService360Tests` => Passed `6/6`.
+- `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-360-section.test.tsx` => Passed `3/3`.
+- `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter ImportCommitInvoiceAutoAllocateTests.CommitInvoice_AutoAllocates_FromOverpaidReceipts` => Passed `1/1`.
+- `gitnexus_detect_changes(scope: "all")` => `medium` do file `CustomerService.cs` keo theo nhieu symbol cung file; doi chieu `git status --short` xac nhan scope thuc te chi gom 7 file cua phase 141.
+
 ## Phase 139 - Remove customer name pill background on invoices list (2026-04-10) [bead: cng-2np]
 - [x] Bỏ nền xám bo elip khỏi trigger tên công ty ở cột `Khách hàng` trên `/invoices`, giữ nguyên deeplink reveal action.
 - [x] Tách style riêng cho `InvoicesPage` thay vì sửa global `.btn-ghost`, để không ảnh hưởng các nút khác trong app.

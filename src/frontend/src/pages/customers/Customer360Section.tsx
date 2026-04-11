@@ -54,6 +54,14 @@ const formatScore = (value?: number | null) => {
   return value.toFixed(4)
 }
 
+const formatSignedCurrency = (value: number) => {
+  if (value < 0) {
+    return `-${currencyFormatter.format(Math.abs(value))}`
+  }
+
+  return currencyFormatter.format(value)
+}
+
 export default function Customer360Section({
   token,
   selectedTaxCode,
@@ -99,14 +107,47 @@ export default function Customer360Section({
     }
   }, [token, selectedTaxCode])
 
+  const netPositionMessage = useMemo(() => {
+    if (!data) return null
+
+    if (data.summary.netPosition < 0) {
+      return `Khách đang dư ${currencyFormatter.format(Math.abs(data.summary.netPosition))} chờ phân bổ`
+    }
+
+    if (data.summary.netPosition > 0) {
+      return `Khách còn phải thanh toán ${currencyFormatter.format(data.summary.netPosition)} sau khi trừ credit chưa phân bổ`
+    }
+
+    if (data.summary.unallocatedCredit > 0) {
+      return 'Khách đang cân bằng, credit chưa phân bổ hiện bù hết công nợ mở'
+    }
+
+    return 'Khách đang ở trạng thái cân bằng'
+  }, [data])
+
   const summaryItems = useMemo(
     () =>
       data
         ? [
             {
-              label: 'Tổng dư nợ hiện tại',
-              value: currencyFormatter.format(data.summary.totalOutstanding),
-              tone: 'accent' as SummaryTone,
+              label: 'Vị thế ròng',
+              value: formatSignedCurrency(data.summary.netPosition),
+              tone:
+                data.summary.netPosition < 0
+                  ? ('success' as SummaryTone)
+                  : data.summary.netPosition > 0
+                    ? ('accent' as SummaryTone)
+                    : ('neutral' as SummaryTone),
+            },
+            {
+              label: 'Công nợ mở',
+              value: currencyFormatter.format(data.summary.openOutstanding),
+              tone: (data.summary.openOutstanding > 0 ? 'warning' : 'neutral') as SummaryTone,
+            },
+            {
+              label: 'Tiền chưa phân bổ',
+              value: currencyFormatter.format(data.summary.unallocatedCredit),
+              tone: (data.summary.unallocatedCredit > 0 ? 'success' : 'neutral') as SummaryTone,
             },
             {
               label: 'Nợ quá hạn',
@@ -143,24 +184,24 @@ export default function Customer360Section({
       data
         ? [
             {
+              label: 'Công nợ mở',
+              value: data.summary.openOutstanding,
+              tone: (data.summary.openOutstanding > 0 ? 'negative' : 'neutral') as BreakdownTone,
+            },
+            {
               label: 'Hóa đơn còn mở',
               value: data.summary.invoiceOutstanding,
-              tone: (data.summary.invoiceOutstanding > 0 ? 'positive' : 'neutral') as BreakdownTone,
+              tone: (data.summary.invoiceOutstanding > 0 ? 'negative' : 'neutral') as BreakdownTone,
             },
             {
               label: 'Trả hộ còn mở',
               value: data.summary.advanceOutstanding,
-              tone: (data.summary.advanceOutstanding > 0 ? 'positive' : 'neutral') as BreakdownTone,
+              tone: (data.summary.advanceOutstanding > 0 ? 'negative' : 'neutral') as BreakdownTone,
             },
             {
-              label: 'Điều chỉnh ròng (phiếu thu/credit)',
-              value: data.summary.netAdjustment,
-              tone:
-                data.summary.netAdjustment < 0
-                  ? ('negative' as BreakdownTone)
-                  : data.summary.netAdjustment > 0
-                    ? ('positive' as BreakdownTone)
-                    : ('neutral' as BreakdownTone),
+              label: 'Tiền chưa phân bổ',
+              value: data.summary.unallocatedCredit,
+              tone: (data.summary.unallocatedCredit > 0 ? 'positive' : 'neutral') as BreakdownTone,
             },
           ]
         : [],
@@ -200,7 +241,7 @@ export default function Customer360Section({
           </div>
 
           <div className="customer-360__summary-panel">
-            <p className="subsection-title">Cấu phần dư nợ</p>
+            <p className="subsection-title">Cấu phần vị thế ròng</p>
             <div className="customer-360__summary-breakdown">
               {debtBreakdownItems.map((item) => (
                 <div className="customer-360__summary-row" key={item.label}>
@@ -211,9 +252,10 @@ export default function Customer360Section({
                 </div>
               ))}
             </div>
+            <p className="text-caption customer-360__summary-note">{netPositionMessage}</p>
             <p className="text-caption customer-360__summary-note">
-              Chỉ số quá hạn, tỷ lệ quá hạn, ngày trễ hạn max và hạn hóa đơn gần nhất chỉ tính trên hóa đơn.
-              Khoản trả hộ và điều chỉnh ròng vẫn được cộng vào tổng dư nợ hiện tại.
+              Vị thế ròng = Công nợ mở - Tiền chưa phân bổ. Chỉ số quá hạn, tỷ lệ quá hạn, ngày trễ hạn max và hạn
+              hóa đơn gần nhất chỉ tính trên hóa đơn; khoản trả hộ vẫn nằm trong công nợ mở.
             </p>
           </div>
 

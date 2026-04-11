@@ -31,6 +31,9 @@ export type Customer360Summary = {
   totalOutstanding: number
   invoiceOutstanding: number
   advanceOutstanding: number
+  openOutstanding: number
+  unallocatedCredit: number
+  netPosition: number
   netAdjustment: number
   overdueAmount: number
   overdueRatio: number

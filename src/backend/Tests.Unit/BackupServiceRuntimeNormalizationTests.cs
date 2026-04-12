@@ -50,6 +50,7 @@ public sealed class BackupServiceRuntimeNormalizationTests
             new TestMaintenanceState(),
             new BackupQueue(),
             new BackupProcessRunner(),
+            NullBackupOffsiteService.Instance,
             NullLogger<BackupService>.Instance,
             configuration);
 
@@ -110,6 +111,7 @@ public sealed class BackupServiceRuntimeNormalizationTests
                 new TestMaintenanceState(),
                 new BackupQueue(),
                 new BackupProcessRunner(),
+                NullBackupOffsiteService.Instance,
                 NullLogger<BackupService>.Instance,
                 configuration);
 

@@ -42,26 +42,6 @@ public sealed partial class BackupService : IBackupService
         ICurrentUser currentUser,
         IMaintenanceState maintenanceState,
         BackupQueue queue,
-        BackupProcessRunner processRunner,
-        ILogger<BackupService> logger,
-        IConfiguration configuration)
-        : this(
-            db,
-            currentUser,
-            maintenanceState,
-            queue,
-            processRunner,
-            NullBackupOffsiteService.Instance,
-            logger,
-            configuration)
-    {
-    }
-
-    public BackupService(
-        ConGNoDbContext db,
-        ICurrentUser currentUser,
-        IMaintenanceState maintenanceState,
-        BackupQueue queue,
         IBackupProcessRunner processRunner,
         IBackupOffsiteService backupOffsiteService,
         ILogger<BackupService> logger,

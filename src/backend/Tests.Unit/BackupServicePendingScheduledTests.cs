@@ -34,6 +34,7 @@ public sealed class BackupServicePendingScheduledTests
             new TestMaintenanceState(),
             new BackupQueue(),
             new BackupProcessRunner(),
+            NullBackupOffsiteService.Instance,
             NullLogger<BackupService>.Instance,
             new ConfigurationBuilder().Build());
 

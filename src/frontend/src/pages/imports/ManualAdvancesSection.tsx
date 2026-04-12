@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import {
   approveAdvance,
@@ -29,6 +30,8 @@ import AdvanceHistoryModal from './AdvanceHistoryModal'
 import {
   advanceStatusLabels,
   buildManualAdvanceColumns,
+  type ManualAdvanceRevealTarget,
+  type ManualAdvanceRevealedCell,
   shortAdvanceId,
 } from './manualAdvancesColumns'
 
@@ -64,6 +67,20 @@ const storeFilter = (key: string, value: string) => {
 
 const DEFAULT_SOURCE_FILTER = ''
 
+const buildCustomerRoute = (taxCode: string) => {
+  const params = new URLSearchParams({ taxCode })
+  return `/customers?${params.toString()}`
+}
+
+const buildAdvanceRoute = (taxCode: string, advanceNo: string) => {
+  const params = new URLSearchParams({
+    taxCode,
+    tab: 'advances',
+    doc: advanceNo,
+  })
+  return `/customers?${params.toString()}`
+}
+
 type ManualAdvancesSectionProps = {
   token: string
   canApprove: boolean
@@ -82,6 +99,7 @@ export default function ManualAdvancesSection({
   canApprove,
   onImportTemplate,
 }: ManualAdvancesSectionProps) {
+  const navigate = useNavigate()
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -131,6 +149,13 @@ export default function ManualAdvancesSection({
   const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<string[]>([])
   const [bulkConfirmAction, setBulkConfirmAction] = useState<ManualAdvanceConfirmAction | null>(null)
   const [bulkConfirmError, setBulkConfirmError] = useState<string | null>(null)
+  const [revealedCell, setRevealedCell] = useState<ManualAdvanceRevealedCell>(null)
+
+  const handleToggleReveal = (rowId: string, target: ManualAdvanceRevealTarget) => {
+    setRevealedCell((current) =>
+      current?.rowId === rowId && current.target === target ? null : { rowId, target },
+    )
+  }
 
   useEffect(() => {
     if (!token) return
@@ -227,6 +252,7 @@ export default function ManualAdvancesSection({
         if (!isActive) return
         setListRows(result.items)
         setListTotal(result.total)
+        setRevealedCell(null)
       } catch (err) {
         if (!isActive) return
         if (err instanceof ApiError) {
@@ -673,6 +699,11 @@ export default function ManualAdvancesSection({
     onApprove: handleApprove,
     onVoid: handleVoid,
     onUnvoid: handleUnvoid,
+    revealedCell,
+    onToggleReveal: handleToggleReveal,
+    onOpenAdvance: (customerTaxCode, advanceNo) =>
+      navigate(buildAdvanceRoute(customerTaxCode, advanceNo)),
+    onOpenCustomer: (customerTaxCode) => navigate(buildCustomerRoute(customerTaxCode)),
     loadingAction,
   })
 

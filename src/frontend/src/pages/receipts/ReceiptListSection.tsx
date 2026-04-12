@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   approveReceipt,
   approveReceiptsBulk,
@@ -96,12 +97,34 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+type ReceiptRevealTarget = 'receipt' | 'customer'
+
+type RevealedCell = {
+  rowId: string
+  target: ReceiptRevealTarget
+} | null
+
+const buildCustomerRoute = (taxCode: string) => {
+  const params = new URLSearchParams({ taxCode })
+  return `/customers?${params.toString()}`
+}
+
+const buildReceiptRoute = (taxCode: string, receiptNo: string) => {
+  const params = new URLSearchParams({
+    taxCode,
+    tab: 'receipts',
+    doc: receiptNo,
+  })
+  return `/customers?${params.toString()}`
+}
+
 type ReceiptListSectionProps = {
   token: string
   reloadSignal: number
 }
 
 export default function ReceiptListSection({ token, reloadSignal }: ReceiptListSectionProps) {
+  const navigate = useNavigate()
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -137,6 +160,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [listReloadTick, setListReloadTick] = useState(0)
   const [selectedReceiptIds, setSelectedReceiptIds] = useState<string[]>([])
+  const [revealedCell, setRevealedCell] = useState<RevealedCell>(null)
 
   const [cancelRow, setCancelRow] = useState<ReceiptListItem | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -178,6 +202,11 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     if (listReminder === 'DISABLED') return false
     return undefined
   }, [listReminder])
+  const handleToggleReveal = useCallback((rowId: string, target: ReceiptRevealTarget) => {
+    setRevealedCell((current) =>
+      current?.rowId === rowId && current.target === target ? null : { rowId, target },
+    )
+  }, [])
   const validationError = useMemo(() => {
     if (listDateFrom && listDateTo && listDateFrom > listDateTo) {
       return 'Ngày chứng từ từ phải nhỏ hơn hoặc bằng ngày chứng từ đến.'
@@ -265,6 +294,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         if (!isActive) return
         setListRows(result.items)
         setListTotal(result.total)
+        setRevealedCell(null)
       } catch (err) {
         if (!isActive) return
         if (err instanceof ApiError) {
@@ -597,14 +627,109 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
       {
         key: 'receiptNo',
         label: 'Số chứng từ',
-        render: (row: ReceiptListItem) =>
-          row.receiptNo?.trim() ? row.receiptNo : <span className="muted">-</span>,
+        render: (row: ReceiptListItem) => {
+          const receiptNo = row.receiptNo?.trim() ?? ''
+          const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+          const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'receipt'
+
+          if (!receiptNo) {
+            return <span className="muted">-</span>
+          }
+
+          if (!customerTaxCode) {
+            return receiptNo
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                className="btn btn-ghost btn-table"
+                type="button"
+                aria-label={`Mở liên kết chứng từ ${receiptNo}`}
+                onClick={() => handleToggleReveal(row.id, 'receipt')}
+              >
+                {receiptNo}
+              </button>
+              {isRevealed && (
+                <button
+                  className="btn btn-ghost btn-table"
+                  type="button"
+                  aria-label={`Xem chứng từ ${receiptNo}`}
+                  onClick={() => navigate(buildReceiptRoute(customerTaxCode, receiptNo))}
+                >
+                  Xem
+                </button>
+              )}
+            </div>
+          )
+        },
       },
       {
         key: 'customer',
         label: 'Khách hàng',
-        render: (row: ReceiptListItem) =>
-          row.customerName ? `${row.customerName} (${row.customerTaxCode})` : row.customerTaxCode,
+        render: (row: ReceiptListItem) => {
+          const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+          const customerName = row.customerName?.trim() ?? ''
+          const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'customer'
+
+          if (!customerTaxCode) {
+            if (customerName) {
+              return customerName
+            }
+            return <span className="muted">-</span>
+          }
+
+          if (!customerName) {
+            return (
+              <div className="stacked-text">
+                <button
+                  className="table-deeplink-trigger"
+                  type="button"
+                  aria-label={`Mở liên kết khách hàng ${customerTaxCode}`}
+                  onClick={() => handleToggleReveal(row.id, 'customer')}
+                >
+                  {customerTaxCode}
+                </button>
+                {isRevealed && (
+                  <button
+                    className="btn btn-ghost btn-table"
+                    type="button"
+                    aria-label={`Xem khách hàng ${customerTaxCode}`}
+                    onClick={() => navigate(buildCustomerRoute(customerTaxCode))}
+                  >
+                    Xem
+                  </button>
+                )}
+              </div>
+            )
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                className="table-deeplink-trigger"
+                type="button"
+                aria-label={`Mở liên kết khách hàng ${customerName}`}
+                onClick={() => handleToggleReveal(row.id, 'customer')}
+              >
+                <div className="stacked-text">
+                  <span>{customerTaxCode}</span>
+                  <span className="muted">{customerName}</span>
+                </div>
+              </button>
+              {isRevealed && (
+                <button
+                  className="btn btn-ghost btn-table"
+                  type="button"
+                  aria-label={`Xem khách hàng ${customerTaxCode}`}
+                  onClick={() => navigate(buildCustomerRoute(customerTaxCode))}
+                >
+                  Xem
+                </button>
+              )}
+            </div>
+          )
+        },
       },
       {
         key: 'amount',
@@ -698,7 +823,10 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
       handleOpenHistory,
       handleOpenView,
       handleToggleReminder,
+      handleToggleReveal,
       handleUnvoid,
+      navigate,
+      revealedCell,
       selectedReceiptIds,
       unvoidLoadingId,
     ],

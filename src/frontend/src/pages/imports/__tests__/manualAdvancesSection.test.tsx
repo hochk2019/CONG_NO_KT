@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   createAdvanceMock: vi.fn(),
   fetchAdvanceHistoryMock: vi.fn(),
   listAdvancesMock: vi.fn(),
+  navigateMock: vi.fn(),
   unvoidAdvanceMock: vi.fn(),
   updateAdvanceMock: vi.fn(),
   voidAdvanceMock: vi.fn(),
@@ -34,6 +35,10 @@ vi.mock('../../../api/lookups', () => ({
   mapTaxCodeOptions: mocks.mapTaxCodeOptionsMock,
 }))
 
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mocks.navigateMock,
+}))
+
 describe('ManualAdvancesSection', () => {
   beforeEach(() => {
     mocks.approveAdvanceMock.mockReset()
@@ -41,6 +46,7 @@ describe('ManualAdvancesSection', () => {
     mocks.createAdvanceMock.mockReset()
     mocks.fetchAdvanceHistoryMock.mockReset()
     mocks.listAdvancesMock.mockReset()
+    mocks.navigateMock.mockReset()
     mocks.unvoidAdvanceMock.mockReset()
     mocks.updateAdvanceMock.mockReset()
     mocks.voidAdvanceMock.mockReset()
@@ -264,5 +270,65 @@ describe('ManualAdvancesSection', () => {
     expect(mocks.fetchAdvanceHistoryMock).toHaveBeenCalledWith('token-advance', 'adv-1')
     expect(await screen.findByText('CORRECTED')).toBeInTheDocument()
     expect(screen.getByText('tester')).toBeInTheDocument()
+  })
+
+  it('reveals and navigates to the advance deeplink from the worklist document cell', async () => {
+    const user = userEvent.setup()
+    mocks.listAdvancesMock.mockResolvedValueOnce({ items: [baseAdvance], total: 1 })
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    const documentButton = await screen.findByRole('button', {
+      name: 'Mở liên kết chứng từ TH-001',
+    })
+    await user.click(documentButton)
+
+    const deeplinkButton = await screen.findByRole('button', { name: 'Xem chứng từ TH-001' })
+    await user.click(deeplinkButton)
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith(
+      '/customers?taxCode=0101234567&tab=advances&doc=TH-001',
+    )
+  })
+
+  it('reveals and navigates to customer 360 from the worklist customer cell', async () => {
+    const user = userEvent.setup()
+    mocks.listAdvancesMock.mockResolvedValueOnce({ items: [baseAdvance], total: 1 })
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    const customerButton = await screen.findByRole('button', {
+      name: 'Mở liên kết khách hàng ACME',
+    })
+    expect(customerButton).toHaveClass('table-deeplink-trigger')
+    const customerContent = customerButton.textContent ?? ''
+    expect(customerContent).toContain('0101234567')
+    expect(customerContent).toContain('ACME')
+    expect(customerContent.indexOf('0101234567')).toBeLessThan(customerContent.indexOf('ACME'))
+    await user.click(customerButton)
+
+    const deeplinkButton = await screen.findByRole('button', { name: 'Xem khách hàng 0101234567' })
+    await user.click(deeplinkButton)
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith('/customers?taxCode=0101234567')
+  })
+
+  it('keeps manual advances worklist text-only when deeplink data is incomplete', async () => {
+    mocks.listAdvancesMock.mockResolvedValueOnce({
+      items: [{ ...baseAdvance, customerTaxCode: '' }],
+      total: 1,
+    })
+
+    render(<ManualAdvancesSection token="token-advance" canApprove={false} />)
+
+    await screen.findByText('TH-001')
+    expect(screen.getByText('ACME')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Mở liên kết chứng từ TH-001' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Mở liên kết khách hàng ACME' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem chứng từ TH-001' })).not.toBeInTheDocument()
   })
 })

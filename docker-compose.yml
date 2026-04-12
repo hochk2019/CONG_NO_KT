@@ -71,6 +71,13 @@ services:
       Backup__DefaultPath: ${BACKUP_CONTAINER_PATH:-/var/lib/congno/backups/dumps}
       Backup__HostPathHint: ${BACKUP_HOST_PATH:-./data/backup/dumps}
       Backup__DefaultPgBinPath: ${BACKUP_PG_BIN_PATH:-/usr/bin}
+      BackupOffsiteGoogleDrive__Enabled: ${BACKUP_OFFSITE_GOOGLE_DRIVE_ENABLED:-false}
+      BackupOffsiteGoogleDrive__ClientId: ${BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_ID:-}
+      BackupOffsiteGoogleDrive__ClientSecret: ${BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_SECRET:-}
+      BackupOffsiteGoogleDrive__AuthorizationEndpoint: ${BACKUP_OFFSITE_GOOGLE_DRIVE_AUTH_URL:-https://accounts.google.com/o/oauth2/v2/auth}
+      BackupOffsiteGoogleDrive__TokenEndpoint: ${BACKUP_OFFSITE_GOOGLE_DRIVE_TOKEN_URL:-https://oauth2.googleapis.com/token}
+      BackupOffsiteGoogleDrive__UploadEndpoint: ${BACKUP_OFFSITE_GOOGLE_DRIVE_UPLOAD_URL:-https://www.googleapis.com/upload/drive/v3/files}
+      BackupOffsiteGoogleDrive__Scope: ${BACKUP_OFFSITE_GOOGLE_DRIVE_SCOPE:-https://www.googleapis.com/auth/drive.file}
       Observability__ServiceName: ${OBSERVABILITY_SERVICE_NAME:-congno-api}
       Observability__EnablePrometheusExporter: ${OBSERVABILITY_PROMETHEUS_ENABLED:-true}
       Observability__PrometheusScrapeEndpointPath: ${OBSERVABILITY_PROMETHEUS_PATH:-/metrics}

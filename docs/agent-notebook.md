@@ -13,10 +13,10 @@ Khi quay lai task dang do, doc theo thu tu sau:
 
 ## Active Work
 
-- Bead: `cng-6mo`
-- Task phase: `Phase 142` trong `task.md`
+- Bead: `cng-6zj`
+- Task phase: `Phase 143` trong `task.md`
 - Last updated: `2026-04-12`
-- Current status: bead `cng-6mo` da dong; provider Google Drive that da xong, da verify unit suite va scope thay doi, san sang handoff neu user can review/commit.
+- Current status: baseline backup/offsite changes da duoc commit thanh `6851fa1`; dang noi not env-plumbing Google Drive cho Docker/docs. Secret that (`ClientId` / `ClientSecret`) van chua co tren may hien tai.
 
 ## Goal
 
@@ -96,6 +96,19 @@ Ghi nho: moi thay doi tren `BackupSettings`, `BackupJob`, `ConGNoDbContext` phai
 
 ### 2026-04-12
 
+- User yeu cau commit toan bo thay doi truoc do, sau do cau hinh not bien moi truong Google Drive that.
+- Da chay `mcp__gitnexus__detect_changes(scope: "all")` truoc commit; risk tong the = `critical` vi scope backup/offsite rong, nhung user yeu cau commit toan bo worktree hien co.
+- Da stage va commit baseline bang commit `6851fa1`:
+  - `feat(backup): add Google Drive offsite backup`
+- Da xac nhan worktree sach sau commit baseline.
+- Dang bo sung env-plumbing cho:
+  - `docker-compose.yml`
+  - `.env.example`
+  - `ENV_SAMPLE.md`
+- Blocker con lai:
+  - may hien tai chua co `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_ID` va `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_SECRET` that;
+  - co the hoan tat wiring/documentation ngay, nhung de bat ket noi Google Drive that thi can user cung cap cap secret hoac inject qua secret manager/local `.env`.
+
 - User yeu cau trien khai provider Google Drive that cho offsite upload.
 - Da refresh lai GitNexus index bang `npx -y gitnexus@latest analyze`.
 - Da tao bead `cng-6mo`, chuyen sang `in_progress`, va them `Phase 142` vao `task.md`.
@@ -174,14 +187,15 @@ Ghi nho: moi thay doi tren `BackupSettings`, `BackupJob`, `ConGNoDbContext` phai
 
 ## Next Action
 
-1. Neu user muon, review nhanh luong config production cho `BackupOffsiteGoogleDrive` va cach cap secret `ClientId` / `ClientSecret`.
-2. Chi commit/push khi user yeu cau ro rang.
+1. Chay `mcp__gitnexus__detect_changes(scope: "all")` sau khi xong env-plumbing de chot scope rieng cua phase 143.
+2. Neu user cung cap secret that, inject vao `.env` hoac secret manager ma khong lo ro gia tri trong chat/log.
+3. Chi commit tiep phan env-plumbing/push neu user yeu cau ro rang.
 
 ## Resume Checklist
 
-- Mo `task.md` va tim `Phase 142`
-- `bd show cng-6mo`
-- Xac nhan bead da dong sau khi cap nhat tracker
-- Khong commit/push neu user chua yeu cau
-- Neu sua tiep cac symbol backup hien huu: chay lai `mcp__gitnexus__impact`
+- Mo `task.md` va tim `Phase 143`
+- `bd show cng-6zj`
+- Nho rang commit baseline da xong o `6851fa1`
+- Khong commit/push tiep neu user chua yeu cau
+- Secret Google Drive that hien van thieu; can inject an toan, khong paste len chat/log
 - Truoc khi ket thuc bat ky thay doi code moi: chay lai `mcp__gitnexus__detect_changes`

@@ -51,6 +51,28 @@ Password policy note:
 ## Reports
 - Reports__TemplatePath=Templates/Mau_DoiSoat_CongNo_Golden.xlsx
 
+## Google Drive offsite backup (optional)
+- BackupOffsiteGoogleDrive__Enabled=false
+- BackupOffsiteGoogleDrive__ClientId=CHANGE_ME_GOOGLE_DRIVE_CLIENT_ID
+- BackupOffsiteGoogleDrive__ClientSecret=CHANGE_ME_GOOGLE_DRIVE_CLIENT_SECRET
+- BackupOffsiteGoogleDrive__AuthorizationEndpoint=https://accounts.google.com/o/oauth2/v2/auth
+- BackupOffsiteGoogleDrive__TokenEndpoint=https://oauth2.googleapis.com/token
+- BackupOffsiteGoogleDrive__UploadEndpoint=https://www.googleapis.com/upload/drive/v3/files
+- BackupOffsiteGoogleDrive__Scope=https://www.googleapis.com/auth/drive.file
+
+Docker/root `.env` mapping:
+- BACKUP_OFFSITE_GOOGLE_DRIVE_ENABLED=false
+- BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_ID=CHANGE_ME_GOOGLE_DRIVE_CLIENT_ID
+- BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_SECRET=CHANGE_ME_GOOGLE_DRIVE_CLIENT_SECRET
+- BACKUP_OFFSITE_GOOGLE_DRIVE_AUTH_URL=https://accounts.google.com/o/oauth2/v2/auth
+- BACKUP_OFFSITE_GOOGLE_DRIVE_TOKEN_URL=https://oauth2.googleapis.com/token
+- BACKUP_OFFSITE_GOOGLE_DRIVE_UPLOAD_URL=https://www.googleapis.com/upload/drive/v3/files
+- BACKUP_OFFSITE_GOOGLE_DRIVE_SCOPE=https://www.googleapis.com/auth/drive.file
+
+Operational note:
+- `ClientId` va `ClientSecret` la secret that, khong commit trong `appsettings*.json`.
+- Neu chay bang Docker Compose, root `.env` la noi can set cap bien `BACKUP_OFFSITE_GOOGLE_DRIVE_*`.
+
 ## Zalo reminders (optional)
 - Zalo__Enabled=false
 - Zalo__OaId=2804410978830725257

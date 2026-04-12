@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   getReceiptMock: vi.fn(),
   listReceiptsMock: vi.fn(),
   mapTaxCodeOptionsMock: vi.fn(),
+  navigateMock: vi.fn(),
   unvoidReceiptMock: vi.fn(),
   updateReceiptReminderMock: vi.fn(),
   voidReceiptMock: vi.fn(),
@@ -38,6 +39,10 @@ vi.mock('../../../api/lookups', () => ({
   fetchCustomerLookup: mocks.fetchCustomerLookupMock,
   fetchSellerLookup: mocks.fetchSellerLookupMock,
   mapTaxCodeOptions: mocks.mapTaxCodeOptionsMock,
+}))
+
+vi.mock('react-router-dom', () => ({
+  useNavigate: () => mocks.navigateMock,
 }))
 
 describe('ReceiptListSection', () => {
@@ -96,12 +101,14 @@ describe('ReceiptListSection', () => {
     mocks.getReceiptMock.mockReset()
     mocks.listReceiptsMock.mockReset()
     mocks.mapTaxCodeOptionsMock.mockReset()
+    mocks.navigateMock.mockReset()
     mocks.unvoidReceiptMock.mockReset()
     mocks.updateReceiptReminderMock.mockReset()
     mocks.voidReceiptMock.mockReset()
 
     mocks.listReceiptsMock.mockResolvedValue({ items: [], total: 0 })
     mocks.fetchCustomerLookupMock.mockResolvedValue([])
+    mocks.fetchReceiptAllocationsMock.mockResolvedValue([])
     mocks.fetchSellerLookupMock.mockResolvedValue([])
     mocks.mapTaxCodeOptionsMock.mockReturnValue([])
     mocks.fetchReceiptHistoryMock.mockResolvedValue([])
@@ -169,5 +176,89 @@ describe('ReceiptListSection', () => {
     expect(mocks.fetchReceiptHistoryMock).toHaveBeenCalledWith('token-receipt', 'receipt-1')
     expect(await screen.findByText('CORRECTED')).toBeInTheDocument()
     expect(screen.getByText('tester')).toBeInTheDocument()
+  })
+
+  it('reveals and navigates to the receipt deeplink from the document cell', async () => {
+    const user = userEvent.setup()
+    mocks.listReceiptsMock.mockResolvedValueOnce({ items: [baseRow], total: 1 })
+
+    render(<ReceiptListSection token="token-receipt" reloadSignal={0} />)
+
+    const documentButton = await screen.findByRole('button', {
+      name: 'Mở liên kết chứng từ PT-001',
+    })
+    await user.click(documentButton)
+
+    const deeplinkButton = await screen.findByRole('button', { name: 'Xem chứng từ PT-001' })
+    await user.click(deeplinkButton)
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith(
+      '/customers?taxCode=0101234567&tab=receipts&doc=PT-001',
+    )
+  })
+
+  it('reveals and navigates to customer 360 from the customer cell', async () => {
+    const user = userEvent.setup()
+    mocks.listReceiptsMock.mockResolvedValueOnce({ items: [baseRow], total: 1 })
+
+    render(<ReceiptListSection token="token-receipt" reloadSignal={0} />)
+
+    const customerButton = await screen.findByRole('button', {
+      name: 'Mở liên kết khách hàng ACME',
+    })
+    expect(customerButton).toHaveClass('table-deeplink-trigger')
+    const customerContent = customerButton.textContent ?? ''
+    expect(customerContent).toContain('0101234567')
+    expect(customerContent).toContain('ACME')
+    expect(customerContent.indexOf('0101234567')).toBeLessThan(customerContent.indexOf('ACME'))
+    await user.click(customerButton)
+
+    const deeplinkButton = await screen.findByRole('button', { name: 'Xem khách hàng 0101234567' })
+    await user.click(deeplinkButton)
+
+    expect(mocks.navigateMock).toHaveBeenCalledWith('/customers?taxCode=0101234567')
+  })
+
+  it('keeps receipt cells as plain text when deeplink data is incomplete', async () => {
+    mocks.listReceiptsMock.mockResolvedValueOnce({
+      items: [{ ...baseRow, customerTaxCode: '' }],
+      total: 1,
+    })
+
+    render(<ReceiptListSection token="token-receipt" reloadSignal={0} />)
+
+    await screen.findByText('PT-001')
+    expect(screen.getByText('ACME')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Mở liên kết chứng từ PT-001' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Mở liên kết khách hàng ACME' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xem chứng từ PT-001' })).not.toBeInTheDocument()
+  })
+
+  it('keeps the existing action-column view button opening allocations modal flow', async () => {
+    const user = userEvent.setup()
+    mocks.listReceiptsMock.mockResolvedValueOnce({ items: [baseRow], total: 1 })
+    mocks.fetchReceiptAllocationsMock.mockResolvedValueOnce([
+      {
+        id: 'alloc-1',
+        receiptId: 'receipt-1',
+        invoiceId: 'invoice-1',
+        amount: 1000000,
+        allocatedAt: '2026-03-20T10:00:00Z',
+        invoiceNo: 'HD-001',
+      },
+    ])
+
+    render(<ReceiptListSection token="token-receipt" reloadSignal={0} />)
+
+    const actionButtons = await screen.findAllByRole('button', { name: 'Xem' })
+    await user.click(actionButtons.at(-1) as HTMLButtonElement)
+
+    expect(mocks.fetchReceiptAllocationsMock).toHaveBeenCalledWith('token-receipt', 'receipt-1')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(mocks.navigateMock).not.toHaveBeenCalled()
   })
 })

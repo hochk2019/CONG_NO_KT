@@ -29,6 +29,10 @@ const buildColumns = (handlers?: Partial<Parameters<typeof buildManualAdvanceCol
     onApprove: vi.fn(),
     onVoid: vi.fn(),
     onUnvoid: vi.fn(),
+    revealedCell: null,
+    onToggleReveal: vi.fn(),
+    onOpenAdvance: vi.fn(),
+    onOpenCustomer: vi.fn(),
     loadingAction: '',
     ...handlers,
   })
@@ -97,5 +101,79 @@ describe('manualAdvancesColumns', () => {
 
     expect(screen.getByText('-')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sửa' })).not.toBeInTheDocument()
+  })
+
+  it('reveals and opens advance deeplink from advance number cell', async () => {
+    const user = userEvent.setup()
+    const onToggleReveal = vi.fn()
+    const onOpenAdvance = vi.fn()
+    const columns = buildColumns({
+      revealedCell: { rowId: 'adv-1', target: 'advance' },
+      onToggleReveal,
+      onOpenAdvance,
+    })
+    const column = columns.find((col) => col.key === 'advanceNo')
+    const renderCell = column?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+
+    expect(renderCell).toBeTypeOf('function')
+    render(<>{renderCell!(baseRow)}</>)
+
+    await user.click(screen.getByRole('button', { name: 'Mở liên kết chứng từ TH-001' }))
+    await user.click(screen.getByRole('button', { name: 'Xem chứng từ TH-001' }))
+
+    expect(onToggleReveal).toHaveBeenCalledWith('adv-1', 'advance')
+    expect(onOpenAdvance).toHaveBeenCalledWith('0101234567', 'TH-001')
+  })
+
+  it('reveals and opens customer deeplink from customer cell', async () => {
+    const user = userEvent.setup()
+    const onToggleReveal = vi.fn()
+    const onOpenCustomer = vi.fn()
+    const columns = buildColumns({
+      revealedCell: { rowId: 'adv-1', target: 'customer' },
+      onToggleReveal,
+      onOpenCustomer,
+    })
+    const column = columns.find((col) => col.key === 'customer')
+    const renderCell = column?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+
+    expect(renderCell).toBeTypeOf('function')
+    render(<>{renderCell!(baseRow)}</>)
+
+    await user.click(screen.getByRole('button', { name: 'Mở liên kết khách hàng ACME' }))
+    await user.click(screen.getByRole('button', { name: 'Xem khách hàng 0101234567' }))
+
+    expect(onToggleReveal).toHaveBeenCalledWith('adv-1', 'customer')
+    expect(onOpenCustomer).toHaveBeenCalledWith('0101234567')
+  })
+
+  it('keeps plain text fallback when advance deeplink data is incomplete', () => {
+    const columns = buildColumns({
+      revealedCell: { rowId: 'adv-1', target: 'advance' },
+    })
+    const advanceColumn = columns.find((col) => col.key === 'advanceNo')
+    const customerColumn = columns.find((col) => col.key === 'customer')
+    const renderAdvance = advanceColumn?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+    const renderCustomer = customerColumn?.render as ((row: AdvanceListItem) => ReactNode) | undefined
+    const incompleteRow = {
+      ...baseRow,
+      customerTaxCode: '',
+    }
+
+    expect(renderAdvance).toBeTypeOf('function')
+    expect(renderCustomer).toBeTypeOf('function')
+
+    render(
+      <>
+        {renderAdvance!(incompleteRow)}
+        {renderCustomer!(incompleteRow)}
+      </>,
+    )
+
+    expect(document.body).toHaveTextContent('TH-001')
+    expect(document.body).toHaveTextContent('ACME')
+    expect(screen.queryByRole('button', { name: 'Mở liên kết chứng từ TH-001' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mở liên kết khách hàng ACME' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Xem/ })).not.toBeInTheDocument()
   })
 })

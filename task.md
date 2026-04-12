@@ -23,6 +23,14 @@
 - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`222/222`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: critical` do worktree tong the dang co nhieu file ban ngoai scope phase nay; pham vi code cua phase 142 tap trung vao provider Google Drive, DI/config va unit tests backup.
 
+## Phase 143 - Google Drive env plumbing after baseline commit (2026-04-12) [bead: cng-6zj]
+- [x] Commit toàn bộ thay đổi backup/offsite hiện có trước khi tách phần env-plumbing, theo yêu cầu user.
+- [x] Bổ sung map env `BackupOffsiteGoogleDrive` vào `docker-compose.yml` để container API nhận đúng các biến Google Drive từ root `.env`.
+- [x] Cập nhật `.env.example` và `ENV_SAMPLE.md` với đầy đủ biến `BACKUP_OFFSITE_GOOGLE_DRIVE_*` / `BackupOffsiteGoogleDrive__*`.
+- [x] Cập nhật `docs/agent-notebook.md` và `task.md` để lưu trạng thái sau commit nền và nêu rõ blocker còn lại là secret thật.
+- [ ] Điền secret thật `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_ID` + `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_SECRET` vào môi trường chạy thực tế khi user cung cấp hoặc tự inject qua secret manager.
+- [ ] Chạy `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` cho riêng diff env-plumbing trước khi chốt.
+
 ## Phase 124 - Receipt side-effects metadata/version sync (2026-04-09) [bead: cng-d1g]
 - [x] Gom helper side-effects phiếu thu dùng chung sang partial mới `ReceiptService.AllocationEffects.cs` để tránh lặp logic giữa approve/void/correct/auto-allocation.
 - [x] Cập nhật luồng `ApproveAsync`, `VoidAsync`, `CorrectAsync` và auto-allocation để mọi mutation lên `Invoice`, `Advance`, `Customer` đều touch `UpdatedAt` và increment `Version`.

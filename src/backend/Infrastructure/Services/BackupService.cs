@@ -108,6 +108,7 @@ public sealed partial class BackupService : IBackupService
         settings.Enabled = request.Enabled;
         settings.BackupPath = backupPath;
         settings.RetentionCount = request.RetentionCount;
+        settings.ScheduleFrequency = request.ScheduleFrequency;
         settings.ScheduleDayOfWeek = request.ScheduleDayOfWeek;
         settings.ScheduleTime = request.ScheduleTime.Trim();
         settings.PgBinPath = pgBinPath;
@@ -121,6 +122,7 @@ public sealed partial class BackupService : IBackupService
             settings.Enabled,
             settings.BackupPath,
             settings.RetentionCount,
+            settings.ScheduleFrequency,
             settings.ScheduleDayOfWeek,
             settings.ScheduleTime,
             settings.PgBinPath,
@@ -522,6 +524,7 @@ public sealed partial class BackupService : IBackupService
             Id = Guid.NewGuid(),
             Enabled = false,
             BackupPath = GetDefaultBackupPath(),
+            ScheduleFrequency = 2,
             RetentionCount = 10,
             ScheduleDayOfWeek = (int)DayOfWeek.Monday,
             ScheduleTime = "02:00",
@@ -572,6 +575,7 @@ public sealed partial class BackupService : IBackupService
 
         return new BackupSettingsDto(
             settings.Enabled,
+            settings.ScheduleFrequency,
             settings.BackupPath,
             settings.RetentionCount,
             settings.ScheduleDayOfWeek,

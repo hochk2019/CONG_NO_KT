@@ -42,6 +42,11 @@ const dayOptions = [
   { value: 6, label: 'Thứ 7' },
 ]
 
+const frequencyOptions = [
+  { value: 1, label: 'Hàng ngày' },
+  { value: 2, label: 'Hàng tuần' },
+]
+
 const statusLabels: Record<string, string> = {
   queued: 'Đang xếp hàng',
   running: 'Đang chạy',
@@ -694,6 +699,24 @@ export default function AdminBackupPage() {
             </select>
           </label>
           <label className="field">
+            <span>Tần suất</span>
+            <select
+              value={settings.scheduleFrequency ?? 2}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev ? { ...prev, scheduleFrequency: Number(event.target.value) } : prev,
+                )
+              }
+            >
+              {frequencyOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(settings.scheduleFrequency ?? 2) === 2 && (
+          <label className="field">
             <span>Ngày chạy</span>
             <select
               value={settings.scheduleDayOfWeek}
@@ -710,6 +733,7 @@ export default function AdminBackupPage() {
               ))}
             </select>
           </label>
+          )}
           <label className="field">
             <span>Giờ chạy</span>
             <input

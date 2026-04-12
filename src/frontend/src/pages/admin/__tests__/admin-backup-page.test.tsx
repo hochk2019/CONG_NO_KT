@@ -301,6 +301,7 @@ describe('admin backup page', () => {
   it('shows host path guidance when backup runs inside docker', async () => {
     vi.mocked(fetchBackupSettings).mockResolvedValueOnce({
       enabled: true,
+      scheduleFrequency: 2,
       backupPath: '/var/lib/congno/backups/dumps',
       usesContainerPaths: true,
       hostBackupPath: 'C:/Backup/CongNo',

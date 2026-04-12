@@ -4,6 +4,7 @@ public sealed class BackupSettings
 {
     public Guid Id { get; set; }
     public bool Enabled { get; set; }
+    public int ScheduleFrequency { get; set; } = 2; // Default: Weekly
     public string BackupPath { get; set; } = string.Empty;
     public int RetentionCount { get; set; } = 10;
     public int ScheduleDayOfWeek { get; set; }

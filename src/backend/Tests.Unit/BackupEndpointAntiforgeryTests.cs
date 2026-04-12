@@ -40,10 +40,10 @@ public sealed class BackupEndpointAntiforgeryTests
     private sealed class StubBackupService : IBackupService
     {
         public Task<BackupSettingsDto> GetSettingsAsync(CancellationToken ct) =>
-            Task.FromResult(new BackupSettingsDto(false, "path", 10, 1, "02:00", "UTC", "bin", null, false, "path", null, true, true));
+            Task.FromResult(new BackupSettingsDto(false, 2, "path", 10, 1, "02:00", "UTC", "bin", null, false, "path", null, true, true));
 
         public Task<BackupSettingsDto> UpdateSettingsAsync(BackupSettingsUpdateRequest request, CancellationToken ct) =>
-            Task.FromResult(new BackupSettingsDto(request.Enabled, request.BackupPath, request.RetentionCount, request.ScheduleDayOfWeek, request.ScheduleTime, "UTC", request.PgBinPath, null, false, request.BackupPath, null, true, true));
+            Task.FromResult(new BackupSettingsDto(request.Enabled, request.ScheduleFrequency, request.BackupPath, request.RetentionCount, request.ScheduleDayOfWeek, request.ScheduleTime, "UTC", request.PgBinPath, null, false, request.BackupPath, null, true, true));
 
         public Task<BackupJobListItem> EnqueueManualBackupAsync(CancellationToken ct) =>
             Task.FromResult(new BackupJobListItem(Guid.NewGuid(), "manual", "queued", DateTimeOffset.UtcNow, null, null, null, null, null, null));

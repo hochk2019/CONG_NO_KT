@@ -1,7 +1,14 @@
 namespace CongNoGolden.Application.Backups;
 
+public enum BackupScheduleFrequency
+{
+    Daily = 1,
+    Weekly = 2,
+}
+
 public sealed record BackupSettingsDto(
     bool Enabled,
+    int ScheduleFrequency,
     string BackupPath,
     int RetentionCount,
     int ScheduleDayOfWeek,
@@ -23,6 +30,7 @@ public sealed record BackupSettingsDto(
 
 public sealed record BackupSettingsUpdateRequest(
     bool Enabled,
+    int ScheduleFrequency,
     string BackupPath,
     int RetentionCount,
     int ScheduleDayOfWeek,

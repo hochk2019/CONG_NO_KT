@@ -3,6 +3,7 @@ import type { PagedResult } from './types'
 
 export type BackupSettings = {
   enabled: boolean
+  scheduleFrequency: number
   backupPath: string
   retentionCount: number
   scheduleDayOfWeek: number
@@ -106,6 +107,7 @@ export const updateBackupSettings = async (token: string, payload: BackupSetting
     method: 'PUT',
     body: {
       enabled: payload.enabled,
+      scheduleFrequency: payload.scheduleFrequency,
       backupPath: payload.backupPath,
       retentionCount: payload.retentionCount,
       scheduleDayOfWeek: payload.scheduleDayOfWeek,

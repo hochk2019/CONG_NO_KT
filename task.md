@@ -11,6 +11,18 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 142 - Real Google Drive offsite provider (2026-04-12) [bead: cng-6mo]
+- [x] Hoàn thiện provider Google Drive thật cho offsite upload bằng OAuth refresh token + Drive REST API, không còn dừng ở `NullBackupOffsiteService`.
+- [x] Nối provider vào `DependencyInjection` với fallback an toàn: chỉ dùng provider thật khi config đầy đủ, còn lại giữ null provider để không phá local backup hiện tại.
+- [x] Khai báo section `BackupOffsiteGoogleDrive` trong appsettings để chốt contract cấu hình production/development.
+- [x] Bổ sung unit tests cho connect URL, callback lưu refresh token, upload success và fail khi thiếu file local.
+- [x] Cập nhật `docs/agent-notebook.md`, bead, bằng chứng verify và chạy `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-12, phase 142 / cng-6mo)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~GoogleDriveBackupOffsiteServiceTests.ProcessNextPendingUploadAsync_WhenQueuedBackupExists_UploadsAndMarksSuccess"` => pass (`1/1`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`222/222`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: critical` do worktree tong the dang co nhieu file ban ngoai scope phase nay; pham vi code cua phase 142 tap trung vao provider Google Drive, DI/config va unit tests backup.
+
 ## Phase 124 - Receipt side-effects metadata/version sync (2026-04-09) [bead: cng-d1g]
 - [x] Gom helper side-effects phiếu thu dùng chung sang partial mới `ReceiptService.AllocationEffects.cs` để tránh lặp logic giữa approve/void/correct/auto-allocation.
 - [x] Cập nhật luồng `ApproveAsync`, `VoidAsync`, `CorrectAsync` và auto-allocation để mọi mutation lên `Invoice`, `Advance`, `Customer` đều touch `UpdatedAt` và increment `Version`.
@@ -2159,3 +2171,20 @@ Verification evidence (2026-04-11, phase 141 / cng-4qn)
 - [x] `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx` => pass (`8/8`).
 - [x] `npm --prefix src/frontend run build` => pass (`tsc -b && vite build`).
 - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: medium`; scope code tap trung vao `src/frontend/src/pages/InvoicesPage.tsx` va process `InvoicesPage -> RenderReferenceChips`, con tong risk bi doi len boi worktree dang co them thay doi tai lieu san (`AGENTS.md`, `CLAUDE.md`) va file CSS da chinh truoc do (`src/frontend/src/pages/advances/advances.css`).
+
+## Phase 139 - Google Drive offsite backup hardening (2026-04-11) [bead: cng-w5p]
+- [x] Mo rong backup settings/model/contracts de ho tro offsite backup Google Drive, retention rieng, checksum va health/status.
+- [x] Bo sung persistence va service abstraction cho Google Drive OAuth user-drive, luu refresh token da ma hoa, upload job metadata va retry state.
+- [x] Chuan hoa luong backup thanh 2 pha: local dump -> enqueue offsite upload, khong lam fail nguoc local khi upload offsite loi.
+- [x] Bo sung durability/recovery cho queue/job backup + offsite upload de survive service restart va theo doi missed backup.
+- [x] Mo rong admin API/UI backup cho connect/callback/disconnect/test upload/reupload va hien thi local/offsite status tach bach.
+- [x] Cap nhat backend/frontend tests cho local flow, offsite flow, OAuth, recovery va regression restore.
+- [ ] Verify:
+  - [x] Build/test backend, frontend theo scope thay doi
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-11, phase 139 / cng-w5p)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --no-restore` => pass (`218/218`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/admin/__tests__/admin-backup-page.test.tsx` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run build` => pass (`tsc -b && vite build`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: critical` do thay doi vao cac symbol trung tam cua backup flow (`BackupSettings`, `ConGNoDbContext`, `IBackupService`, `BackupWorkerHostedService`, `MapBackupEndpoints`) va worktree dang co san thay doi tai lieu ngoai scope (`AGENTS.md`, `CLAUDE.md`). Scope code cua phase nay van tap trung vao backup/offsite backend + admin backup UI/tests.

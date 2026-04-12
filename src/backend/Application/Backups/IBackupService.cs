@@ -18,5 +18,6 @@ public interface IBackupService
 
     Task<bool> HasPendingScheduledBackupAsync(CancellationToken ct);
     Task EnqueueScheduledBackupAsync(CancellationToken ct);
+    Task<bool> ProcessNextPendingJobAsync(CancellationToken ct);
     Task ProcessJobAsync(Guid jobId, CancellationToken ct);
 }

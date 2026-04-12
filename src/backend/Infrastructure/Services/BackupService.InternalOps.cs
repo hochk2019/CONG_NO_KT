@@ -89,6 +89,11 @@ public sealed partial class BackupService
 
     private async Task<bool> TryAcquireAdvisoryLockAsync(string key, CancellationToken ct)
     {
+        if (!_db.Database.IsRelational() || !_db.Database.IsNpgsql())
+        {
+            return true;
+        }
+
         var connection = (NpgsqlConnection)_db.Database.GetDbConnection();
         var shouldClose = connection.State != ConnectionState.Open;
         if (shouldClose)

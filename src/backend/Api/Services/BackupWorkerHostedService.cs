@@ -8,6 +8,7 @@ public sealed class BackupWorkerHostedService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly BackupQueue _queue;
     private readonly ILogger<BackupWorkerHostedService> _logger;
+    private static readonly TimeSpan IdleDelay = TimeSpan.FromSeconds(2);
 
     public BackupWorkerHostedService(
         IServiceScopeFactory scopeFactory,
@@ -25,21 +26,65 @@ public sealed class BackupWorkerHostedService : BackgroundService
         {
             if (_queue.TryDequeue(out var jobId))
             {
-                try
-                {
-                    using var scope = _scopeFactory.CreateScope();
-                    var service = scope.ServiceProvider.GetRequiredService<IBackupService>();
-                    await service.ProcessJobAsync(jobId, stoppingToken);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Backup worker failed for job {JobId}.", jobId);
-                }
+                await ProcessQueuedJobAsync(jobId, stoppingToken);
+                continue;
             }
-            else
+
+            if (await ProcessPendingBackupJobAsync(stoppingToken))
             {
-                await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken);
+                continue;
             }
+
+            if (await ProcessPendingOffsiteUploadAsync(stoppingToken))
+            {
+                continue;
+            }
+
+            await Task.Delay(IdleDelay, stoppingToken);
+        }
+    }
+
+    private async Task ProcessQueuedJobAsync(Guid jobId, CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IBackupService>();
+            await service.ProcessJobAsync(jobId, stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Backup worker failed for job {JobId}.", jobId);
+        }
+    }
+
+    private async Task<bool> ProcessPendingBackupJobAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IBackupService>();
+            return await service.ProcessNextPendingJobAsync(stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Backup worker failed while polling pending backup jobs.");
+            return false;
+        }
+    }
+
+    private async Task<bool> ProcessPendingOffsiteUploadAsync(CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var scope = _scopeFactory.CreateScope();
+            var service = scope.ServiceProvider.GetRequiredService<IBackupOffsiteService>();
+            return await service.ProcessNextPendingUploadAsync(stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Backup worker failed while polling pending offsite uploads.");
+            return false;
         }
     }
 }

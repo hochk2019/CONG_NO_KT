@@ -23,6 +23,7 @@ using CongNoGolden.Infrastructure.Services.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 namespace CongNoGolden.Infrastructure;
@@ -73,6 +74,18 @@ public static class DependencyInjection
         services.AddScoped<IReminderService, ReminderService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IBackupService, BackupService>();
+        services.AddSingleton<IBackupProcessRunner, BackupProcessRunner>();
+        services.AddDataProtection();
+        services.Configure<GoogleDriveBackupOffsiteOptions>(
+            configuration.GetSection(GoogleDriveBackupOffsiteOptions.SectionName));
+        services.AddHttpClient<GoogleDriveBackupOffsiteService>();
+        services.AddScoped<IBackupOffsiteService>(sp =>
+        {
+            var options = sp.GetRequiredService<IOptions<GoogleDriveBackupOffsiteOptions>>().Value;
+            return options.IsConfigured
+                ? sp.GetRequiredService<GoogleDriveBackupOffsiteService>()
+                : NullBackupOffsiteService.Instance;
+        });
         services.AddScoped<IDataRetentionService, DataRetentionService>();
         services.AddHttpClient<IErpIntegrationService, ErpIntegrationService>();
         services.AddSingleton<BackupQueue>();

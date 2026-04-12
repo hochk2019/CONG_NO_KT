@@ -32,7 +32,8 @@ public sealed partial class BackupService : IBackupService
     private readonly ICurrentUser _currentUser;
     private readonly IMaintenanceState _maintenanceState;
     private readonly BackupQueue _queue;
-    private readonly BackupProcessRunner _processRunner;
+    private readonly IBackupProcessRunner _processRunner;
+    private readonly IBackupOffsiteService _backupOffsiteService;
     private readonly ILogger<BackupService> _logger;
     private readonly IConfiguration _configuration;
 
@@ -44,12 +45,34 @@ public sealed partial class BackupService : IBackupService
         BackupProcessRunner processRunner,
         ILogger<BackupService> logger,
         IConfiguration configuration)
+        : this(
+            db,
+            currentUser,
+            maintenanceState,
+            queue,
+            processRunner,
+            NullBackupOffsiteService.Instance,
+            logger,
+            configuration)
+    {
+    }
+
+    public BackupService(
+        ConGNoDbContext db,
+        ICurrentUser currentUser,
+        IMaintenanceState maintenanceState,
+        BackupQueue queue,
+        IBackupProcessRunner processRunner,
+        IBackupOffsiteService backupOffsiteService,
+        ILogger<BackupService> logger,
+        IConfiguration configuration)
     {
         _db = db;
         _currentUser = currentUser;
         _maintenanceState = maintenanceState;
         _queue = queue;
         _processRunner = processRunner;
+        _backupOffsiteService = backupOffsiteService;
         _logger = logger;
         _configuration = configuration;
     }
@@ -57,7 +80,7 @@ public sealed partial class BackupService : IBackupService
     public async Task<BackupSettingsDto> GetSettingsAsync(CancellationToken ct)
     {
         var settings = await GetOrCreateSettingsAsync(ct);
-        return MapSettings(settings);
+        return await MapSettingsAsync(settings, ct);
     }
 
     public async Task<BackupSettingsDto> UpdateSettingsAsync(
@@ -109,6 +132,7 @@ public sealed partial class BackupService : IBackupService
         settings.ScheduleTime = request.ScheduleTime.Trim();
         settings.PgBinPath = pgBinPath;
         settings.Timezone = TimeZoneInfo.Local.Id;
+        ApplyOffsiteSettings(settings, request);
 
         await _db.SaveChangesAsync(ct);
 
@@ -119,10 +143,15 @@ public sealed partial class BackupService : IBackupService
             settings.RetentionCount,
             settings.ScheduleDayOfWeek,
             settings.ScheduleTime,
-            settings.PgBinPath
+            settings.PgBinPath,
+            settings.OffsiteEnabled,
+            settings.OffsiteProvider,
+            settings.GoogleDriveFolderId,
+            settings.OffsiteRetentionCount,
+            settings.UploadAfterBackup
         }, ct);
 
-        return MapSettings(settings);
+        return await MapSettingsAsync(settings, ct);
     }
 
     public async Task<BackupJobListItem> EnqueueManualBackupAsync(CancellationToken ct)
@@ -167,6 +196,25 @@ public sealed partial class BackupService : IBackupService
         _queue.Enqueue(job.Id);
 
         await WriteAuditAsync("backup_scheduled", "success", new { job.Id, job.Status }, ct);
+    }
+
+    public async Task<bool> ProcessNextPendingJobAsync(CancellationToken ct)
+    {
+        var nextJobId = await _db.BackupJobs
+            .AsNoTracking()
+            .Where(job => job.Status == "queued")
+            .OrderBy(job => job.CreatedAt)
+            .ThenBy(job => job.Id)
+            .Select(job => job.Id)
+            .FirstOrDefaultAsync(ct);
+
+        if (nextJobId == Guid.Empty)
+        {
+            return false;
+        }
+
+        await ProcessJobAsync(nextJobId, ct);
+        return true;
     }
 
     public async Task ProcessJobAsync(Guid jobId, CancellationToken ct)
@@ -261,6 +309,7 @@ public sealed partial class BackupService : IBackupService
         if (job.Status == "success")
         {
             await ApplyRetentionAsync(settings.RetentionCount, ct);
+            await TryQueueOffsiteUploadAsync(settings, job.Id, ct);
         }
         else
         {
@@ -498,6 +547,9 @@ public sealed partial class BackupService : IBackupService
             ScheduleTime = "02:00",
             Timezone = TimeZoneInfo.Local.Id,
             PgBinPath = GetDefaultPgBinPath(),
+            OffsiteEnabled = false,
+            OffsiteRetentionCount = 10,
+            UploadAfterBackup = false,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow
         };
@@ -507,7 +559,33 @@ public sealed partial class BackupService : IBackupService
         return settings;
     }
 
-    private BackupSettingsDto MapSettings(BackupSettings settings)
+    private void ApplyOffsiteSettings(BackupSettings settings, BackupSettingsUpdateRequest request)
+    {
+        var provider = NormalizeOffsiteProvider(request.Provider);
+        var folderId = string.IsNullOrWhiteSpace(request.GoogleDriveFolderId)
+            ? null
+            : request.GoogleDriveFolderId.Trim();
+        var retentionCount = request.OffsiteRetentionCount ?? settings.OffsiteRetentionCount;
+        if (retentionCount <= 0 || retentionCount > 200)
+        {
+            throw new InvalidOperationException("Offsite retention count must be between 1 and 200.");
+        }
+
+        settings.OffsiteEnabled = request.OffsiteEnabled;
+        settings.OffsiteProvider = request.OffsiteEnabled ? provider : null;
+        settings.GoogleDriveFolderId = request.OffsiteEnabled ? folderId : null;
+        settings.OffsiteRetentionCount = retentionCount;
+        settings.UploadAfterBackup = request.OffsiteEnabled && request.UploadAfterBackup;
+    }
+
+    private static string? NormalizeOffsiteProvider(string? provider)
+    {
+        return string.IsNullOrWhiteSpace(provider)
+            ? null
+            : provider.Trim().ToLowerInvariant();
+    }
+
+    private BackupSettingsDto MapSettings(BackupSettings settings, BackupOffsiteConnectionStatus? offsiteConnection)
     {
         var usesContainerPaths = IsRunningInContainerRuntime();
         var hostBackupPath = usesContainerPaths ? GetHostBackupPathHint() : settings.BackupPath;
@@ -525,7 +603,13 @@ public sealed partial class BackupService : IBackupService
             hostBackupPath,
             usesContainerPaths ? "BACKUP_HOST_PATH" : null,
             !usesContainerPaths,
-            !usesContainerPaths);
+            !usesContainerPaths,
+            settings.OffsiteEnabled,
+            settings.OffsiteProvider,
+            settings.GoogleDriveFolderId,
+            settings.OffsiteRetentionCount,
+            settings.UploadAfterBackup,
+            offsiteConnection);
     }
 
     private static BackupJobListItem MapJobListItem(BackupJob job)

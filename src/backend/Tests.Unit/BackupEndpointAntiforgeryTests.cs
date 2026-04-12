@@ -3,6 +3,7 @@ using CongNoGolden.Api.Endpoints;
 using CongNoGolden.Application.Backups;
 using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.Interfaces;
+using CongNoGolden.Infrastructure.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,6 +20,7 @@ public sealed class BackupEndpointAntiforgeryTests
         var builder = WebApplication.CreateBuilder();
         builder.Services.AddAuthorization();
         builder.Services.AddSingleton<IBackupService, StubBackupService>();
+        builder.Services.AddSingleton<IBackupOffsiteService>(NullBackupOffsiteService.Instance);
         builder.Services.AddSingleton<IMaintenanceState, StubMaintenanceState>();
         var app = builder.Build();
 
@@ -71,6 +73,7 @@ public sealed class BackupEndpointAntiforgeryTests
         public Task<bool> HasPendingScheduledBackupAsync(CancellationToken ct) => Task.FromResult(false);
 
         public Task EnqueueScheduledBackupAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task<bool> ProcessNextPendingJobAsync(CancellationToken ct) => Task.FromResult(false);
         public Task ProcessJobAsync(Guid jobId, CancellationToken ct) => Task.CompletedTask;
     }
 

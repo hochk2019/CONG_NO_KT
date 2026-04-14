@@ -244,6 +244,10 @@ export default function AppShell() {
     () => [...new Set([...allowed.map((item) => item.to), '/notifications'])],
     [allowed],
   )
+  const reportsIndex = defaultNavItems.findIndex(item => item.to === '/reports')
+  const navItemsBefore = reportsIndex >= 0 ? defaultNavItems.slice(0, reportsIndex + 1) : defaultNavItems
+  const navItemsAfter = reportsIndex >= 0 ? defaultNavItems.slice(reportsIndex + 1) : []
+
   const currentPageTitle = resolveCurrentPageTitle(location.pathname)
   const primaryRole = useMemo(
     () => rolePriority.find((role) => state.roles.includes(role)),
@@ -384,14 +388,14 @@ export default function AppShell() {
     const deepTargetsRaw =
       deepMax > 0
         ? selectPrefetchTargets({
-            roles: state.roles,
-            permissions: state.permissions,
-            allowedPaths,
-            currentPath,
-            history,
-            max: deepMax + targets.length,
-            tier: 'deep',
-          })
+          roles: state.roles,
+          permissions: state.permissions,
+          allowedPaths,
+          currentPath,
+          history,
+          max: deepMax + targets.length,
+          tier: 'deep',
+        })
         : []
     const deepTargets = deepTargetsRaw.filter((target) => !targets.includes(target)).slice(0, deepMax)
 
@@ -535,9 +539,8 @@ export default function AppShell() {
 
   return (
     <div
-      className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${
-        isNavCollapsed ? ' app-shell--nav-collapsed' : ''
-      }`}
+      className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${isNavCollapsed ? ' app-shell--nav-collapsed' : ''
+        }`}
     >
       <button
         className="mobile-nav-backdrop"
@@ -568,13 +571,14 @@ export default function AppShell() {
           </div>
         </div>
         <nav className="nav-list">
-          {defaultNavItems.map(renderNavItem)}
+          {navItemsBefore.map(renderNavItem)}
           {riskCollectionItems.length > 0 && (
             <div className="nav-group" aria-label="Risk and Collections">
               <p className="nav-group__title">Risk &amp; Collections</p>
               <div className="nav-group__items">{riskCollectionItems.map(renderNavItem)}</div>
             </div>
           )}
+          {navItemsAfter.map(renderNavItem)}
         </nav>
         <div className="nav-footer">
           <div className="user-chip">

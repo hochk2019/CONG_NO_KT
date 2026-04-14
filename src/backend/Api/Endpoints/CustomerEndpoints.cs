@@ -466,15 +466,23 @@ public static class CustomerEndpoints
                 return ApiErrors.NotFound("Customer not found.");
             }
 
-            var invoicesCount = await db.Invoices.CountAsync(i => i.CustomerTaxCode == key, ct);
-            var advancesCount = await db.Advances.CountAsync(a => a.CustomerTaxCode == key, ct);
-            var receiptsCount = await db.Receipts.CountAsync(r => r.CustomerTaxCode == key, ct);
+            var invoices = await db.Invoices.IgnoreQueryFilters().Where(i => i.CustomerTaxCode == key).ToListAsync(ct);
+            var advances = await db.Advances.IgnoreQueryFilters().Where(a => a.CustomerTaxCode == key).ToListAsync(ct);
+            var receipts = await db.Receipts.IgnoreQueryFilters().Where(r => r.CustomerTaxCode == key).ToListAsync(ct);
 
-            if (invoicesCount > 0 || advancesCount > 0 || receiptsCount > 0 || customer.CurrentBalance != 0)
+            var activeInvoicesCount = invoices.Count(i => i.DeletedAt == null);
+            var activeAdvancesCount = advances.Count(a => a.DeletedAt == null);
+            var activeReceiptsCount = receipts.Count(r => r.DeletedAt == null);
+
+            if (activeInvoicesCount > 0 || activeAdvancesCount > 0 || activeReceiptsCount > 0 || customer.CurrentBalance != 0)
             {
                 return ApiErrors.InvalidRequest(
-                    $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {invoicesCount} hóa đơn, {advancesCount} khoản trả hộ, {receiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
+                    $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {activeInvoicesCount} hóa đơn, {activeAdvancesCount} khoản trả hộ, {activeReceiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
             }
+
+            if (invoices.Count > 0) db.Invoices.RemoveRange(invoices);
+            if (advances.Count > 0) db.Advances.RemoveRange(advances);
+            if (receipts.Count > 0) db.Receipts.RemoveRange(receipts);
 
             var before = new
             {

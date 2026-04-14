@@ -266,6 +266,7 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("RiskManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.RiskManage));
     options.AddPolicy("BackupManage", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.BackupManage));
     options.AddPolicy("BackupRestore", policy => policy.RequireClaim(AppClaimTypes.Permission, AppPermissions.BackupRestore));
+    options.AddPolicy("Admin", policy => policy.RequireRole("Admin"));
 });
 
 var app = builder.Build();

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CustomerDetail, CustomerListItem } from '../../api/customers'
-import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer } from '../../api/customers'
+import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer, deleteCustomer } from '../../api/customers'
 import { ApiError } from '../../api/client'
 import {
   fetchOwnerLookup,
@@ -18,6 +18,7 @@ import { getDebtToneClass } from './customerDebtTone'
 type CustomerListSectionProps = {
   token: string
   canManageCustomers: boolean
+  isAdmin?: boolean
   selectedTaxCode: string | null
   selectedName: string
   onSelectCustomer: (row: CustomerListItem) => void
@@ -75,6 +76,7 @@ const storeFilter = (key: string, value: string) => {
 export default function CustomerListSection({
   token,
   canManageCustomers,
+  isAdmin = false,
   selectedTaxCode,
   selectedName,
   onSelectCustomer,
@@ -103,6 +105,9 @@ export default function CustomerListSection({
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
   const [statusConfirmRow, setStatusConfirmRow] = useState<CustomerListItem | null>(null)
   const [statusConfirmNextStatus, setStatusConfirmNextStatus] = useState<'ACTIVE' | 'INACTIVE' | null>(null)
+  const [deleteActionLoading, setDeleteActionLoading] = useState<string | null>(null)
+  const [deleteActionError, setDeleteActionError] = useState<string | null>(null)
+  const [deleteConfirmRow, setDeleteConfirmRow] = useState<CustomerListItem | null>(null)
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -432,6 +437,29 @@ export default function CustomerListSection({
     }
   }, [token, statusConfirmRow, statusConfirmNextStatus, detail])
 
+  const handleDeleteCustomer = useCallback(async () => {
+    if (!token || !deleteConfirmRow) return
+
+    setDeleteActionLoading(deleteConfirmRow.taxCode)
+    setDeleteActionError(null)
+    try {
+      await deleteCustomer(token, deleteConfirmRow.taxCode)
+      setDeleteConfirmRow(null)
+      setListReload((value) => value + 1)
+      if (selectedTaxCode === deleteConfirmRow.taxCode) {
+        // Cập nhật ngầm
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDeleteActionError(err.message)
+      } else {
+        setDeleteActionError('Không xóa được khách hàng.')
+      }
+    } finally {
+      setDeleteActionLoading(null)
+    }
+  }, [token, deleteConfirmRow, selectedTaxCode])
+
   const handleSaveCustomer = useCallback(async () => {
     if (!token || !selectedTaxCode) return
     if (!canManageCustomers) {
@@ -593,6 +621,35 @@ export default function CustomerListSection({
           </button>
         ),
       },
+      ...(isAdmin ? [{
+        key: 'delete',
+        label: 'Xóa',
+        width: '60px',
+        align: 'center' as const,
+        render: (row: CustomerListItem) => (
+          <button
+            className="btn btn-ghost btn-table"
+            type="button"
+            onClick={() => {
+              setDeleteActionError(null)
+              setDeleteConfirmRow(row)
+            }}
+            aria-label={`Xóa khách hàng ${row.name}`}
+            title="Xóa khách hàng"
+            disabled={deleteActionLoading === row.taxCode}
+            style={{ color: 'var(--color-danger, #d32f2f)' }}
+          >
+            {deleteActionLoading === row.taxCode ? '...' : (
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12 1.41-1.41L12 12.59l2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14l-2.12-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"
+                  fill="currentColor"
+                />
+              </svg>
+            )}
+          </button>
+        ),
+      }] : []),
       {
         key: 'status',
         label: 'Trạng thái',
@@ -623,8 +680,8 @@ export default function CustomerListSection({
           const title = !canManageCustomers
             ? 'Bạn không có quyền thay đổi trạng thái'
             : isHideAction && hasBalance
-            ? 'Không thể ẩn khách hàng đang còn dư nợ'
-            : undefined
+              ? 'Không thể ẩn khách hàng đang còn dư nợ'
+              : undefined
           return (
             <button
               className={className}
@@ -916,6 +973,27 @@ export default function CustomerListSection({
         }}
         onConfirm={() => {
           void handleConfirmCustomerStatus()
+        }}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(deleteConfirmRow)}
+        title="Xóa khách hàng"
+        description={
+          deleteConfirmRow
+            ? `Cảnh báo: Hành động này KHÔNG THỂ KHÔI PHỤC được. Hệ thống sẽ ngay lập tức xóa dữ liệu kế toán và hồ sơ của khách hàng "${deleteConfirmRow.name}". Hệ thống sẽ chặn nếu khách hàng này đã phát sinh hóa đơn, phiếu thu, hoặc công nợ.`
+            : undefined
+        }
+        confirmLabel="Tiến hành xóa vĩnh viễn"
+        loading={Boolean(deleteConfirmRow && deleteActionLoading === deleteConfirmRow.taxCode)}
+        error={deleteActionError}
+        tone="danger"
+        onClose={() => {
+          setDeleteConfirmRow(null)
+          setDeleteActionError(null)
+        }}
+        onConfirm={() => {
+          void handleDeleteCustomer()
         }}
       />
     </>

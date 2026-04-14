@@ -448,6 +448,59 @@ public static class CustomerEndpoints
         .WithTags("Customers")
         .RequireAuthorization("CustomerManage");
 
+        app.MapDelete("/customers/{taxCode}", async (
+            string taxCode,
+            ConGNoDbContext db,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var key = taxCode.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return ApiErrors.InvalidRequest("Tax code is required.");
+            }
+
+            var customer = await db.Customers.FirstOrDefaultAsync(c => c.TaxCode == key, ct);
+            if (customer is null)
+            {
+                return ApiErrors.NotFound("Customer not found.");
+            }
+
+            var invoicesCount = await db.Invoices.CountAsync(i => i.CustomerTaxCode == key, ct);
+            var advancesCount = await db.Advances.CountAsync(a => a.CustomerTaxCode == key, ct);
+            var receiptsCount = await db.Receipts.CountAsync(r => r.CustomerTaxCode == key, ct);
+
+            if (invoicesCount > 0 || advancesCount > 0 || receiptsCount > 0 || customer.CurrentBalance != 0)
+            {
+                return ApiErrors.InvalidRequest(
+                    $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {invoicesCount} hóa đơn, {advancesCount} khoản trả hộ, {receiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
+            }
+
+            var before = new
+            {
+                customer.Name,
+                customer.Status,
+                customer.CreatedAt,
+                customer.CurrentBalance
+            };
+
+            db.Customers.Remove(customer);
+            await db.SaveChangesAsync(ct);
+
+            await auditService.LogAsync(
+                "CUSTOMER_DELETE",
+                "Customer",
+                customer.TaxCode,
+                before,
+                null,
+                ct);
+
+            return Results.NoContent();
+        })
+        .WithName("CustomerDelete")
+        .WithTags("Customers")
+        .RequireAuthorization("Admin");
+
         return app;
     }
 

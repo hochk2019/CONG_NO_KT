@@ -11,6 +11,13 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 144 - Safe Customer deletion feature (2026-04-14) [bead: cng-d9h]
+- [x] Lập kế hoạch và đợi phê duyệt (Đang chờ - Pending user).
+- [x] Backend: Thêm `DELETE /customers/{taxCode}` endpoint với RBAC `Admin`.
+- [x] Backend: Bổ sung guard chặn xóa khách hàng đã phát sinh công nợ (`CurrentBalance != 0` hoặc có liên kết).
+- [x] Frontend: Thêm nút Delete và ConfirmDialog trên UI quản lý KH.
+- [x] Tests/Verify: Thử nghiệm thực tế các kịch bản chặn xóa an toàn.
+
 ## Phase 142 - Real Google Drive offsite provider (2026-04-12) [bead: cng-6mo]
 - [x] Hoàn thiện provider Google Drive thật cho offsite upload bằng OAuth refresh token + Drive REST API, không còn dừng ở `NullBackupOffsiteService`.
 - [x] Nối provider vào `DependencyInjection` với fallback an toàn: chỉ dùng provider thật khi config đầy đủ, còn lại giữ null provider để không phá local backup hiện tại.

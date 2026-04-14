@@ -45,6 +45,7 @@ export default function CustomersPage() {
   const canManageCustomers = state.permissions.some((permission) =>
     CUSTOMER_MANAGE_PERMISSIONS.includes(permission as (typeof CUSTOMER_MANAGE_PERMISSIONS)[number]),
   )
+  const isAdmin = state.roles?.includes('Admin') ?? false
 
   const queryTaxCode = useMemo(() => parseTaxCode(searchParams.get('taxCode')), [searchParams])
   const queryTab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams])
@@ -116,6 +117,7 @@ export default function CustomersPage() {
       <CustomerListSection
         token={token}
         canManageCustomers={canManageCustomers}
+        isAdmin={isAdmin}
         selectedTaxCode={selectedTaxCode}
         selectedName={selectedName}
         onSelectCustomer={handleSelectCustomer}

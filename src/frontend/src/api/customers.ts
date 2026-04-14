@@ -219,6 +219,7 @@ export const fetchCustomer360 = async (token: string, taxCode: string) => {
   return apiFetch<Customer360>(`/customers/${taxCode}/360`, { token })
 }
 
+
 export const updateCustomer = async (
   token: string,
   taxCode: string,
@@ -228,6 +229,13 @@ export const updateCustomer = async (
     method: 'PUT',
     token,
     body: payload,
+  })
+}
+
+export const deleteCustomer = async (token: string, taxCode: string) => {
+  return apiFetch<void>(`/customers/${taxCode}`, {
+    method: 'DELETE',
+    token,
   })
 }
 

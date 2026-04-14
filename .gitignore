@@ -53,3 +53,6 @@ ReportDetail.xlsx
 screenshot_*.png
 CongNoGolden_Spec_PostgreSQL_WEB_Windows_FULL.zip
 .gitnexus
+data/backup/dumps/congno_golden_20260413_1240.dump
+data/backup/dumps/congno_golden_20260412_1604.dump
+data/backup/dumps/congno_golden_20260413_0128.dump

@@ -480,9 +480,16 @@ public static class CustomerEndpoints
                     $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {activeInvoicesCount} hóa đơn, {activeAdvancesCount} khoản trả hộ, {activeReceiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
             }
 
+            var riskScores = await db.RiskScoreSnapshots.IgnoreQueryFilters().Where(r => r.CustomerTaxCode == key).ToListAsync(ct);
+            var riskAlerts = await db.RiskDeltaAlerts.IgnoreQueryFilters().Where(a => a.CustomerTaxCode == key).ToListAsync(ct);
+            var reminderLogs = await db.ReminderLogs.IgnoreQueryFilters().Where(l => l.CustomerTaxCode == key).ToListAsync(ct);
+
             if (invoices.Count > 0) db.Invoices.RemoveRange(invoices);
             if (advances.Count > 0) db.Advances.RemoveRange(advances);
             if (receipts.Count > 0) db.Receipts.RemoveRange(receipts);
+            if (riskScores.Count > 0) db.RiskScoreSnapshots.RemoveRange(riskScores);
+            if (riskAlerts.Count > 0) db.RiskDeltaAlerts.RemoveRange(riskAlerts);
+            if (reminderLogs.Count > 0) db.ReminderLogs.RemoveRange(reminderLogs);
 
             var before = new
             {

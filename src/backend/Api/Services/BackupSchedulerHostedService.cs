@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Backups;
+using TimeZoneConverter;
 
 namespace CongNoGolden.Api.Services;
 
@@ -76,7 +77,7 @@ public sealed class BackupSchedulerHostedService : BackgroundService
 
         try
         {
-            return TimeZoneInfo.FindSystemTimeZoneById(timezone);
+            return TZConvert.GetTimeZoneInfo(timezone);
         }
         catch
         {

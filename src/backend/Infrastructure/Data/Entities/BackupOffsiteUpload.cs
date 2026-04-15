@@ -10,9 +10,12 @@ public sealed class BackupOffsiteUpload
     public string? RemoteChecksum { get; set; }
     public long? RemoteFileSize { get; set; }
     public int AttemptCount { get; set; }
+    public int MaxAttempts { get; set; } = 5;
+    public string? ResumableSessionUri { get; set; }
     public string? ErrorMessage { get; set; }
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset? QueuedAt { get; set; }
+    public DateTimeOffset? NextRetryAt { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 }

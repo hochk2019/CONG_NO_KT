@@ -235,7 +235,8 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
         }
 
         var upload = await _dbContext.BackupOffsiteUploads
-            .Where(x => x.Provider == ProviderName && x.Status == UploadQueuedStatus)
+            .Where(x => x.Provider == ProviderName && x.Status == UploadQueuedStatus &&
+                        (x.NextRetryAt == null || x.NextRetryAt <= DateTimeOffset.UtcNow))
             .OrderBy(x => x.QueuedAt ?? x.CreatedAt)
             .FirstOrDefaultAsync(ct);
 
@@ -256,7 +257,12 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
             var filePath = backupJob.FilePath;
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
             {
-                throw new InvalidOperationException($"Backup file was not found for offsite upload: {filePath ?? "<null>"}");
+                // File is permanently gone – fail immediately, do not retry
+                await MarkUploadPermanentlyFailedAsync(
+                    upload,
+                    $"Backup file was not found for offsite upload: {filePath ?? "<null>"}",
+                    ct);
+                return true;
             }
 
             var connection = await RequireConnectedConnectionAsync(ct);
@@ -269,19 +275,26 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
             var targetFolderId = await ResolveFolderIdAsync(connection, ct);
             await using var fileStream = File.OpenRead(filePath);
             var fileName = string.IsNullOrWhiteSpace(backupJob.FileName) ? Path.GetFileName(filePath) : backupJob.FileName;
-            var uploadResult = await UploadFileAsync(
-                tokenResponse.AccessToken,
-                fileName,
-                fileStream,
-                fileStream.Length,
-                targetFolderId,
-                ct);
+
+            // Initiate session only if we don't have a valid resumable URI already
+            if (string.IsNullOrWhiteSpace(upload.ResumableSessionUri))
+            {
+                upload.ResumableSessionUri = await InitiateResumableSessionAsync(
+                    tokenResponse.AccessToken, fileName, fileStream.Length, targetFolderId, ct);
+                upload.UpdatedAt = DateTimeOffset.UtcNow;
+                await _dbContext.SaveChangesAsync(ct);
+            }
+
+            var uploadResult = await UploadResumableAsync(
+                upload.ResumableSessionUri!, fileStream, fileStream.Length, ct);
 
             upload.Status = UploadSuccessStatus;
             upload.RemoteFileId = uploadResult.FileId;
             upload.RemoteChecksum = uploadResult.Md5Checksum;
             upload.RemoteFileSize = uploadResult.Size ?? fileStream.Length;
             upload.ErrorMessage = null;
+            upload.ResumableSessionUri = null; // clear on success
+            upload.NextRetryAt = null;
             upload.CompletedAt = DateTimeOffset.UtcNow;
             upload.UpdatedAt = upload.CompletedAt.Value;
 
@@ -295,7 +308,7 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Google Drive offsite upload failed for upload {UploadId}", upload.Id);
-            await MarkUploadFailedAsync(upload, ex.Message, ct);
+            await MarkUploadForRetryOrFailAsync(upload, ex.Message, ct);
         }
 
         return true;
@@ -344,16 +357,14 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
         }
 
         var now = DateTimeOffset.UtcNow;
+        var fileName = $"congno-offsite-test-{now:yyyyMMddHHmmss}.txt";
         var contents = Encoding.UTF8.GetBytes($"congno-offsite-test {now:O}");
-        await using var stream = new MemoryStream(contents, writable: false);
         var targetFolderId = await ResolveFolderIdAsync(connection, ct);
-        var uploadResult = await UploadFileAsync(
-            tokenResponse.AccessToken,
-            $"congno-offsite-test-{now:yyyyMMddHHmmss}.txt",
-            stream,
-            contents.Length,
-            targetFolderId,
-            ct);
+
+        await using var stream = new MemoryStream(contents, writable: false);
+        var sessionUri = await InitiateResumableSessionAsync(
+            tokenResponse.AccessToken, fileName, contents.Length, targetFolderId, ct);
+        var uploadResult = await UploadResumableAsync(sessionUri, stream, contents.Length, ct);
 
         connection.Status = ConnectedStatus;
         connection.LastValidatedAt = now;
@@ -555,90 +566,223 @@ public sealed class GoogleDriveBackupOffsiteService : IBackupOffsiteService
         return new TokenResult(accessToken, refreshToken);
     }
 
-    private async Task<UploadResult> UploadFileAsync(
+    private async Task<string> InitiateResumableSessionAsync(
         string accessToken,
         string fileName,
-        Stream fileStream,
         long fileSize,
         string? folderId,
         CancellationToken ct)
     {
-        var metadata = new Dictionary<string, object?>
-        {
-            ["name"] = fileName
-        };
-
+        var metadata = new Dictionary<string, object?> { ["name"] = fileName };
         if (!string.IsNullOrWhiteSpace(folderId))
         {
             metadata["parents"] = new[] { folderId };
         }
 
-        using var metadataContent = new StringContent(
-            JsonSerializer.Serialize(metadata),
-            Encoding.UTF8,
-            "application/json");
-
-        using var fileContent = new StreamContent(fileStream);
-        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-        using var multipart = new MultipartContent("related");
-        multipart.Add(metadataContent);
-        multipart.Add(fileContent);
-
-        using var request = new HttpRequestMessage(
+        using var initiateRequest = new HttpRequestMessage(
             HttpMethod.Post,
             BuildUrl(
                 _options.UploadEndpoint,
-                new Dictionary<string, string?>
-                {
-                    ["uploadType"] = "multipart",
-                    ["supportsAllDrives"] = "true",
-                    ["fields"] = "id,name,size,md5Checksum"
-                }));
+                new Dictionary<string, string?> { ["uploadType"] = "resumable", ["supportsAllDrives"] = "true" }));
 
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Content = multipart;
+        initiateRequest.Headers.Authorization =
+            new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", accessToken);
+        initiateRequest.Headers.Add("X-Upload-Content-Type", "application/octet-stream");
+        initiateRequest.Headers.Add("X-Upload-Content-Length", fileSize.ToString());
+        initiateRequest.Content = new StringContent(
+            System.Text.Json.JsonSerializer.Serialize(metadata),
+            System.Text.Encoding.UTF8,
+            "application/json");
 
-        using var response = await _httpClient.SendAsync(request, ct);
-        var payload = await response.Content.ReadAsStringAsync(ct);
-        if (!response.IsSuccessStatusCode)
+        using var initiateResponse = await _httpClient.SendAsync(initiateRequest, ct);
+        if (!initiateResponse.IsSuccessStatusCode)
         {
-            throw new InvalidOperationException($"Google Drive upload failed: {ExtractErrorMessage(payload)}");
+            var body = await initiateResponse.Content.ReadAsStringAsync(ct);
+            throw new InvalidOperationException(
+                $"Google Drive resumable session initiation failed: {ExtractErrorMessage(body)}");
         }
 
-        using var document = JsonDocument.Parse(payload);
+        var sessionUri = initiateResponse.Headers.Location?.ToString();
+        if (string.IsNullOrWhiteSpace(sessionUri))
+        {
+            throw new InvalidOperationException(
+                "Google Drive resumable session initiation returned no Location header.");
+        }
+
+        return sessionUri;
+    }
+
+    private async Task<UploadResult> UploadResumableAsync(
+        string sessionUri,
+        Stream fileStream,
+        long fileSize,
+        CancellationToken ct)
+    {
+        // Query how many bytes Google has already received (resume support)
+        long uploadedBytes = 0;
+        if (fileStream.Position == 0 && fileSize > 0)
+        {
+            using var queryRequest = new HttpRequestMessage(HttpMethod.Put, sessionUri);
+            queryRequest.Content = new ByteArrayContent(Array.Empty<byte>());
+            queryRequest.Content.Headers.ContentLength = 0;
+            queryRequest.Content.Headers.Add("Content-Range", $"bytes */{fileSize}");
+
+            using var queryResponse = await _httpClient.SendAsync(queryRequest, ct);
+            // 308 Resume Incomplete means partial upload exists
+            if ((int)queryResponse.StatusCode == 308)
+            {
+                var rangeHeader = queryResponse.Headers.Contains("Range")
+                    ? queryResponse.Headers.GetValues("Range").FirstOrDefault()
+                    : null;
+                if (rangeHeader is not null)
+                {
+                    // Range: bytes=0-N
+                    var dashIdx = rangeHeader.IndexOf('-', StringComparison.Ordinal);
+                    if (dashIdx >= 0 && long.TryParse(rangeHeader[(dashIdx + 1)..], out var resumeFrom))
+                    {
+                        uploadedBytes = resumeFrom + 1;
+                    }
+                }
+            }
+            // 200/201 means already complete - shouldn't happen but handle gracefully
+            else if (queryResponse.IsSuccessStatusCode)
+            {
+                var completePayload = await queryResponse.Content.ReadAsStringAsync(ct);
+                return ParseUploadResultFromPayload(completePayload);
+            }
+        }
+
+        // Seek to the already-uploaded position
+        fileStream.Seek(uploadedBytes, SeekOrigin.Begin);
+
+        const long ChunkSize = 8L * 1024 * 1024; // 8 MB chunks
+        HttpResponseMessage? lastResponse = null;
+
+        while (uploadedBytes < fileSize)
+        {
+            var remaining = fileSize - uploadedBytes;
+            var chunkLength = (int)Math.Min(ChunkSize, remaining);
+
+            var buffer = new byte[chunkLength];
+            var totalRead = 0;
+            while (totalRead < chunkLength)
+            {
+                var read = await fileStream.ReadAsync(buffer.AsMemory(totalRead, chunkLength - totalRead), ct);
+                if (read == 0) break;
+                totalRead += read;
+            }
+
+            var endByte = uploadedBytes + totalRead - 1;
+
+            using var chunkRequest = new HttpRequestMessage(HttpMethod.Put, sessionUri);
+            chunkRequest.Content = new ByteArrayContent(buffer, 0, totalRead);
+            chunkRequest.Content.Headers.ContentType =
+                new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+            chunkRequest.Content.Headers.ContentLength = totalRead;
+            chunkRequest.Content.Headers.Add("Content-Range",
+                $"bytes {uploadedBytes}-{endByte}/{fileSize}");
+
+            lastResponse?.Dispose();
+            lastResponse = await _httpClient.SendAsync(chunkRequest, ct);
+
+            if ((int)lastResponse.StatusCode == 308)
+            {
+                // Chunk accepted, continue
+                uploadedBytes += totalRead;
+                continue;
+            }
+
+            if (lastResponse.IsSuccessStatusCode)
+            {
+                // Final chunk accepted with 200/201
+                var finalPayload = await lastResponse.Content.ReadAsStringAsync(ct);
+                lastResponse.Dispose();
+                return ParseUploadResultFromPayload(finalPayload);
+            }
+
+            var errorPayload = await lastResponse.Content.ReadAsStringAsync(ct);
+            lastResponse.Dispose();
+            throw new InvalidOperationException(
+                $"Google Drive resumable upload chunk failed: {ExtractErrorMessage(errorPayload)}");
+        }
+
+        // Should have returned inside loop on success, but handle edge case
+        throw new InvalidOperationException("Google Drive resumable upload ended without a success response.");
+    }
+
+    private static UploadResult ParseUploadResultFromPayload(string payload)
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(payload);
         var root = document.RootElement;
-        var fileId = root.TryGetProperty("id", out var idElement) ? idElement.GetString() : null;
+        var fileId = root.TryGetProperty("id", out var idEl) ? idEl.GetString() : null;
         if (string.IsNullOrWhiteSpace(fileId))
         {
-            throw new InvalidOperationException("Google Drive upload failed: missing remote file id.");
+            throw new InvalidOperationException("Google Drive upload response missing file id.");
         }
 
         long? remoteSize = null;
-        if (root.TryGetProperty("size", out var sizeElement))
+        if (root.TryGetProperty("size", out var sizeEl))
         {
-            remoteSize = sizeElement.ValueKind switch
+            remoteSize = sizeEl.ValueKind switch
             {
-                JsonValueKind.Number when sizeElement.TryGetInt64(out var numericSize) => numericSize,
-                JsonValueKind.String when long.TryParse(sizeElement.GetString(), out var parsedSize) => parsedSize,
+                System.Text.Json.JsonValueKind.Number when sizeEl.TryGetInt64(out var n) => n,
+                System.Text.Json.JsonValueKind.String when long.TryParse(sizeEl.GetString(), out var s) => s,
                 _ => null
             };
         }
 
-        var checksum = root.TryGetProperty("md5Checksum", out var checksumElement)
-            ? checksumElement.GetString()
-            : null;
-
+        var checksum = root.TryGetProperty("md5Checksum", out var csEl) ? csEl.GetString() : null;
         return new UploadResult(fileId, remoteSize, checksum);
     }
 
-    private async Task MarkUploadFailedAsync(BackupOffsiteUpload upload, string errorMessage, CancellationToken ct)
+    private async Task MarkUploadPermanentlyFailedAsync(BackupOffsiteUpload upload, string errorMessage, CancellationToken ct)
     {
         upload.Status = UploadFailedStatus;
         upload.ErrorMessage = errorMessage;
+        upload.ResumableSessionUri = null;
+        upload.NextRetryAt = null;
         upload.UpdatedAt = DateTimeOffset.UtcNow;
+        _logger.LogError(
+            "Google Drive offsite upload {UploadId} permanently failed: {Error}",
+            upload.Id, errorMessage);
         await _dbContext.SaveChangesAsync(ct);
     }
+
+    private async Task MarkUploadForRetryOrFailAsync(BackupOffsiteUpload upload, string errorMessage, CancellationToken ct)
+    {
+        upload.ErrorMessage = errorMessage;
+        upload.UpdatedAt = DateTimeOffset.UtcNow;
+
+        if (upload.AttemptCount >= upload.MaxAttempts)
+        {
+            // Permanently failed - clear session so a fresh start is forced
+            upload.Status = UploadFailedStatus;
+            upload.ResumableSessionUri = null;
+            upload.NextRetryAt = null;
+            _logger.LogError(
+                "Google Drive offsite upload {UploadId} permanently failed after {Attempts} attempts: {Error}",
+                upload.Id, upload.AttemptCount, errorMessage);
+        }
+        else
+        {
+            // Schedule retry with exponential backoff; keep session URI to resume
+            upload.Status = UploadQueuedStatus;
+            upload.NextRetryAt = upload.UpdatedAt + GetRetryDelay(upload.AttemptCount);
+            _logger.LogWarning(
+                "Google Drive offsite upload {UploadId} will retry (attempt {Attempt}/{Max}) at {RetryAt}: {Error}",
+                upload.Id, upload.AttemptCount, upload.MaxAttempts, upload.NextRetryAt, errorMessage);
+        }
+
+        await _dbContext.SaveChangesAsync(ct);
+    }
+
+    private static TimeSpan GetRetryDelay(int attemptCount) => attemptCount switch
+    {
+        <= 1 => TimeSpan.FromMinutes(1),
+        2    => TimeSpan.FromMinutes(5),
+        3    => TimeSpan.FromMinutes(15),
+        _    => TimeSpan.FromMinutes(30)
+    };
 
     private static string ExtractErrorMessage(string payload)
     {

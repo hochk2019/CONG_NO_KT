@@ -157,6 +157,8 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [activeTab, setActiveTab] = useState<'receipts' | 'surplusQueue'>('receipts')
   const [listError, setListError] = useState<string | null>(null)
   const [listMessage, setListMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [listReloadTick, setListReloadTick] = useState(0)
   const [selectedReceiptIds, setSelectedReceiptIds] = useState<string[]>([])
@@ -912,7 +914,11 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         )
         const failedMessages = result.items
           .filter((item) => failedIds.has(item.receiptId))
-          .map((item) => item.errorMessage || item.errorCode || `Lỗi ${item.receiptId}`)
+          .map((item) => {
+            const row = selectedEligibleRows.find((r) => r.id === item.receiptId)
+            const label = row?.receiptNo?.trim() || item.receiptId
+            return `${label}: ${item.errorMessage || item.errorCode || 'Lỗi'}`
+          })
 
         setSelectedReceiptIds((prev) => prev.filter((id) => failedIds.has(id)))
         setBulkApproveOpen(false)
@@ -921,17 +927,17 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         if (result.approved > 0) {
           const successMessage = `Đã duyệt ${result.approved}/${result.total} phiếu thu đã chọn.`
           if (failedIds.size > 0) {
-            setListError(
+            setActionError(
               `${successMessage} ${failedIds.size} phiếu thu thất bại: ${failedMessages
-                .slice(0, 2)
+                .slice(0, 5)
                 .join('; ')}`,
             )
           } else {
-            setListMessage(successMessage)
+            setActionMessage(successMessage)
           }
         } else {
-          setListError(
-            `Không duyệt được phiếu thu nào: ${failedMessages.slice(0, 2).join('; ') || 'Lỗi không xác định.'}`,
+          setActionError(
+            `Không duyệt được phiếu thu nào: ${failedMessages.slice(0, 5).join('; ') || 'Lỗi không xác định.'}`,
           )
         }
       } catch (err) {
@@ -1206,6 +1212,18 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
           {validationError && <div className="alert alert--error">{validationError}</div>}
           {listError && <div className="alert alert--error">{listError}</div>}
           {listMessage && <div className="alert alert--success">{listMessage}</div>}
+          {actionError && (
+            <div className="alert alert--error alert--dismissible">
+              <span>{actionError}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActionError(null)}>Đóng</button>
+            </div>
+          )}
+          {actionMessage && (
+            <div className="alert alert--success alert--dismissible">
+              <span>{actionMessage}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActionMessage(null)}>Đóng</button>
+            </div>
+          )}
 
           <div className="filters-actions">
             <span className="muted">

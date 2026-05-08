@@ -131,6 +131,7 @@ export default function ImportBatchSection({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [previewOpen, setPreviewOpen] = useState(false)
   const [isDropzoneActive, setIsDropzoneActive] = useState(false)
+  const [autoApprove, setAutoApprove] = useState(true)
 
   const currentQualitySummary = useMemo<ImportBatchQualitySnapshot | null>(() => {
     if (preview) {
@@ -402,6 +403,7 @@ export default function ImportBatchSection({
     setOverrideLock(false)
     setOverrideReason('')
     setFieldErrors({})
+    setAutoApprove(true)
   }
 
   const handleCommit = async () => {
@@ -432,6 +434,7 @@ export default function ImportBatchSection({
         idempotencyKey: idempotencyKey || undefined,
         overridePeriodLock: overrideLock,
         overrideReason: overrideReason || undefined,
+        autoApprove,
       })
       setCommitResult(result)
       setHistoryReload((value) => value + 1)
@@ -730,6 +733,18 @@ export default function ImportBatchSection({
                 )}
               </label>
             </div>
+            {type === 'RECEIPT' && (
+              <div className="form-grid" style={{ marginTop: 16 }}>
+                <label className="field field-inline">
+                  <input
+                    type="checkbox"
+                    checked={autoApprove}
+                    onChange={(event) => setAutoApprove(event.target.checked)}
+                  />
+                  <span>Tự động duyệt và phân bổ (FIFO) cho phiếu thu</span>
+                </label>
+              </div>
+            )}
           </div>
         </details>
         <div className="inline-actions">

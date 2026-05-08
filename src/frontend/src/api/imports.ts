@@ -200,6 +200,7 @@ export const commitImport = async (params: {
   idempotencyKey?: string
   overridePeriodLock?: boolean
   overrideReason?: string
+  autoApprove?: boolean
 }) => {
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? ''
   const response = await fetch(`${apiBaseUrl}/imports/${params.batchId}/commit`, {
@@ -212,6 +213,7 @@ export const commitImport = async (params: {
       idempotency_key: params.idempotencyKey ?? null,
       override_period_lock: params.overridePeriodLock ?? false,
       override_reason: params.overrideReason ?? null,
+      auto_approve: params.autoApprove ?? false,
     }),
   })
 

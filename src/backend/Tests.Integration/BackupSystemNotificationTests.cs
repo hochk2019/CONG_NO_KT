@@ -79,6 +79,7 @@ public sealed class BackupSystemNotificationTests
             new TestMaintenanceState(),
             new BackupQueue(),
             new BackupProcessRunner(),
+            NullBackupOffsiteService.Instance,
             NullLogger<BackupService>.Instance,
             configuration);
 

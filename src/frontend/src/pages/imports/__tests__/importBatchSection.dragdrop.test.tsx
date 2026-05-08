@@ -58,6 +58,18 @@ describe('ImportBatchSection drag and drop', () => {
     cancelImportMock.mockReset()
   })
 
+  it('renders step 1 actions without the duplicated imports hero row', () => {
+    render(<ImportBatchSection token="token-1" canStage canCommit />)
+
+    expect(
+      screen.queryByRole('heading', { name: 'Nhập file, kiểm tra trước khi ghi dữ liệu' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByText('Bước 1')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Chuẩn bị template' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Tải template' })).toHaveAttribute('href', '#templates')
+    expect(screen.getByRole('link', { name: 'Lịch sử nhập' })).toHaveAttribute('href', '#history')
+  })
+
   it('accepts dropped file and uploads it', async () => {
     const user = userEvent.setup()
     const file = new File(['demo'], 'invoice-import.xlsx', {

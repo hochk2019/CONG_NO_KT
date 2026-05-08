@@ -72,6 +72,72 @@ public static class BackupEndpoints
             return job is null ? Results.NotFound() : Results.Ok(job);
         }).RequireAuthorization("BackupManage");
 
+        group.MapGet("/offsite/connection", async (
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            var connection = await service.GetConnectionStatusAsync(ct);
+            return Results.Ok(connection);
+        }).RequireAuthorization("BackupManage");
+
+        group.MapPost("/offsite/google-drive/connect-url", async (
+            BackupOffsiteConnectUrlRequest request,
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            {
+                return ApiErrors.InvalidRequest("Redirect uri is required.");
+            }
+
+            var url = await service.BuildGoogleDriveConnectUrlAsync(
+                request.RedirectUri,
+                request.GoogleDriveFolderId,
+                ct);
+
+            if (string.IsNullOrWhiteSpace(url))
+            {
+                return ApiErrors.InvalidRequest("Offsite backup is not configured.");
+            }
+
+            return Results.Ok(new BackupOffsiteConnectUrlResponse(url));
+        })
+        .RequireAuthorization("BackupManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
+        group.MapPost("/offsite/google-drive/callback", async (
+            BackupOffsiteGoogleDriveCallbackRequest request,
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            if (string.IsNullOrWhiteSpace(request.Code))
+            {
+                return ApiErrors.InvalidRequest("Authorization code is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.RedirectUri))
+            {
+                return ApiErrors.InvalidRequest("Redirect uri is required.");
+            }
+
+            try
+            {
+                var connection = await service.CompleteGoogleDriveCallbackAsync(
+                    request.Code,
+                    request.RedirectUri,
+                    request.GoogleDriveFolderId,
+                    ct);
+
+                return Results.Ok(connection);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiErrors.InvalidRequest(ex.Message);
+            }
+        })
+        .RequireAuthorization("BackupManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
         group.MapPost("/jobs/{id:guid}/download-token", async (
             Guid id,
             IBackupService service,
@@ -140,6 +206,65 @@ public static class BackupEndpoints
             }
         })
         .RequireAuthorization("BackupRestore")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
+        group.MapDelete("/offsite/connection", async (
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            await service.DisconnectAsync(ct);
+            return Results.Ok(new { status = "ok" });
+        })
+        .RequireAuthorization("BackupManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
+        group.MapGet("/offsite/uploads", async (
+            int? page,
+            int? pageSize,
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            var result = await service.ListUploadsAsync(
+                page.GetValueOrDefault(1),
+                pageSize.GetValueOrDefault(20),
+                ct);
+
+            return Results.Ok(result);
+        }).RequireAuthorization("BackupManage");
+
+        group.MapPost("/jobs/{id:guid}/reupload", async (
+            Guid id,
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var upload = await service.ReuploadAsync(id, ct);
+                return Results.Ok(upload);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiErrors.InvalidRequest(ex.Message);
+            }
+        })
+        .RequireAuthorization("BackupManage")
+        .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
+
+        group.MapPost("/offsite/test-upload", async (
+            IBackupOffsiteService service,
+            CancellationToken ct) =>
+        {
+            try
+            {
+                var upload = await service.TestUploadAsync(ct);
+                return Results.Ok(upload);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return ApiErrors.InvalidRequest(ex.Message);
+            }
+        })
+        .RequireAuthorization("BackupManage")
         .RequireRateLimiting(AuthSecurityPolicy.MutationRateLimiterPolicy);
 
         group.MapGet("/audit", async (

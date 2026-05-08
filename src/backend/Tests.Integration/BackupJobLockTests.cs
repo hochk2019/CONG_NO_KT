@@ -52,6 +52,7 @@ public sealed class BackupJobLockTests
             new TestMaintenanceState(),
             new BackupQueue(),
             new BackupProcessRunner(),
+            NullBackupOffsiteService.Instance,
             NullLogger<BackupService>.Instance,
             new ConfigurationBuilder().Build());
 

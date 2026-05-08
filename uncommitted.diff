@@ -1,0 +1,330 @@
+diff --git a/.gitignore b/.gitignore
+index baccafe..d022dc5 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -53,3 +53,6 @@ ReportDetail.xlsx
+ screenshot_*.png
+ CongNoGolden_Spec_PostgreSQL_WEB_Windows_FULL.zip
+ .gitnexus
++data/backup/dumps/congno_golden_20260413_1240.dump
++data/backup/dumps/congno_golden_20260412_1604.dump
++data/backup/dumps/congno_golden_20260413_0128.dump
+diff --git a/AGENTS.md b/AGENTS.md
+index aedbe70..f852087 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -65,7 +65,7 @@ bd sync                               # Sync with git
+ <!-- gitnexus:start -->
+ # GitNexus — Code Intelligence
+ 
+-This project is indexed by GitNexus as **CONG_NO_KT** (7262 symbols, 19201 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
++This project is indexed by GitNexus as **CONG_NO_KT** (7583 symbols, 20153 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+ 
+ > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+ 
+diff --git a/CLAUDE.md b/CLAUDE.md
+index c2af605..c3df981 100644
+--- a/CLAUDE.md
++++ b/CLAUDE.md
+@@ -1,7 +1,7 @@
+ <!-- gitnexus:start -->
+ # GitNexus — Code Intelligence
+ 
+-This project is indexed by GitNexus as **CONG_NO_KT** (7262 symbols, 19201 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
++This project is indexed by GitNexus as **CONG_NO_KT** (7583 symbols, 20153 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+ 
+ > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
+ 
+diff --git a/src/backend/Api/Endpoints/CustomerEndpoints.cs b/src/backend/Api/Endpoints/CustomerEndpoints.cs
+index 494d938..3af508d 100644
+--- a/src/backend/Api/Endpoints/CustomerEndpoints.cs
++++ b/src/backend/Api/Endpoints/CustomerEndpoints.cs
+@@ -448,6 +448,59 @@ public static class CustomerEndpoints
+         .WithTags("Customers")
+         .RequireAuthorization("CustomerManage");
+ 
++        app.MapDelete("/customers/{taxCode}", async (
++            string taxCode,
++            ConGNoDbContext db,
++            IAuditService auditService,
++            CancellationToken ct) =>
++        {
++            var key = taxCode.Trim();
++            if (string.IsNullOrWhiteSpace(key))
++            {
++                return ApiErrors.InvalidRequest("Tax code is required.");
++            }
++
++            var customer = await db.Customers.FirstOrDefaultAsync(c => c.TaxCode == key, ct);
++            if (customer is null)
++            {
++                return ApiErrors.NotFound("Customer not found.");
++            }
++
++            var invoicesCount = await db.Invoices.CountAsync(i => i.CustomerTaxCode == key, ct);
++            var advancesCount = await db.Advances.CountAsync(a => a.CustomerTaxCode == key, ct);
++            var receiptsCount = await db.Receipts.CountAsync(r => r.CustomerTaxCode == key, ct);
++
++            if (invoicesCount > 0 || advancesCount > 0 || receiptsCount > 0 || customer.CurrentBalance != 0)
++            {
++                return ApiErrors.InvalidRequest(
++                    $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {invoicesCount} hóa đơn, {advancesCount} khoản trả hộ, {receiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
++            }
++
++            var before = new
++            {
++                customer.Name,
++                customer.Status,
++                customer.CreatedAt,
++                customer.CurrentBalance
++            };
++
++            db.Customers.Remove(customer);
++            await db.SaveChangesAsync(ct);
++
++            await auditService.LogAsync(
++                "CUSTOMER_DELETE",
++                "Customer",
++                customer.TaxCode,
++                before,
++                null,
++                ct);
++
++            return Results.NoContent();
++        })
++        .WithName("CustomerDelete")
++        .WithTags("Customers")
++        .RequireAuthorization("Admin");
++
+         return app;
+     }
+ 
+diff --git a/src/backend/Infrastructure/Services/ImportRollbackService.cs b/src/backend/Infrastructure/Services/ImportRollbackService.cs
+index 4760069..621bf34 100644
+--- a/src/backend/Infrastructure/Services/ImportRollbackService.cs
++++ b/src/backend/Infrastructure/Services/ImportRollbackService.cs
+@@ -174,7 +174,7 @@ public sealed class ImportRollbackService : IImportRollbackService
+         foreach (var invoice in invoices)
+         {
+             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == invoice.CustomerTaxCode, ct);
+-            if (customer is not null)
++            if (customer is not null && invoice.Status != "VOID")
+             {
+                 customer.CurrentBalance -= invoice.TotalAmount;
+             }
+@@ -186,7 +186,7 @@ public sealed class ImportRollbackService : IImportRollbackService
+         foreach (var advance in advances)
+         {
+             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == advance.CustomerTaxCode, ct);
+-            if (customer is not null)
++            if (customer is not null && advance.Status != "VOID")
+             {
+                 customer.CurrentBalance -= advance.Amount;
+             }
+diff --git a/src/frontend/src/api/customers.ts b/src/frontend/src/api/customers.ts
+index 1567808..1901904 100644
+--- a/src/frontend/src/api/customers.ts
++++ b/src/frontend/src/api/customers.ts
+@@ -219,6 +219,7 @@ export const fetchCustomer360 = async (token: string, taxCode: string) => {
+   return apiFetch<Customer360>(`/customers/${taxCode}/360`, { token })
+ }
+ 
++
+ export const updateCustomer = async (
+   token: string,
+   taxCode: string,
+@@ -231,6 +232,13 @@ export const updateCustomer = async (
+   })
+ }
+ 
++export const deleteCustomer = async (token: string, taxCode: string) => {
++  return apiFetch<void>(`/customers/${taxCode}`, {
++    method: 'DELETE',
++    token,
++  })
++}
++
+ export const createCustomer = async (token: string, payload: CustomerCreateRequest) => {
+   return apiFetch<CustomerDetail>('/customers', {
+     method: 'POST',
+diff --git a/src/frontend/src/pages/customers/CustomerListSection.tsx b/src/frontend/src/pages/customers/CustomerListSection.tsx
+index 79de72b..6d77f57 100644
+--- a/src/frontend/src/pages/customers/CustomerListSection.tsx
++++ b/src/frontend/src/pages/customers/CustomerListSection.tsx
+@@ -1,6 +1,6 @@
+ import { useCallback, useEffect, useMemo, useState } from 'react'
+ import type { CustomerDetail, CustomerListItem } from '../../api/customers'
+-import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer } from '../../api/customers'
++import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer, deleteCustomer } from '../../api/customers'
+ import { ApiError } from '../../api/client'
+ import {
+   fetchOwnerLookup,
+@@ -18,6 +18,7 @@ import { getDebtToneClass } from './customerDebtTone'
+ type CustomerListSectionProps = {
+   token: string
+   canManageCustomers: boolean
++  isAdmin?: boolean
+   selectedTaxCode: string | null
+   selectedName: string
+   onSelectCustomer: (row: CustomerListItem) => void
+@@ -75,6 +76,7 @@ const storeFilter = (key: string, value: string) => {
+ export default function CustomerListSection({
+   token,
+   canManageCustomers,
++  isAdmin = false,
+   selectedTaxCode,
+   selectedName,
+   onSelectCustomer,
+@@ -103,6 +105,9 @@ export default function CustomerListSection({
+   const [statusActionError, setStatusActionError] = useState<string | null>(null)
+   const [statusConfirmRow, setStatusConfirmRow] = useState<CustomerListItem | null>(null)
+   const [statusConfirmNextStatus, setStatusConfirmNextStatus] = useState<'ACTIVE' | 'INACTIVE' | null>(null)
++  const [deleteActionLoading, setDeleteActionLoading] = useState<string | null>(null)
++  const [deleteActionError, setDeleteActionError] = useState<string | null>(null)
++  const [deleteConfirmRow, setDeleteConfirmRow] = useState<CustomerListItem | null>(null)
+ 
+   const [detail, setDetail] = useState<CustomerDetail | null>(null)
+   const [detailLoading, setDetailLoading] = useState(false)
+@@ -432,6 +437,29 @@ export default function CustomerListSection({
+     }
+   }, [token, statusConfirmRow, statusConfirmNextStatus, detail])
+ 
++  const handleDeleteCustomer = useCallback(async () => {
++    if (!token || !deleteConfirmRow) return
++
++    setDeleteActionLoading(deleteConfirmRow.taxCode)
++    setDeleteActionError(null)
++    try {
++      await deleteCustomer(token, deleteConfirmRow.taxCode)
++      setDeleteConfirmRow(null)
++      setListReload((value) => value + 1)
++      if (selectedTaxCode === deleteConfirmRow.taxCode) {
++        // Cập nhật ngầm
++      }
++    } catch (err) {
++      if (err instanceof ApiError) {
++        setDeleteActionError(err.message)
++      } else {
++        setDeleteActionError('Không xóa được khách hàng.')
++      }
++    } finally {
++      setDeleteActionLoading(null)
++    }
++  }, [token, deleteConfirmRow, selectedTaxCode])
++
+   const handleSaveCustomer = useCallback(async () => {
+     if (!token || !selectedTaxCode) return
+     if (!canManageCustomers) {
+@@ -593,6 +621,35 @@ export default function CustomerListSection({
+           </button>
+         ),
+       },
++      ...(isAdmin ? [{
++        key: 'delete',
++        label: 'Xóa',
++        width: '60px',
++        align: 'center' as const,
++        render: (row: CustomerListItem) => (
++          <button
++            className="btn btn-ghost btn-table"
++            type="button"
++            onClick={() => {
++              setDeleteActionError(null)
++              setDeleteConfirmRow(row)
++            }}
++            aria-label={`Xóa khách hàng ${row.name}`}
++            title="Xóa khách hàng"
++            disabled={deleteActionLoading === row.taxCode}
++            style={{ color: 'var(--color-danger, #d32f2f)' }}
++          >
++            {deleteActionLoading === row.taxCode ? '...' : (
++              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
++                <path
++                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12 1.41-1.41L12 12.59l2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14l-2.12-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"
++                  fill="currentColor"
++                />
++              </svg>
++            )}
++          </button>
++        ),
++      }] : []),
+       {
+         key: 'status',
+         label: 'Trạng thái',
+@@ -623,8 +680,8 @@ export default function CustomerListSection({
+           const title = !canManageCustomers
+             ? 'Bạn không có quyền thay đổi trạng thái'
+             : isHideAction && hasBalance
+-            ? 'Không thể ẩn khách hàng đang còn dư nợ'
+-            : undefined
++              ? 'Không thể ẩn khách hàng đang còn dư nợ'
++              : undefined
+           return (
+             <button
+               className={className}
+@@ -918,6 +975,27 @@ export default function CustomerListSection({
+           void handleConfirmCustomerStatus()
+         }}
+       />
++
++      <ActionConfirmModal
++        isOpen={Boolean(deleteConfirmRow)}
++        title="Xóa khách hàng"
++        description={
++          deleteConfirmRow
++            ? `Cảnh báo: Hành động này KHÔNG THỂ KHÔI PHỤC được. Hệ thống sẽ ngay lập tức xóa dữ liệu kế toán và hồ sơ của khách hàng "${deleteConfirmRow.name}". Hệ thống sẽ chặn nếu khách hàng này đã phát sinh hóa đơn, phiếu thu, hoặc công nợ.`
++            : undefined
++        }
++        confirmLabel="Tiến hành xóa vĩnh viễn"
++        loading={Boolean(deleteConfirmRow && deleteActionLoading === deleteConfirmRow.taxCode)}
++        error={deleteActionError}
++        tone="danger"
++        onClose={() => {
++          setDeleteConfirmRow(null)
++          setDeleteActionError(null)
++        }}
++        onConfirm={() => {
++          void handleDeleteCustomer()
++        }}
++      />
+     </>
+   )
+ }
+diff --git a/src/frontend/src/pages/customers/CustomersPage.tsx b/src/frontend/src/pages/customers/CustomersPage.tsx
+index 948ffab..62f9cc9 100644
+--- a/src/frontend/src/pages/customers/CustomersPage.tsx
++++ b/src/frontend/src/pages/customers/CustomersPage.tsx
+@@ -45,6 +45,7 @@ export default function CustomersPage() {
+   const canManageCustomers = state.permissions.some((permission) =>
+     CUSTOMER_MANAGE_PERMISSIONS.includes(permission as (typeof CUSTOMER_MANAGE_PERMISSIONS)[number]),
+   )
++  const isAdmin = state.roles?.includes('Admin') ?? false
+ 
+   const queryTaxCode = useMemo(() => parseTaxCode(searchParams.get('taxCode')), [searchParams])
+   const queryTab = useMemo(() => parseTab(searchParams.get('tab')), [searchParams])
+@@ -116,6 +117,7 @@ export default function CustomersPage() {
+       <CustomerListSection
+         token={token}
+         canManageCustomers={canManageCustomers}
++        isAdmin={isAdmin}
+         selectedTaxCode={selectedTaxCode}
+         selectedName={selectedName}
+         onSelectCustomer={handleSelectCustomer}
+diff --git a/task.md b/task.md
+index 317187f..12f6ca5 100644
+--- a/task.md
++++ b/task.md
+@@ -11,6 +11,13 @@
+ > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
+ > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
+ 
++## Phase 144 - Safe Customer deletion feature (2026-04-14) [bead: cng-d9h]
++- [/] Lập kế hoạch và đợi phê duyệt (Đang chờ - Pending user).
++- [ ] Backend: Thêm `DELETE /customers/{taxCode}` endpoint với RBAC `CustomerManage`.
++- [ ] Backend: Bổ sung guard chặn xóa khách hàng đã phát sinh công nợ (`CurrentBalance != 0` hoặc có liên kết).
++- [ ] Frontend: Thêm nút Delete và ConfirmDialog trên UI quản lý KH.
++- [ ] Tests/Verify: Thử nghiệm thực tế các kịch bản chặn xóa an toàn.
++
+ ## Phase 142 - Real Google Drive offsite provider (2026-04-12) [bead: cng-6mo]
+ - [x] Hoàn thiện provider Google Drive thật cho offsite upload bằng OAuth refresh token + Drive REST API, không còn dừng ở `NullBackupOffsiteService`.
+ - [x] Nối provider vào `DependencyInjection` với fallback an toàn: chỉ dùng provider thật khi config đầy đủ, còn lại giữ null provider để không phá local backup hiện tại.

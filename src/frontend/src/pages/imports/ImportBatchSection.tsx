@@ -131,6 +131,7 @@ export default function ImportBatchSection({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [previewOpen, setPreviewOpen] = useState(false)
   const [isDropzoneActive, setIsDropzoneActive] = useState(false)
+  const [autoApprove, setAutoApprove] = useState(true)
 
   const currentQualitySummary = useMemo<ImportBatchQualitySnapshot | null>(() => {
     if (preview) {
@@ -402,6 +403,7 @@ export default function ImportBatchSection({
     setOverrideLock(false)
     setOverrideReason('')
     setFieldErrors({})
+    setAutoApprove(true)
   }
 
   const handleCommit = async () => {
@@ -432,6 +434,7 @@ export default function ImportBatchSection({
         idempotencyKey: idempotencyKey || undefined,
         overridePeriodLock: overrideLock,
         overrideReason: overrideReason || undefined,
+        autoApprove,
       })
       setCommitResult(result)
       setHistoryReload((value) => value + 1)
@@ -499,24 +502,21 @@ export default function ImportBatchSection({
 
   return (
     <div className="page-stack">
-      <div className="page-header">
-        <div>
-          <h2>Nhập file, kiểm tra trước khi ghi dữ liệu</h2>
-          <p className="muted">Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.</p>
-        </div>
-        <div className="header-actions">
-          <a className="btn btn-ghost" href="#templates">
-            Tải template
-          </a>
-          <a className="btn btn-outline" href="#history">
-            Lịch sử nhập
-          </a>
-        </div>
-      </div>
-
       <section className="card" id="templates">
-        <p className="eyebrow">Bước 1</p>
-        <h3>Chuẩn bị template</h3>
+        <div className="page-header">
+          <div>
+            <p className="eyebrow">Bước 1</p>
+            <h3>Chuẩn bị template</h3>
+          </div>
+          <div className="header-actions">
+            <a className="btn btn-ghost" href="#templates">
+              Tải template
+            </a>
+            <a className="btn btn-outline" href="#history">
+              Lịch sử nhập
+            </a>
+          </div>
+        </div>
         <p className="muted">
           Giữ nguyên header ở sheet Data. Dòng 1 là header cố định, dòng 2 là dòng mẫu tham chiếu.
           Ngày hỗ trợ yyyy-MM-dd, dd/MM/yyyy, dd-MM-yyyy. Với khoản trả hộ KH và phiếu thu,
@@ -733,6 +733,18 @@ export default function ImportBatchSection({
                 )}
               </label>
             </div>
+            {type === 'RECEIPT' && (
+              <div className="form-grid" style={{ marginTop: 16 }}>
+                <label className="field field-inline">
+                  <input
+                    type="checkbox"
+                    checked={autoApprove}
+                    onChange={(event) => setAutoApprove(event.target.checked)}
+                  />
+                  <span>Tự động duyệt và phân bổ (FIFO) cho phiếu thu</span>
+                </label>
+              </div>
+            )}
           </div>
         </details>
         <div className="inline-actions">

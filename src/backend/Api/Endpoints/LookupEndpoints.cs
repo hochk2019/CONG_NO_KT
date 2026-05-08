@@ -1,5 +1,6 @@
 using CongNoGolden.Api;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 
@@ -11,6 +12,58 @@ public static class LookupEndpoints
 
     public static IEndpointRouteBuilder MapLookupEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapPost("/sellers", async (
+            SellerCreateRequest request,
+            ConGNoDbContext db,
+            CancellationToken ct) =>
+        {
+            var taxCode = NormalizeSellerTaxCode(request.TaxCode);
+            if (string.IsNullOrWhiteSpace(taxCode))
+            {
+                return ApiErrors.InvalidRequest("Tax code is required.");
+            }
+
+            var name = (request.Name ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return ApiErrors.InvalidRequest("Seller name is required.");
+            }
+
+            var status = NormalizeSellerStatus(request.Status);
+            if (status is null)
+            {
+                return ApiErrors.InvalidRequest("Invalid seller status.");
+            }
+
+            var sellerExists = await db.Sellers.AnyAsync(s => s.SellerTaxCode == taxCode, ct);
+            if (sellerExists)
+            {
+                return ApiErrors.InvalidRequest("Seller tax code already exists.");
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var seller = new Seller
+            {
+                SellerTaxCode = taxCode,
+                Name = name,
+                ShortName = CleanSellerOptional(request.ShortName),
+                Address = CleanSellerOptional(request.Address),
+                Status = status,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            db.Sellers.Add(seller);
+            await db.SaveChangesAsync(ct);
+
+            return Results.Created(
+                $"/sellers/{seller.SellerTaxCode}",
+                new SellerLookupItem(seller.SellerTaxCode, seller.Name, seller.ShortName));
+        })
+        .WithName("SellerCreate")
+        .WithTags("Lookups")
+        .RequireAuthorization("CustomerManage");
+
         app.MapGet("/lookups/sellers", async (
             string? search,
             int? limit,
@@ -185,9 +238,32 @@ public static class LookupEndpoints
 
         return value;
     }
+
+    private static string NormalizeSellerTaxCode(string? value) =>
+        (value ?? string.Empty).Trim().ToUpperInvariant();
+
+    private static string? NormalizeSellerStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "ACTIVE";
+        }
+
+        var normalized = value.Trim().ToUpperInvariant();
+        return normalized is "ACTIVE" or "INACTIVE" ? normalized : null;
+    }
+
+    private static string? CleanSellerOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }
 
 public sealed record SellerLookupItem(string TaxCode, string Name, string? ShortName);
 public sealed record CustomerLookupItem(string TaxCode, string Name);
 public sealed record OwnerLookupItem(Guid Id, string Name, string Username);
 public sealed record UserLookupItem(Guid Id, string Name, string Username);
+public sealed record SellerCreateRequest(
+    string TaxCode,
+    string Name,
+    string? ShortName,
+    string? Address,
+    string? Status);

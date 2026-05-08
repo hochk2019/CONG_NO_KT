@@ -17,6 +17,7 @@ public sealed record ReceiptDto(
     DateTimeOffset? AllocationSuggestedAt,
     IReadOnlyList<ReceiptTargetRef>? SelectedTargets,
     string Method,
+    string? Description,
     string SellerTaxCode,
     string CustomerTaxCode
 );

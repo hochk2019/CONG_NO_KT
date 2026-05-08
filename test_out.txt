@@ -1,0 +1,30 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  Domain -> E:\GPT\CONG_NO_KT\src\backend\Domain\bin\Debug\net8.0\Domain.dll
+  CongNoGolden.Application -> E:\GPT\CONG_NO_KT\src\backend\Application\bin\Debug\net8.0\CongNoGolden.Application.dll
+  CongNoGolden.Infrastructure -> E:\GPT\CONG_NO_KT\src\backend\Infrastructure\bin\Debug\net8.0\CongNoGolden.Infrastructure.dll
+  CongNoGolden.Api -> E:\GPT\CONG_NO_KT\src\backend\Api\bin\Debug\net8.0\CongNoGolden.Api.dll
+  CongNoGolden.Tests.Integration -> E:\GPT\CONG_NO_KT\src\backend\Tests.Integration\bin\Debug\net8.0\CongNoGolden.Tests.Integration.dll
+Test run for E:\GPT\CONG_NO_KT\src\backend\Tests.Integration\bin\Debug\net8.0\CongNoGolden.Tests.Integration.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.11.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+  Failed CongNoGolden.Tests.Integration.CustomerDeleteEndpointTests.CustomerDelete_RequiresAdminRole_ReturnsForbidden [393 ms]
+  Error Message:
+   System.InvalidOperationException : Unable to find the required 'IAuthenticationService' service. Please add all the required services by calling 'IServiceCollection.AddAuthentication' in the application startup code.
+  Stack Trace:
+     at Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.GetAuthenticationService(HttpContext context)
+   at Microsoft.AspNetCore.Authentication.AuthenticationHttpContextExtensions.ChallengeAsync(HttpContext context)
+   at Microsoft.AspNetCore.Authorization.Policy.AuthorizationMiddlewareResultHandler.<>c__DisplayClass0_0.<<HandleAsync>g__Handle|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.Authorization.AuthorizationMiddleware.Invoke(HttpContext context)
+   at Microsoft.AspNetCore.TestHost.HttpContextBuilder.<>c__DisplayClass23_0.<<SendAsync>g__RunRequestAsync|0>d.MoveNext()
+--- End of stack trace from previous location ---
+   at Microsoft.AspNetCore.TestHost.ClientHandler.SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+   at System.Net.Http.HttpClient.<SendAsync>g__Core|83_0(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationTokenSource cts, Boolean disposeCts, CancellationTokenSource pendingRequestsCts, CancellationToken originalCancellationToken)
+   at CongNoGolden.Tests.Integration.CustomerDeleteEndpointTests.InvokeDeleteAsync(String taxCode, IReadOnlyList`1 roles) in E:\GPT\CONG_NO_KT\src\backend\Tests.Integration\CustomerDeleteEndpointTests.cs:line 150
+   at CongNoGolden.Tests.Integration.CustomerDeleteEndpointTests.CustomerDelete_RequiresAdminRole_ReturnsForbidden() in E:\GPT\CONG_NO_KT\src\backend\Tests.Integration\CustomerDeleteEndpointTests.cs:line 33
+--- End of stack trace from previous location ---
+
+Failed!  - Failed:     1, Passed:     0, Skipped:     0, Total:     1, Duration: < 1 ms - CongNoGolden.Tests.Integration.dll (net8.0)

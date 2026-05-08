@@ -2,6 +2,7 @@ using CongNoGolden.Application.Common;
 using CongNoGolden.Application.Common.StatusCodes;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace CongNoGolden.Infrastructure.Services;
@@ -53,6 +54,71 @@ public sealed class CustomerService : ICustomerService
         return (term, mode.Length == 0 ? null : mode);
     }
 
+    private static string? NormalizeCustomerListSort(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        return raw.Trim().ToLowerInvariant() switch
+        {
+            "balance_asc" => "balance_asc",
+            "balance_desc" => "balance_desc",
+            "debt_oldest" => "debt_oldest",
+            "debt_newest" => "debt_newest",
+            _ => null
+        };
+    }
+
+    private IQueryable<Customer> ApplyCustomerListSort(IQueryable<Customer> query, string? sort)
+    {
+        return NormalizeCustomerListSort(sort) switch
+        {
+            "balance_asc" => query
+                .OrderBy(c => c.CurrentBalance)
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "balance_desc" => query
+                .OrderByDescending(c => c.CurrentBalance)
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "debt_oldest" => query
+                .OrderBy(c => !_db.Invoices.Any(i =>
+                    i.DeletedAt == null &&
+                    i.CustomerTaxCode == c.TaxCode &&
+                    i.OutstandingAmount > 0m &&
+                    i.Status != "VOID"))
+                .ThenBy(c => _db.Invoices
+                    .Where(i =>
+                        i.DeletedAt == null &&
+                        i.CustomerTaxCode == c.TaxCode &&
+                        i.OutstandingAmount > 0m &&
+                        i.Status != "VOID")
+                    .Min(i => (DateOnly?)i.IssueDate))
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            "debt_newest" => query
+                .OrderBy(c => !_db.Invoices.Any(i =>
+                    i.DeletedAt == null &&
+                    i.CustomerTaxCode == c.TaxCode &&
+                    i.OutstandingAmount > 0m &&
+                    i.Status != "VOID"))
+                .ThenByDescending(c => _db.Invoices
+                    .Where(i =>
+                        i.DeletedAt == null &&
+                        i.CustomerTaxCode == c.TaxCode &&
+                        i.OutstandingAmount > 0m &&
+                        i.Status != "VOID")
+                    .Max(i => (DateOnly?)i.IssueDate))
+                .ThenBy(c => c.Name)
+                .ThenBy(c => c.TaxCode),
+            _ => query
+                .OrderBy(c => c.Name)
+                .ThenBy(c => c.TaxCode)
+        };
+    }
+
     public async Task<PagedResult<CustomerListItem>> ListAsync(CustomerListRequest request, CancellationToken ct)
     {
         var page = request.Page <= 0 ? 1 : request.Page;
@@ -70,6 +136,10 @@ public sealed class CustomerService : ICustomerService
         {
             query = query.Where(c => c.AccountantOwnerId == request.OwnerId);
         }
+        else if (request.UnassignedOnly)
+        {
+            query = query.Where(c => c.AccountantOwnerId == null);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
@@ -84,10 +154,9 @@ public sealed class CustomerService : ICustomerService
         }
 
         var total = await query.CountAsync(ct);
+        query = ApplyCustomerListSort(query, request.Sort);
 
         var rows = await query
-            .OrderBy(c => c.Name)
-            .ThenBy(c => c.TaxCode)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(c => new
@@ -230,16 +299,26 @@ public sealed class CustomerService : ICustomerService
             })
             .ToListAsync(ct);
 
+        var openAdvances = await _db.Advances
+            .AsNoTracking()
+            .Where(a =>
+                a.DeletedAt == null &&
+                a.CustomerTaxCode == key &&
+                a.OutstandingAmount > 0m &&
+                (a.Status == "APPROVED" || a.Status == "PAID"))
+            .Select(a => a.OutstandingAmount)
+            .ToListAsync(ct);
+
         var today = DateOnly.FromDateTime(_utcNow());
         var paymentTermsDays = Math.Max(customer.PaymentTermsDays, 0);
 
         var overdueAmount = 0m;
-        var totalOutstanding = 0m;
+        var invoiceOutstanding = 0m;
         var maxDaysPastDue = 0;
         var nextDueDate = (DateOnly?)null;
         foreach (var invoice in openInvoices)
         {
-            totalOutstanding += invoice.OutstandingAmount;
+            invoiceOutstanding += invoice.OutstandingAmount;
 
             var dueDate = invoice.IssueDate.AddDays(paymentTermsDays);
             if (dueDate >= today)
@@ -260,7 +339,53 @@ public sealed class CustomerService : ICustomerService
             }
         }
 
-        var overdueRatio = totalOutstanding <= 0m ? 0m : overdueAmount / totalOutstanding;
+        var advanceOutstanding = openAdvances.Sum();
+        var eligibleUnallocatedReceiptStatuses = new[]
+        {
+            ReceiptAllocationStatusCodes.Unallocated,
+            ReceiptAllocationStatusCodes.Selected,
+            ReceiptAllocationStatusCodes.Suggested,
+            ReceiptAllocationStatusCodes.Partial,
+        };
+        var eligibleHeldCreditStatuses = new[]
+        {
+            ReceiptHeldCreditStatusCodes.Holding,
+            ReceiptHeldCreditStatusCodes.Partial,
+        };
+
+        var receiptUnallocatedAmounts = await _db.Receipts
+            .AsNoTracking()
+            .Where(r =>
+                r.DeletedAt == null &&
+                r.CustomerTaxCode == key &&
+                r.Status == ReceiptStatusCodes.Approved &&
+                r.UnallocatedAmount > 0m &&
+                eligibleUnallocatedReceiptStatuses.Contains(r.AllocationStatus))
+            .Select(r => r.UnallocatedAmount)
+            .ToListAsync(ct);
+
+        var heldCreditAmounts = await _db.ReceiptHeldCredits
+            .AsNoTracking()
+            .Join(
+                _db.Receipts.AsNoTracking().Where(r =>
+                    r.DeletedAt == null &&
+                    r.CustomerTaxCode == key &&
+                    r.Status == ReceiptStatusCodes.Approved),
+                held => held.ReceiptId,
+                receipt => receipt.Id,
+                (held, _) => held)
+            .Where(held =>
+                held.AmountRemaining > 0m &&
+                eligibleHeldCreditStatuses.Contains(held.Status))
+            .Select(held => held.AmountRemaining)
+            .ToListAsync(ct);
+
+        var openOutstanding = invoiceOutstanding + advanceOutstanding;
+        var unallocatedCredit = receiptUnallocatedAmounts.Sum() + heldCreditAmounts.Sum();
+        var netPosition = customer.CurrentBalance;
+        var totalOutstanding = netPosition;
+        var netAdjustment = netPosition - openOutstanding;
+        var overdueRatio = invoiceOutstanding <= 0m ? 0m : overdueAmount / invoiceOutstanding;
 
         var latestSnapshot = await _db.RiskScoreSnapshots
             .AsNoTracking()
@@ -312,6 +437,12 @@ public sealed class CustomerService : ICustomerService
             managerName,
             new Customer360SummaryDto(
                 totalOutstanding,
+                invoiceOutstanding,
+                advanceOutstanding,
+                openOutstanding,
+                unallocatedCredit,
+                netPosition,
+                netAdjustment,
                 overdueAmount,
                 overdueRatio,
                 maxDaysPastDue,

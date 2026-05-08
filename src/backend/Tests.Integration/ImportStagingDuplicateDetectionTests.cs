@@ -126,6 +126,125 @@ public class ImportStagingDuplicateDetectionTests
         Assert.Contains("DUP_IN_DB", messages);
     }
 
+    [Fact]
+    public async Task StageInvoice_SystemTemplateFile_Preserves_IssueDate()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "2300328765");
+        await SeedCustomerAsync(db, "0101000002", "Cong ty TNHH Mau");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "INVOICE",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "invoice_template.xlsx");
+        await using var stream = File.OpenRead(templatePath);
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "INVOICE", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.DoesNotContain("ISSUE_DATE_REQUIRED", messages);
+        Assert.Equal("2026-01-15", ReadRawString(row.RawData, "issue_date"));
+        Assert.Equal("Cong ty TNHH Mau", ReadRawString(row.RawData, "customer_name"));
+    }
+
+    [Fact]
+    public async Task StageAdvance_SystemTemplateFile_Preserves_All_SnakeCase_Columns()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "2300328765");
+        await SeedCustomerAsync(db, "0101000002", "Cong ty TNHH Mau");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "ADVANCE",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "advance_template.xlsx");
+        await using var stream = File.OpenRead(templatePath);
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "ADVANCE", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.DoesNotContain("ADVANCE_DATE_REQUIRED", messages);
+        Assert.Equal("2300328765", ReadRawString(row.RawData, "seller_tax_code"));
+        Assert.Equal("0101000002", ReadRawString(row.RawData, "customer_tax_code"));
+        Assert.Equal("TH-2026-0001", ReadRawString(row.RawData, "advance_no"));
+        Assert.Equal("2026-01-10", ReadRawString(row.RawData, "advance_date"));
+        Assert.Equal(1500000m, ReadRawDecimal(row.RawData, "amount"));
+        Assert.Equal("Tra ho cuoc van chuyen", ReadRawString(row.RawData, "description"));
+    }
+
+    [Fact]
+    public async Task StageReceipt_SystemTemplateFile_Preserves_All_SnakeCase_Columns()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "2300328765");
+        await SeedCustomerAsync(db, "0101000002", "Cong ty TNHH Mau");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "RECEIPT",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        var templatePath = FindRepoFile("src", "frontend", "public", "templates", "receipt_template.xlsx");
+        await using var stream = File.OpenRead(templatePath);
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "RECEIPT", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+        var messages = ReadMessages(row.ValidationMessages);
+
+        Assert.DoesNotContain("RECEIPT_DATE_REQUIRED", messages);
+        Assert.DoesNotContain("APPLIED_PERIOD_REQUIRED", messages);
+        Assert.Equal("2300328765", ReadRawString(row.RawData, "seller_tax_code"));
+        Assert.Equal("0101000002", ReadRawString(row.RawData, "customer_tax_code"));
+        Assert.Equal("PT-2026-0001", ReadRawString(row.RawData, "receipt_no"));
+        Assert.Equal("2026-01-12", ReadRawString(row.RawData, "receipt_date"));
+        Assert.Equal("2026-01-01", ReadRawString(row.RawData, "applied_period_start"));
+        Assert.Equal(2500000m, ReadRawDecimal(row.RawData, "amount"));
+        Assert.Equal("BANK", ReadRawString(row.RawData, "method"));
+        Assert.Equal("Thu cong no thang 01/2026", ReadRawString(row.RawData, "description"));
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -362,5 +481,35 @@ public class ImportStagingDuplicateDetectionTests
     private static IReadOnlyList<string> ReadMessages(string? raw)
     {
         return JsonSerializer.Deserialize<string[]>(raw ?? "[]") ?? Array.Empty<string>();
+    }
+
+    private static string? ReadRawString(string? raw, string property)
+    {
+        using var doc = JsonDocument.Parse(raw ?? "{}");
+        return doc.RootElement.TryGetProperty(property, out var value) ? value.GetString() : null;
+    }
+
+    private static decimal ReadRawDecimal(string? raw, string property)
+    {
+        using var doc = JsonDocument.Parse(raw ?? "{}");
+        return doc.RootElement.TryGetProperty(property, out var value) ? value.GetDecimal() : 0m;
+    }
+
+    private static string FindRepoFile(params string[] relativeSegments)
+    {
+        var current = new DirectoryInfo(AppContext.BaseDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Combine(new[] { current.FullName }.Concat(relativeSegments).ToArray());
+            if (File.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            current = current.Parent;
+        }
+
+        throw new FileNotFoundException(
+            $"Không tìm thấy file kiểm thử cần thiết: {Path.Combine(relativeSegments)}");
     }
 }

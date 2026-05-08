@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -36,7 +37,7 @@ public class ImportCommitPeriodLockTests
         });
         await db.SaveChangesAsync();
 
-        var user = new TestCurrentUser(new[] { "Admin" });
+        var user = new TestCurrentUser(["Admin"], [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -63,7 +64,7 @@ public class ImportCommitPeriodLockTests
         });
         await db.SaveChangesAsync();
 
-        var user = new TestCurrentUser(new[] { "Admin" });
+        var user = new TestCurrentUser(["Admin"], [AppPermissions.ImportCommitInvoice]);
         var audit = new AuditService(db, user);
         var service = new ImportCommitService(db, user, audit);
 
@@ -148,14 +149,16 @@ public class ImportCommitPeriodLockTests
 
     private sealed class TestCurrentUser : ICurrentUser
     {
-        public TestCurrentUser(IReadOnlyList<string> roles)
+        public TestCurrentUser(IReadOnlyList<string> roles, IReadOnlyList<string> permissions)
         {
             Roles = roles;
+            Permissions = permissions;
         }
 
         public Guid? UserId => Guid.Parse("11111111-1111-1111-1111-111111111111");
         public string? Username => "test";
         public IReadOnlyList<string> Roles { get; }
+        public IReadOnlyList<string> Permissions { get; }
         public string? IpAddress => "127.0.0.1";
     }
 }

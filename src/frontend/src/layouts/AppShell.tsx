@@ -53,19 +53,25 @@ const adminPermissions = ['admin.manage']
 const navItems: NavItem[] = [
   { label: 'Tổng quan', to: '/dashboard', roles: ['Admin', 'Supervisor', 'Accountant', 'Viewer'] },
   {
-    label: 'Nhập liệu HĐ',
+    label: 'Import từ Template',
     to: '/imports',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: importPermissions,
   },
   {
-    label: 'Nhập liệu Trả hộ',
+    label: 'Nhập hóa đơn',
+    to: '/invoices',
+    roles: ['Admin', 'Supervisor', 'Accountant'],
+    permissions: importPermissions,
+  },
+  {
+    label: 'Nhập trả hộ',
     to: '/advances',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: advancePermissions,
   },
   {
-    label: 'Thu tiền',
+    label: 'Nhập phiếu thu',
     to: '/receipts',
     roles: ['Admin', 'Supervisor', 'Accountant'],
     permissions: receiptPermissions,
@@ -128,8 +134,14 @@ const rolePriority = ['Admin', 'Supervisor', 'Accountant', 'Viewer']
 const roleGuidance: Record<string, string> = {
   Admin: 'Theo dõi vận hành, phân quyền và rủi ro hệ thống.',
   Supervisor: 'Ưu tiên xử lý cảnh báo, khóa kỳ và giám sát chất lượng dữ liệu.',
-  Accountant: 'Tập trung nhập liệu chính xác, thu tiền đúng hạn và đối chiếu báo cáo.',
+  Accountant: 'Tập trung import từ template, nhập liệu đúng chứng từ và đối chiếu công nợ theo ngày.',
   Viewer: 'Theo dõi KPI công nợ, cảnh báo quá hạn và biến động theo kỳ.',
+}
+
+const pageGuidanceOverrides: Record<string, string> = {
+  '/imports': 'Quy trình: chuẩn bị template → tải file → xem trước → ghi dữ liệu.',
+  '/invoices': 'Theo dõi danh sách HĐ, nhập thủ công HĐ hoặc chuyển sang Import từ Template.',
+  '/advances': 'Nhập khoản trả hộ cho khách hàng vào hệ thống theo dõi công nợ',
 }
 
 const hasAnyRole = (requiredRoles: string[], roles: string[]) => {
@@ -170,7 +182,7 @@ const themeOptions: Array<{ value: ThemePreference; label: string }> = [
 const onboardingSteps = [
   {
     title: 'Điều hướng nhanh theo nghiệp vụ',
-    description: 'Menu trái tách theo nhóm: nhập liệu, thu tiền, báo cáo và quản trị.',
+    description: 'Menu trái đi theo flow nhập liệu: Import từ Template, Nhập hóa đơn, Nhập trả hộ và Nhập phiếu thu.',
   },
   {
     title: 'Tìm kiếm toàn cục',
@@ -232,6 +244,10 @@ export default function AppShell() {
     () => [...new Set([...allowed.map((item) => item.to), '/notifications'])],
     [allowed],
   )
+  const reportsIndex = defaultNavItems.findIndex(item => item.to === '/reports')
+  const navItemsBefore = reportsIndex >= 0 ? defaultNavItems.slice(0, reportsIndex + 1) : defaultNavItems
+  const navItemsAfter = reportsIndex >= 0 ? defaultNavItems.slice(reportsIndex + 1) : []
+
   const currentPageTitle = resolveCurrentPageTitle(location.pathname)
   const primaryRole = useMemo(
     () => rolePriority.find((role) => state.roles.includes(role)),
@@ -251,6 +267,7 @@ export default function AppShell() {
     return null
   }, [state.permissions])
   const currentRoleGuidance =
+    pageGuidanceOverrides[location.pathname] ??
     (primaryRole && roleGuidance[primaryRole]) ??
     permissionRoleGuidance ??
     'Theo dõi tiến độ công việc theo quy trình và ưu tiên các mục quá hạn.'
@@ -371,14 +388,14 @@ export default function AppShell() {
     const deepTargetsRaw =
       deepMax > 0
         ? selectPrefetchTargets({
-            roles: state.roles,
-            permissions: state.permissions,
-            allowedPaths,
-            currentPath,
-            history,
-            max: deepMax + targets.length,
-            tier: 'deep',
-          })
+          roles: state.roles,
+          permissions: state.permissions,
+          allowedPaths,
+          currentPath,
+          history,
+          max: deepMax + targets.length,
+          tier: 'deep',
+        })
         : []
     const deepTargets = deepTargetsRaw.filter((target) => !targets.includes(target)).slice(0, deepMax)
 
@@ -522,9 +539,8 @@ export default function AppShell() {
 
   return (
     <div
-      className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${
-        isNavCollapsed ? ' app-shell--nav-collapsed' : ''
-      }`}
+      className={`app-shell${isNavOpen ? ' app-shell--nav-open' : ''}${isNavCollapsed ? ' app-shell--nav-collapsed' : ''
+        }`}
     >
       <button
         className="mobile-nav-backdrop"
@@ -555,13 +571,14 @@ export default function AppShell() {
           </div>
         </div>
         <nav className="nav-list">
-          {defaultNavItems.map(renderNavItem)}
+          {navItemsBefore.map(renderNavItem)}
           {riskCollectionItems.length > 0 && (
             <div className="nav-group" aria-label="Risk and Collections">
               <p className="nav-group__title">Risk &amp; Collections</p>
               <div className="nav-group__items">{riskCollectionItems.map(renderNavItem)}</div>
             </div>
           )}
+          {navItemsAfter.map(renderNavItem)}
         </nav>
         <div className="nav-footer">
           <div className="user-chip">

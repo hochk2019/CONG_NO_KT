@@ -15,6 +15,23 @@
   WHEN: Update after completing each phase or encountering errors. More detailed than task_plan.md.
 -->
 
+## Session: 2026-04-07
+
+### Phase 120: Merge fix/table-scroll-hint-20260307 into main
+- **Status:** complete
+- **Started:** 2026-04-07
+- Actions taken:
+  - Tạo bead `cng-akc` để theo dõi việc đồng bộ nhánh chạy Docker (`fix/table-scroll-hint-20260307`) trở lại `main`.
+  - So sánh divergence giữa `main` và `fix/table-scroll-hint-20260307`; xác nhận `main` chỉ có commit dữ liệu cục bộ `9347540` còn nhánh fix chứa toàn bộ commit vận hành Docker.
+  - Checkout `main` và merge `fix/table-scroll-hint-20260307` bằng merge commit `8e71b66` để giữ lại cả lịch sử dữ liệu cục bộ trên `main`.
+  - Rà lại regression sau merge; phát hiện duy nhất một test frontend lệch copy UI (`previewButtonLabel`) và cập nhật assertion cho khớp behavior hiện hành.
+  - Chạy lại targeted verification cho backend/frontend và cập nhật `task.md`, `progress.md`, `findings.md`.
+- Files created/modified:
+  - `src/frontend/src/pages/imports/__tests__/importBatchRecovery.test.ts` (modified)
+  - `task.md` (updated)
+  - `progress.md` (updated)
+  - `findings.md` (updated)
+
 ## Session: 2026-04-06
 
 ### Phase 96: Customer owner/manager import from Excel

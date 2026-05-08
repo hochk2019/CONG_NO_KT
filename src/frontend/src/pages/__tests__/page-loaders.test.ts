@@ -38,7 +38,7 @@ describe('page loaders', () => {
   it('selects affinity routes first when allowed', () => {
     const targets = selectPrefetchTargets({
       roles: ['Accountant'],
-      allowedPaths: ['/dashboard', '/imports', '/customers', '/receipts', '/reports', '/risk'],
+      allowedPaths: ['/dashboard', '/invoices', '/customers', '/receipts', '/reports', '/risk'],
       currentPath: '/customers',
       max: 2,
     })
@@ -61,7 +61,7 @@ describe('page loaders', () => {
     const targets = selectPrefetchTargets({
       roles: [],
       permissions: ['import.upload', 'customer.edit.owned', 'receipt.approve'],
-      allowedPaths: ['/dashboard', '/imports', '/customers', '/receipts', '/reports'],
+      allowedPaths: ['/dashboard', '/invoices', '/customers', '/receipts', '/reports'],
       currentPath: '/customers',
       max: 2,
     } as Parameters<typeof selectPrefetchTargets>[0] & { permissions: string[] })
@@ -73,19 +73,19 @@ describe('page loaders', () => {
     const targets = selectPrefetchTargets({
       roles: [],
       permissions: ['import.upload', 'customer.edit.owned', 'receipt.approve'],
-      allowedPaths: ['/reports', '/dashboard', '/imports', '/customers', '/receipts'],
+      allowedPaths: ['/reports', '/dashboard', '/invoices', '/customers', '/receipts'],
       currentPath: '/unknown',
       max: 2,
     } as Parameters<typeof selectPrefetchTargets>[0] & { permissions: string[] })
 
-    expect(targets).toEqual(['/dashboard', '/imports'])
+    expect(targets).toEqual(['/dashboard', '/invoices'])
   })
 
   it('uses history to prioritize recent routes', () => {
-    const allowedPaths = ['/dashboard', '/imports', '/customers', '/receipts', '/reports', '/risk']
+    const allowedPaths = ['/dashboard', '/invoices', '/customers', '/receipts', '/reports', '/risk']
     recordRouteVisit('/dashboard', allowedPaths)
-    recordRouteVisit('/imports', allowedPaths)
-    recordRouteVisit('/imports', allowedPaths)
+    recordRouteVisit('/invoices', allowedPaths)
+    recordRouteVisit('/invoices', allowedPaths)
 
     const history = readRouteHistory()
     const targets = selectPrefetchTargets({
@@ -96,7 +96,7 @@ describe('page loaders', () => {
       max: 2,
     })
 
-    expect(targets[0]).toBe('/imports')
+    expect(targets[0]).toBe('/invoices')
   })
 
   it('prioritizes admin routes when in admin area', () => {
@@ -113,13 +113,13 @@ describe('page loaders', () => {
   it('includes deeper affinity targets on deep tier', () => {
     const targets = selectPrefetchTargets({
       roles: ['Accountant'],
-      allowedPaths: ['/dashboard', '/imports', '/customers', '/receipts', '/reports'],
+      allowedPaths: ['/dashboard', '/invoices', '/customers', '/receipts', '/reports'],
       currentPath: '/dashboard',
       max: 3,
       tier: 'deep',
     })
 
-    expect(targets).toEqual(['/imports', '/receipts', '/customers'])
+    expect(targets).toEqual(['/invoices', '/receipts', '/customers'])
   })
 
   it('computes prefetch budget per role', () => {

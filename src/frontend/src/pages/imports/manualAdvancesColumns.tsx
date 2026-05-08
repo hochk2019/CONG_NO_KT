@@ -1,4 +1,3 @@
-import type { Dispatch, SetStateAction } from 'react'
 import type { AdvanceListItem } from '../../api/advances'
 import { formatDate, formatMoney } from '../../utils/format'
 
@@ -22,29 +21,36 @@ export const formatAdvanceStatus = (status: string) => {
 
 export const shortAdvanceId = (id: string) => (id.length > 8 ? id.slice(0, 8) : id)
 
+export type ManualAdvanceRevealTarget = 'advance' | 'customer'
+
+export type ManualAdvanceRevealedCell = {
+  rowId: string
+  target: ManualAdvanceRevealTarget
+} | null
+
 type ManualAdvanceColumnsOptions = {
-  editingId: string | null
-  editingDescription: string
-  setEditingDescription: Dispatch<SetStateAction<string>>
-  onStartEdit: (row: AdvanceListItem) => void
-  onSaveEdit: (row: AdvanceListItem) => void
-  onCancelEdit: () => void
+  onOpenCorrection: (row: AdvanceListItem) => void
+  onOpenHistory: (row: AdvanceListItem) => void
   onApprove: (row: AdvanceListItem) => void
   onVoid: (row: AdvanceListItem) => void
   onUnvoid: (row: AdvanceListItem) => void
+  revealedCell: ManualAdvanceRevealedCell
+  onToggleReveal: (rowId: string, target: ManualAdvanceRevealTarget) => void
+  onOpenAdvance: (customerTaxCode: string, advanceNo: string) => void
+  onOpenCustomer: (customerTaxCode: string) => void
   loadingAction: string
 }
 
 export const buildManualAdvanceColumns = ({
-  editingId,
-  editingDescription,
-  setEditingDescription,
-  onStartEdit,
-  onSaveEdit,
-  onCancelEdit,
+  onOpenCorrection,
+  onOpenHistory,
   onApprove,
   onVoid,
   onUnvoid,
+  revealedCell,
+  onToggleReveal,
+  onOpenAdvance,
+  onOpenCustomer,
   loadingAction,
 }: ManualAdvanceColumnsOptions) => [
   {
@@ -59,8 +65,42 @@ export const buildManualAdvanceColumns = ({
   {
     key: 'advanceNo',
     label: 'Số chứng từ',
-    render: (row: AdvanceListItem) =>
-      row.advanceNo?.trim() ? row.advanceNo : <span className="muted">-</span>,
+    render: (row: AdvanceListItem) => {
+      const advanceNo = row.advanceNo?.trim() ?? ''
+      const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+      const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'advance'
+
+      if (!advanceNo) {
+        return <span className="muted">-</span>
+      }
+
+      if (!customerTaxCode) {
+        return advanceNo
+      }
+
+      return (
+        <div className="stacked-text">
+          <button
+            className="btn btn-ghost btn-table"
+            type="button"
+            aria-label={`Mở liên kết chứng từ ${advanceNo}`}
+            onClick={() => onToggleReveal(row.id, 'advance')}
+          >
+            {advanceNo}
+          </button>
+          {isRevealed && (
+            <button
+              className="btn btn-ghost btn-table"
+              type="button"
+              aria-label={`Xem chứng từ ${advanceNo}`}
+              onClick={() => onOpenAdvance(customerTaxCode, advanceNo)}
+            >
+              Xem
+            </button>
+          )}
+        </div>
+      )
+    },
   },
   {
     key: 'advanceDate',
@@ -70,8 +110,69 @@ export const buildManualAdvanceColumns = ({
   {
     key: 'customer',
     label: 'Khách hàng',
-    render: (row: AdvanceListItem) =>
-      row.customerName ? `${row.customerName} (${row.customerTaxCode})` : row.customerTaxCode,
+    render: (row: AdvanceListItem) => {
+      const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+      const customerName = row.customerName?.trim() ?? ''
+      const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'customer'
+
+      if (!customerTaxCode) {
+        if (customerName) {
+          return customerName
+        }
+        return <span className="muted">-</span>
+      }
+
+      if (!customerName) {
+        return (
+          <div className="stacked-text">
+            <button
+              className="table-deeplink-trigger"
+              type="button"
+              aria-label={`Mở liên kết khách hàng ${customerTaxCode}`}
+              onClick={() => onToggleReveal(row.id, 'customer')}
+            >
+              {customerTaxCode}
+            </button>
+            {isRevealed && (
+              <button
+                className="btn btn-ghost btn-table"
+                type="button"
+                aria-label={`Xem khách hàng ${customerTaxCode}`}
+                onClick={() => onOpenCustomer(customerTaxCode)}
+              >
+                Xem
+              </button>
+            )}
+          </div>
+        )
+      }
+
+      return (
+        <div className="stacked-text">
+          <button
+            className="table-deeplink-trigger"
+            type="button"
+            aria-label={`Mở liên kết khách hàng ${customerName}`}
+            onClick={() => onToggleReveal(row.id, 'customer')}
+          >
+            <div className="stacked-text">
+              <span>{customerTaxCode}</span>
+              <span className="muted">{customerName}</span>
+            </div>
+          </button>
+          {isRevealed && (
+            <button
+              className="btn btn-ghost btn-table"
+              type="button"
+              aria-label={`Xem khách hàng ${customerTaxCode}`}
+              onClick={() => onOpenCustomer(customerTaxCode)}
+            >
+              Xem
+            </button>
+          )}
+        </div>
+      )
+    },
   },
   {
     key: 'ownerName',
@@ -101,19 +202,8 @@ export const buildManualAdvanceColumns = ({
   {
     key: 'description',
     label: 'Ghi chú',
-    render: (row: AdvanceListItem) => {
-      if (editingId === row.id) {
-        return (
-          <input
-            value={editingDescription}
-            onChange={(event) => setEditingDescription(event.target.value)}
-            placeholder="Nhập ghi chú"
-            style={{ width: '100%' }}
-          />
-        )
-      }
-      return row.description?.trim() ? row.description : <span className="muted">-</span>
-    },
+    render: (row: AdvanceListItem) =>
+      row.description?.trim() ? row.description : <span className="muted">-</span>,
   },
   {
     key: 'amount',
@@ -139,31 +229,31 @@ export const buildManualAdvanceColumns = ({
       if (!row.canManage) {
         return <span className="muted">-</span>
       }
-      const isEditing = editingId === row.id
       const status = row.status.toUpperCase()
       const canEdit = status !== 'VOID'
       const canApprove = row.status.toUpperCase() === 'DRAFT'
       const canVoid = row.status.toUpperCase() !== 'VOID'
       const canUnvoid = row.status.toUpperCase() === 'VOID'
       return (
-        <div className="input-row">
+        <div className={`advances-row-actions advances-row-actions--${status.toLowerCase()}`}>
           {canEdit && (
             <button
-              className="btn btn-ghost"
+              className="btn btn-ghost advances-row-actions__button"
               type="button"
-              onClick={() => (isEditing ? onSaveEdit(row) : onStartEdit(row))}
-              disabled={loadingAction === `update:${row.id}`}
+              onClick={() => onOpenCorrection(row)}
             >
-              {loadingAction === `update:${row.id}` ? 'Đang lưu...' : isEditing ? 'Lưu' : 'Sửa'}
-            </button>
-          )}
-          {isEditing && (
-            <button className="btn btn-ghost" type="button" onClick={onCancelEdit}>
-              Bỏ
+              Sửa
             </button>
           )}
           <button
-            className="btn btn-outline"
+            className="btn btn-ghost advances-row-actions__button"
+            type="button"
+            onClick={() => onOpenHistory(row)}
+          >
+            Lịch sử sửa
+          </button>
+          <button
+            className="btn btn-outline advances-row-actions__button advances-row-actions__button--accent"
             type="button"
             onClick={() => onApprove(row)}
             disabled={!canApprove || loadingAction === `approve:${row.id}`}
@@ -172,7 +262,7 @@ export const buildManualAdvanceColumns = ({
           </button>
           {canUnvoid ? (
             <button
-              className="btn btn-outline"
+              className="btn btn-outline advances-row-actions__button"
               type="button"
               onClick={() => onUnvoid(row)}
               disabled={loadingAction === `unvoid:${row.id}`}
@@ -181,7 +271,7 @@ export const buildManualAdvanceColumns = ({
             </button>
           ) : (
             <button
-              className="btn btn-outline-danger"
+              className="btn btn-outline-danger advances-row-actions__button"
               type="button"
               onClick={() => onVoid(row)}
               disabled={!canVoid || loadingAction === `void:${row.id}`}

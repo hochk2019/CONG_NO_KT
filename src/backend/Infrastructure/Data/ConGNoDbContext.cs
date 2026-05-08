@@ -41,6 +41,8 @@ public sealed class ConGNoDbContext : DbContext
     public DbSet<BackupJob> BackupJobs => Set<BackupJob>();
     public DbSet<BackupAudit> BackupAudits => Set<BackupAudit>();
     public DbSet<BackupUpload> BackupUploads => Set<BackupUpload>();
+    public DbSet<BackupOffsiteConnection> BackupOffsiteConnections => Set<BackupOffsiteConnection>();
+    public DbSet<BackupOffsiteUpload> BackupOffsiteUploads => Set<BackupOffsiteUpload>();
     public DbSet<ErpIntegrationSetting> ErpIntegrationSettings => Set<ErpIntegrationSetting>();
     public DbSet<ReportDeliverySchedule> ReportDeliverySchedules => Set<ReportDeliverySchedule>();
     public DbSet<ReportDeliveryRun> ReportDeliveryRuns => Set<ReportDeliveryRun>();
@@ -312,6 +314,7 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("backup_settings");
             entity.HasKey(x => x.Id);
+            entity.Property(x => x.OffsiteProvider).HasMaxLength(64);
         });
 
         modelBuilder.Entity<BackupJob>(entity =>
@@ -331,6 +334,25 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("backup_uploads");
             entity.HasKey(x => x.Id);
+        });
+
+        modelBuilder.Entity<BackupOffsiteConnection>(entity =>
+        {
+            entity.ToTable("backup_offsite_connections");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.Provider).IsUnique();
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.Status).HasMaxLength(32);
+        });
+
+        modelBuilder.Entity<BackupOffsiteUpload>(entity =>
+        {
+            entity.ToTable("backup_offsite_uploads");
+            entity.HasKey(x => x.Id);
+            entity.HasIndex(x => x.BackupJobId);
+            entity.HasIndex(x => new { x.Status, x.CreatedAt });
+            entity.Property(x => x.Provider).HasMaxLength(64);
+            entity.Property(x => x.Status).HasMaxLength(32);
         });
 
         modelBuilder.Entity<ErpIntegrationSetting>(entity =>

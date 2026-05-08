@@ -227,8 +227,22 @@ public sealed class ImportCommitService : IImportCommitService
                 var receipt = ImportCommitBuilders.BuildReceipt(raw, batch.Id, sellerSet);
                 receipt.CreatedBy = _currentUser.UserId;
                 await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
+
+                if (request.AutoApprove)
+                {
+                    receipt.Status = "APPROVED";
+                    receipt.ApprovedBy = _currentUser.UserId;
+                    receipt.ApprovedAt = now;
+                    receipt.AutoAllocateEnabled = true;
+                }
+
                 _db.Receipts.Add(receipt);
                 insertedReceipts++;
+
+                if (request.AutoApprove)
+                {
+                    await ApplyAutoAllocationToReceiptAsync(receipt, now, ct);
+                }
             }
 
             processedRows += 1;
@@ -600,5 +614,86 @@ public sealed class ImportCommitService : IImportCommitService
             summary.TotalEligibleRows,
             summary.CommittedRows,
             summary.SkippedRows);
+    }
+
+    private async Task<decimal> ApplyAutoAllocationToReceiptAsync(
+        Receipt receipt,
+        DateTimeOffset now,
+        CancellationToken ct)
+    {
+        if (receipt.UnallocatedAmount <= 0)
+        {
+            return 0m;
+        }
+
+        var invoices = await _db.Invoices
+            .Where(i => i.SellerTaxCode == receipt.SellerTaxCode && i.CustomerTaxCode == receipt.CustomerTaxCode && i.DeletedAt == null)
+            .Where(i => i.OutstandingAmount > 0 && i.Status != "VOID")
+            .OrderBy(i => i.IssueDate)
+            .ThenBy(i => i.CreatedAt)
+            .ToListAsync(ct);
+
+        var advances = await _db.Advances
+            .Where(a => a.SellerTaxCode == receipt.SellerTaxCode && a.CustomerTaxCode == receipt.CustomerTaxCode && a.DeletedAt == null)
+            .Where(a => a.OutstandingAmount > 0 && (a.Status == "APPROVED" || a.Status == "PAID"))
+            .OrderBy(a => a.AdvanceDate)
+            .ThenBy(a => a.CreatedAt)
+            .ToListAsync(ct);
+
+        var allocatedTotal = 0m;
+
+        foreach (var invoice in invoices)
+        {
+            if (receipt.UnallocatedAmount <= 0) break;
+            var allocated = Math.Min(receipt.UnallocatedAmount, invoice.OutstandingAmount);
+            if (allocated <= 0) continue;
+
+            receipt.UnallocatedAmount -= allocated;
+            invoice.OutstandingAmount -= allocated;
+            invoice.Status = invoice.OutstandingAmount == 0 ? "PAID" : "PARTIAL";
+            invoice.UpdatedAt = now;
+            invoice.Version += 1;
+
+            _db.ReceiptAllocations.Add(new ReceiptAllocation
+            {
+                Id = Guid.NewGuid(),
+                ReceiptId = receipt.Id,
+                TargetType = "INVOICE",
+                InvoiceId = invoice.Id,
+                Amount = allocated,
+                CreatedAt = now
+            });
+
+            allocatedTotal += allocated;
+        }
+
+        foreach (var advance in advances)
+        {
+            if (receipt.UnallocatedAmount <= 0) break;
+            var allocated = Math.Min(receipt.UnallocatedAmount, advance.OutstandingAmount);
+            if (allocated <= 0) continue;
+
+            receipt.UnallocatedAmount -= allocated;
+            advance.OutstandingAmount -= allocated;
+            advance.Status = advance.OutstandingAmount == 0 ? "PAID" : "APPROVED";
+            advance.UpdatedAt = now;
+            advance.Version += 1;
+
+            _db.ReceiptAllocations.Add(new ReceiptAllocation
+            {
+                Id = Guid.NewGuid(),
+                ReceiptId = receipt.Id,
+                TargetType = "ADVANCE",
+                AdvanceId = advance.Id,
+                Amount = allocated,
+                CreatedAt = now
+            });
+
+            allocatedTotal += allocated;
+        }
+
+        receipt.AllocationStatus = receipt.UnallocatedAmount == 0 ? "ALLOCATED" : "PARTIAL";
+
+        return allocatedTotal;
     }
 }

@@ -111,17 +111,27 @@
   position: relative;
 }
 
+.advances-required-badge,
 .advances-field-primary::after {
-  content: 'Bat buoc';
-  position: absolute;
-  top: -0.35rem;
-  right: 0.2rem;
   padding: 0.12rem 0.45rem;
   border-radius: 999px;
   background: color-mix(in srgb, var(--color-accent) 14%, transparent);
   color: var(--color-accent-deep);
   font-size: 0.68rem;
   font-weight: 700;
+}
+
+.advances-field-primary::after {
+  content: 'Bắt buộc';
+  position: absolute;
+  top: -0.35rem;
+  right: 0.2rem;
+}
+
+.advances-required-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.45rem;
 }
 
 .advances-field-secondary {
@@ -134,17 +144,12 @@
 
 .advances-submit-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: center;
   gap: var(--space-3);
   flex-wrap: wrap;
   padding-top: 0.9rem;
   border-top: 1px solid var(--advances-border-soft);
-}
-
-.advances-submit-row__copy {
-  display: grid;
-  gap: 0.2rem;
 }
 
 .advances-submit-row__buttons {
@@ -202,7 +207,7 @@
 
 .advances-filter-head {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   align-items: flex-start;
   gap: var(--space-2);
   flex-wrap: wrap;
@@ -252,6 +257,30 @@
   border-radius: 18px;
 }
 
+.advances-row-actions {
+  display: grid;
+  grid-template-columns: minmax(7rem, 1fr);
+  gap: 0.24rem;
+  min-width: 7rem;
+  width: 100%;
+}
+
+.advances-row-actions__button {
+  width: 100%;
+  min-width: 0;
+  min-height: 1.78rem;
+  padding: 0.24rem 0.56rem;
+  font-size: 0.78rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.advances-row-actions__button--accent:not(:disabled) {
+  border-color: color-mix(in srgb, var(--color-primary) 40%, var(--advances-border-strong));
+  background: color-mix(in srgb, var(--color-primary) 12%, var(--advances-surface-tint));
+  color: color-mix(in srgb, var(--color-primary) 75%, white);
+}
+
 @media (max-width: 1200px) {
   .advances-create-main .form-grid--advance {
     grid-template-columns: repeat(2, minmax(160px, 1fr));
@@ -291,5 +320,9 @@
 
   .advances-create-main .form-grid--advance {
     grid-template-columns: 1fr;
+  }
+
+  .advances-row-actions__button {
+    width: 100%;
   }
 }

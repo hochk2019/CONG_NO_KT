@@ -40,6 +40,26 @@ export type AdvanceCreateRequest = {
   description?: string
 }
 
+export type AdvanceCorrectionRequest = {
+  advanceNo?: string | null
+  advanceDate?: string | null
+  amount?: number | null
+  description?: string | null
+  reason: string
+  version: number
+}
+
+export type AdvanceHistoryItem = {
+  id: string
+  action: string
+  entityType: string
+  entityId: string
+  userName?: string | null
+  createdAt: string
+  beforeData?: string | null
+  afterData?: string | null
+}
+
 export const createAdvance = async (token: string, payload: AdvanceCreateRequest) => {
   return apiFetch<AdvanceDto>('/advances', {
     method: 'POST',
@@ -142,17 +162,22 @@ export const unvoidAdvance = async (
 export const updateAdvance = async (
   token: string,
   advanceId: string,
-  payload: { description?: string | null; version: number },
+  payload: AdvanceCorrectionRequest,
 ) => {
-  return apiFetch<{ id: string; version: number; description?: string | null }>(
-    `/advances/${advanceId}`,
-    {
-      method: 'PUT',
-      token,
-      body: {
-        description: payload.description ?? null,
-        version: payload.version,
-      },
+  return apiFetch<AdvanceListItem>(`/advances/${advanceId}`, {
+    method: 'PUT',
+    token,
+    body: {
+      advanceNo: payload.advanceNo ?? null,
+      advanceDate: payload.advanceDate ?? null,
+      amount: payload.amount ?? null,
+      description: payload.description ?? null,
+      reason: payload.reason,
+      version: payload.version,
     },
-  )
+  })
+}
+
+export const fetchAdvanceHistory = async (token: string, advanceId: string) => {
+  return apiFetch<AdvanceHistoryItem[]>(`/advances/${advanceId}/history`, { token })
 }

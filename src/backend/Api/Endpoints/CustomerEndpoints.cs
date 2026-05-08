@@ -1,6 +1,7 @@
 using CongNoGolden.Api;
 using CongNoGolden.Application.Customers;
 using CongNoGolden.Infrastructure.Data;
+using CongNoGolden.Infrastructure.Data.Entities;
 using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Application.Common.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -11,10 +12,101 @@ public static class CustomerEndpoints
 {
     public static IEndpointRouteBuilder MapCustomerEndpoints(this IEndpointRouteBuilder app)
     {
+        app.MapPost("/customers", async (
+            CustomerCreateRequest request,
+            ConGNoDbContext db,
+            CancellationToken ct) =>
+        {
+            var taxCode = NormalizeCustomerTaxCode(request.TaxCode);
+            if (string.IsNullOrWhiteSpace(taxCode))
+            {
+                return ApiErrors.InvalidRequest("Tax code is required.");
+            }
+
+            var name = (request.Name ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return ApiErrors.InvalidRequest("Customer name is required.");
+            }
+
+            var status = NormalizeCustomerStatus(request.Status);
+            if (status is null)
+            {
+                return ApiErrors.InvalidRequest("Invalid customer status.");
+            }
+
+            var paymentTermsDays = request.PaymentTermsDays ?? 0;
+            if (paymentTermsDays < 0)
+            {
+                return ApiErrors.InvalidRequest("Payment terms must be non-negative.");
+            }
+
+            if (request.CreditLimit is not null && request.CreditLimit < 0)
+            {
+                return ApiErrors.InvalidRequest("Credit limit must be non-negative.");
+            }
+
+            var customerExists = await db.Customers.AnyAsync(c => c.TaxCode == taxCode, ct);
+            if (customerExists)
+            {
+                return ApiErrors.InvalidRequest("Customer tax code already exists.");
+            }
+
+            Guid? ownerId = request.OwnerId;
+            if (ownerId.HasValue)
+            {
+                var ownerExists = await db.Users.AnyAsync(u => u.Id == ownerId.Value, ct);
+                if (!ownerExists)
+                {
+                    return ApiErrors.InvalidRequest("Owner user not found.");
+                }
+            }
+
+            Guid? managerId = request.ManagerId;
+            if (managerId.HasValue)
+            {
+                var managerExists = await db.Users.AnyAsync(u => u.Id == managerId.Value, ct);
+                if (!managerExists)
+                {
+                    return ApiErrors.InvalidRequest("Manager user not found.");
+                }
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            var customer = new Customer
+            {
+                TaxCode = taxCode,
+                Name = name,
+                Address = CleanCustomerOptional(request.Address),
+                Email = CleanCustomerOptional(request.Email),
+                Phone = CleanCustomerOptional(request.Phone),
+                Status = status,
+                PaymentTermsDays = paymentTermsDays,
+                CreditLimit = request.CreditLimit,
+                CurrentBalance = 0m,
+                AccountantOwnerId = ownerId,
+                ManagerUserId = managerId,
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            db.Customers.Add(customer);
+            await db.SaveChangesAsync(ct);
+
+            var detail = await BuildCustomerDetailAsync(db, customer.TaxCode, ct);
+
+            return Results.Created($"/customers/{customer.TaxCode}", detail);
+        })
+        .WithName("CustomerCreate")
+        .WithTags("Customers")
+        .RequireAuthorization("CustomerManage");
+
         app.MapGet("/customers", async (
             string? search,
             Guid? ownerId,
+            bool? unassignedOnly,
             string? status,
+            string? sort,
             int? page,
             int? pageSize,
             ICustomerService service,
@@ -24,7 +116,9 @@ public static class CustomerEndpoints
                 new CustomerListRequest(
                     search,
                     ownerId,
+                    unassignedOnly == true,
                     status,
+                    sort,
                     page.GetValueOrDefault(1),
                     pageSize.GetValueOrDefault(20)),
                 ct);
@@ -354,11 +448,153 @@ public static class CustomerEndpoints
         .WithTags("Customers")
         .RequireAuthorization("CustomerManage");
 
+        app.MapDelete("/customers/{taxCode}", async (
+            string taxCode,
+            ConGNoDbContext db,
+            IAuditService auditService,
+            CancellationToken ct) =>
+        {
+            var key = taxCode.Trim();
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return ApiErrors.InvalidRequest("Tax code is required.");
+            }
+
+            var customer = await db.Customers.FirstOrDefaultAsync(c => c.TaxCode == key, ct);
+            if (customer is null)
+            {
+                return ApiErrors.NotFound("Customer not found.");
+            }
+
+            var invoices = await db.Invoices.IgnoreQueryFilters().Where(i => i.CustomerTaxCode == key).ToListAsync(ct);
+            var advances = await db.Advances.IgnoreQueryFilters().Where(a => a.CustomerTaxCode == key).ToListAsync(ct);
+            var receipts = await db.Receipts.IgnoreQueryFilters().Where(r => r.CustomerTaxCode == key).ToListAsync(ct);
+
+            var activeInvoicesCount = invoices.Count(i => i.DeletedAt == null);
+            var activeAdvancesCount = advances.Count(a => a.DeletedAt == null);
+            var activeReceiptsCount = receipts.Count(r => r.DeletedAt == null);
+
+            if (activeInvoicesCount > 0 || activeAdvancesCount > 0 || activeReceiptsCount > 0 || customer.CurrentBalance != 0)
+            {
+                return ApiErrors.InvalidRequest(
+                    $"Không thể xóa KH do phát sinh dữ liệu liên đới. Chi tiết: {activeInvoicesCount} hóa đơn, {activeAdvancesCount} khoản trả hộ, {activeReceiptsCount} phiếu thu, dư nợ {customer.CurrentBalance}.");
+            }
+
+            var riskScores = await db.RiskScoreSnapshots.IgnoreQueryFilters().Where(r => r.CustomerTaxCode == key).ToListAsync(ct);
+            var riskAlerts = await db.RiskDeltaAlerts.IgnoreQueryFilters().Where(a => a.CustomerTaxCode == key).ToListAsync(ct);
+            var reminderLogs = await db.ReminderLogs.IgnoreQueryFilters().Where(l => l.CustomerTaxCode == key).ToListAsync(ct);
+
+            if (invoices.Count > 0) db.Invoices.RemoveRange(invoices);
+            if (advances.Count > 0) db.Advances.RemoveRange(advances);
+            if (receipts.Count > 0) db.Receipts.RemoveRange(receipts);
+            if (riskScores.Count > 0) db.RiskScoreSnapshots.RemoveRange(riskScores);
+            if (riskAlerts.Count > 0) db.RiskDeltaAlerts.RemoveRange(riskAlerts);
+            if (reminderLogs.Count > 0) db.ReminderLogs.RemoveRange(reminderLogs);
+
+            var before = new
+            {
+                customer.Name,
+                customer.Status,
+                customer.CreatedAt,
+                customer.CurrentBalance
+            };
+
+            db.Customers.Remove(customer);
+            await db.SaveChangesAsync(ct);
+
+            await auditService.LogAsync(
+                "CUSTOMER_DELETE",
+                "Customer",
+                customer.TaxCode,
+                before,
+                null,
+                ct);
+
+            return Results.NoContent();
+        })
+        .WithName("CustomerDelete")
+        .WithTags("Customers")
+        .RequireAuthorization("Admin");
+
         return app;
+    }
+
+    private static string NormalizeCustomerTaxCode(string? value) =>
+        (value ?? string.Empty).Trim().ToUpperInvariant();
+
+    private static string? NormalizeCustomerStatus(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return "ACTIVE";
+        }
+
+        var normalized = value.Trim().ToUpperInvariant();
+        return normalized is "ACTIVE" or "INACTIVE" ? normalized : null;
+    }
+
+    private static string? CleanCustomerOptional(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static async Task<CustomerDetailDto> BuildCustomerDetailAsync(
+        ConGNoDbContext db,
+        string taxCode,
+        CancellationToken ct)
+    {
+        var customer = await db.Customers
+            .AsNoTracking()
+            .FirstAsync(c => c.TaxCode == taxCode, ct);
+
+        var owner = customer.AccountantOwnerId.HasValue
+            ? await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == customer.AccountantOwnerId.Value, ct)
+            : null;
+
+        var manager = customer.ManagerUserId.HasValue
+            ? await db.Users.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Id == customer.ManagerUserId.Value, ct)
+            : null;
+
+        var ownerName = owner is null
+            ? null
+            : string.IsNullOrWhiteSpace(owner.FullName) ? owner.Username : owner.FullName;
+
+        var managerName = manager is null
+            ? null
+            : string.IsNullOrWhiteSpace(manager.FullName) ? manager.Username : manager.FullName;
+
+        return new CustomerDetailDto(
+            customer.TaxCode,
+            customer.Name,
+            customer.Address,
+            customer.Email,
+            customer.Phone,
+            customer.Status,
+            customer.CurrentBalance,
+            customer.PaymentTermsDays,
+            customer.CreditLimit,
+            customer.AccountantOwnerId,
+            ownerName,
+            customer.ManagerUserId,
+            managerName,
+            customer.CreatedAt,
+            customer.UpdatedAt);
     }
 }
 
 public sealed record CustomerOwnerUpdateRequest(Guid? OwnerId);
+
+public sealed record CustomerCreateRequest(
+    string TaxCode,
+    string Name,
+    string? Address,
+    string? Email,
+    string? Phone,
+    string? Status,
+    int? PaymentTermsDays,
+    decimal? CreditLimit,
+    Guid? OwnerId,
+    Guid? ManagerId);
 
 public sealed record CustomerUpdateRequest(
     string? Name,

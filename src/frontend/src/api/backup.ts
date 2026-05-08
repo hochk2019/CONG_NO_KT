@@ -3,18 +3,34 @@ import type { PagedResult } from './types'
 
 export type BackupSettings = {
   enabled: boolean
+  scheduleFrequency: number
   backupPath: string
   retentionCount: number
   scheduleDayOfWeek: number
   scheduleTime: string
   timezone: string
   pgBinPath: string
+  offsiteEnabled: boolean
+  provider?: string | null
+  googleDriveFolderId?: string | null
+  offsiteRetentionCount: number
+  uploadAfterBackup: boolean
+  offsiteConnection?: BackupOffsiteConnectionStatus | null
   lastRunAt?: string | null
   usesContainerPaths?: boolean
   hostBackupPath?: string | null
   hostBackupPathConfigKey?: string | null
   canEditBackupPath?: boolean
   canEditPgBinPath?: boolean
+}
+
+export type BackupOffsiteConnectionStatus = {
+  isConnected: boolean
+  provider: string
+  googleDriveFolderId?: string | null
+  connectedAt?: string | null
+  lastValidatedAt?: string | null
+  lastError?: string | null
 }
 
 export type BackupJobListItem = {
@@ -62,6 +78,25 @@ export type BackupStatus = {
   message?: string | null
 }
 
+export type BackupOffsiteConnectUrlResponse = {
+  url: string
+}
+
+export type BackupOffsiteUpload = {
+  id: string
+  backupJobId?: string | null
+  provider: string
+  status: string
+  remoteFileId?: string | null
+  remoteChecksum?: string | null
+  remoteFileSize?: number | null
+  attemptCount: number
+  errorMessage?: string | null
+  createdAt: string
+  queuedAt?: string | null
+  completedAt?: string | null
+}
+
 export const fetchBackupSettings = async (token: string) => {
   return apiFetch<BackupSettings>('/admin/backup/settings', { token })
 }
@@ -72,12 +107,79 @@ export const updateBackupSettings = async (token: string, payload: BackupSetting
     method: 'PUT',
     body: {
       enabled: payload.enabled,
+      scheduleFrequency: payload.scheduleFrequency,
       backupPath: payload.backupPath,
       retentionCount: payload.retentionCount,
       scheduleDayOfWeek: payload.scheduleDayOfWeek,
       scheduleTime: payload.scheduleTime,
       pgBinPath: payload.pgBinPath,
+      offsiteEnabled: payload.offsiteEnabled,
+      provider: payload.provider,
+      googleDriveFolderId: payload.googleDriveFolderId,
+      offsiteRetentionCount: payload.offsiteRetentionCount,
+      uploadAfterBackup: payload.uploadAfterBackup,
     },
+  })
+}
+
+export const fetchBackupOffsiteConnection = async (token: string) => {
+  return apiFetch<BackupOffsiteConnectionStatus>('/admin/backup/offsite/connection', { token })
+}
+
+export const requestBackupGoogleDriveConnectUrl = async (
+  token: string,
+  payload: { redirectUri: string; googleDriveFolderId?: string | null },
+) => {
+  return apiFetch<BackupOffsiteConnectUrlResponse>('/admin/backup/offsite/google-drive/connect-url', {
+    token,
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export const completeBackupGoogleDriveCallback = async (
+  token: string,
+  payload: { code: string; redirectUri: string; googleDriveFolderId?: string | null },
+) => {
+  return apiFetch<BackupOffsiteConnectionStatus>('/admin/backup/offsite/google-drive/callback', {
+    token,
+    method: 'POST',
+    body: payload,
+  })
+}
+
+export const disconnectBackupOffsiteConnection = async (token: string) => {
+  return apiFetch<void>('/admin/backup/offsite/connection', {
+    token,
+    method: 'DELETE',
+  })
+}
+
+export const fetchBackupOffsiteUploads = async (
+  token: string,
+  params?: { page?: number; pageSize?: number },
+) => {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.pageSize) query.set('pageSize', String(params.pageSize))
+  const suffix = query.toString()
+  return apiFetch<PagedResult<BackupOffsiteUpload>>(
+    `/admin/backup/offsite/uploads${suffix ? `?${suffix}` : ''}`,
+    { token },
+  )
+}
+
+export const reuploadBackupJob = async (token: string, id: string) => {
+  return apiFetch<BackupOffsiteUpload>(`/admin/backup/jobs/${id}/reupload`, {
+    token,
+    method: 'POST',
+  })
+}
+
+export const testBackupOffsiteUpload = async (token: string) => {
+  return apiFetch<BackupOffsiteUpload>('/admin/backup/offsite/test-upload', {
+    token,
+    method: 'POST',
   })
 }
 

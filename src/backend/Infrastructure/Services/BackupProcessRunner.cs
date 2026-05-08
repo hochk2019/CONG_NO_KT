@@ -1,10 +1,9 @@
 using System.Diagnostics;
+using CongNoGolden.Application.Backups;
 
 namespace CongNoGolden.Infrastructure.Services;
 
-public sealed record BackupProcessResult(int ExitCode, string Stdout, string Stderr);
-
-public sealed class BackupProcessRunner
+public sealed class BackupProcessRunner : IBackupProcessRunner
 {
     public async Task<BackupProcessResult> RunAsync(ProcessStartInfo startInfo, CancellationToken ct)
     {

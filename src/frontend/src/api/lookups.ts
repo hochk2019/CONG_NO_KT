@@ -8,11 +8,20 @@ export type LookupOption = {
 export type SellerLookupItem = {
   taxCode: string
   name: string
+  shortName?: string | null
 }
 
 export type CustomerLookupItem = {
   taxCode: string
   name: string
+}
+
+export type SellerCreateRequest = {
+  taxCode: string
+  name: string
+  shortName?: string | null
+  address?: string | null
+  status?: string
 }
 
 export type OwnerLookupItem = {
@@ -38,6 +47,14 @@ export const fetchSellerLookup = async (params: {
 
   return apiFetch<SellerLookupItem[]>(`/lookups/sellers?${query.toString()}`, {
     token: params.token,
+  })
+}
+
+export const createSeller = async (token: string, payload: SellerCreateRequest) => {
+  return apiFetch<SellerLookupItem>('/sellers', {
+    method: 'POST',
+    token,
+    body: payload,
   })
 }
 

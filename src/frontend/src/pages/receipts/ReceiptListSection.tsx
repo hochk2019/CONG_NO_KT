@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   approveReceipt,
   approveReceiptsBulk,
+  correctReceipt,
   fetchReceiptAllocations,
+  fetchReceiptHistory,
   fetchReceiptOpenItems,
   getReceipt,
   listReceipts,
@@ -10,6 +13,8 @@ import {
   updateReceiptReminder,
   voidReceipt,
   type ReceiptAllocationDetail,
+  type ReceiptDto,
+  type ReceiptHistoryItem,
   type ReceiptListItem,
   type ReceiptOpenItem,
   type ReceiptTargetRef,
@@ -28,7 +33,9 @@ import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatDate, formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
 import ReceiptAllocationModal from './ReceiptAllocationModal'
+import ReceiptCorrectionModal from './ReceiptCorrectionModal'
 import ReceiptCancelModal from './ReceiptCancelModal'
+import ReceiptHistoryModal from './ReceiptHistoryModal'
 import ReceiptSurplusQueuePanel from './ReceiptSurplusQueuePanel'
 import ReceiptViewAllocationsModal from './ReceiptViewAllocationsModal'
 import {
@@ -90,12 +97,34 @@ const parseNumber = (value: string) => {
   return Number.isFinite(parsed) ? parsed : undefined
 }
 
+type ReceiptRevealTarget = 'receipt' | 'customer'
+
+type RevealedCell = {
+  rowId: string
+  target: ReceiptRevealTarget
+} | null
+
+const buildCustomerRoute = (taxCode: string) => {
+  const params = new URLSearchParams({ taxCode })
+  return `/customers?${params.toString()}`
+}
+
+const buildReceiptRoute = (taxCode: string, receiptNo: string) => {
+  const params = new URLSearchParams({
+    taxCode,
+    tab: 'receipts',
+    doc: receiptNo,
+  })
+  return `/customers?${params.toString()}`
+}
+
 type ReceiptListSectionProps = {
   token: string
   reloadSignal: number
 }
 
 export default function ReceiptListSection({ token, reloadSignal }: ReceiptListSectionProps) {
+  const navigate = useNavigate()
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -128,9 +157,12 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [activeTab, setActiveTab] = useState<'receipts' | 'surplusQueue'>('receipts')
   const [listError, setListError] = useState<string | null>(null)
   const [listMessage, setListMessage] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+  const [actionMessage, setActionMessage] = useState<string | null>(null)
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [listReloadTick, setListReloadTick] = useState(0)
   const [selectedReceiptIds, setSelectedReceiptIds] = useState<string[]>([])
+  const [revealedCell, setRevealedCell] = useState<RevealedCell>(null)
 
   const [cancelRow, setCancelRow] = useState<ReceiptListItem | null>(null)
   const [cancelLoading, setCancelLoading] = useState(false)
@@ -141,6 +173,16 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
   const [bulkApproveOpen, setBulkApproveOpen] = useState(false)
   const [bulkApproveError, setBulkApproveError] = useState<string | null>(null)
   const [bulkApproveLoading, setBulkApproveLoading] = useState(false)
+  const [correctionOpen, setCorrectionOpen] = useState(false)
+  const [correctionReceipt, setCorrectionReceipt] = useState<ReceiptDto | null>(null)
+  const [correctionRow, setCorrectionRow] = useState<ReceiptListItem | null>(null)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
+  const [correctionLoading, setCorrectionLoading] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyRow, setHistoryRow] = useState<ReceiptListItem | null>(null)
+  const [historyItems, setHistoryItems] = useState<ReceiptHistoryItem[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
 
   const [approvalRow, setApprovalRow] = useState<ReceiptListItem | null>(null)
   const [approvalTargets, setApprovalTargets] = useState<ReceiptTargetRef[]>([])
@@ -162,6 +204,11 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     if (listReminder === 'DISABLED') return false
     return undefined
   }, [listReminder])
+  const handleToggleReveal = useCallback((rowId: string, target: ReceiptRevealTarget) => {
+    setRevealedCell((current) =>
+      current?.rowId === rowId && current.target === target ? null : { rowId, target },
+    )
+  }, [])
   const validationError = useMemo(() => {
     if (listDateFrom && listDateTo && listDateFrom > listDateTo) {
       return 'Ngày chứng từ từ phải nhỏ hơn hoặc bằng ngày chứng từ đến.'
@@ -193,7 +240,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     return () => {
       isActive = false
     }
-  }, [token, debouncedSellerQuery])
+  }, [token, activeTab, debouncedSellerQuery])
 
   useEffect(() => {
     if (!token) return
@@ -249,6 +296,7 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         if (!isActive) return
         setListRows(result.items)
         setListTotal(result.total)
+        setRevealedCell(null)
       } catch (err) {
         if (!isActive) return
         if (err instanceof ApiError) {
@@ -310,6 +358,99 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         )
       } catch (err) {
         setListError(err instanceof ApiError ? err.message : 'Không cập nhật được nhắc duyệt.')
+      }
+    },
+    [token],
+  )
+
+  const handleCloseCorrection = useCallback(() => {
+    if (correctionLoading) return
+    setCorrectionOpen(false)
+    setCorrectionReceipt(null)
+    setCorrectionRow(null)
+    setCorrectionError(null)
+  }, [correctionLoading])
+
+  const handleOpenCorrection = useCallback(
+    async (row: ReceiptListItem) => {
+      if (!token || !row.canManage || row.status === 'VOID') return
+      setListMessage(null)
+      setListError(null)
+      setCorrectionOpen(true)
+      setCorrectionLoading(true)
+      setCorrectionError(null)
+      setCorrectionRow(row)
+      setCorrectionReceipt(null)
+      try {
+        const detail = await getReceipt(token, row.id)
+        setCorrectionReceipt(detail)
+      } catch (err) {
+        setCorrectionError(err instanceof ApiError ? err.message : 'Không tải được phiếu thu.')
+      } finally {
+        setCorrectionLoading(false)
+      }
+    },
+    [token],
+  )
+
+  const handleSubmitCorrection = useCallback(
+    async (payload: {
+      receiptNo?: string | null
+      receiptDate?: string | null
+      amount?: number | null
+      method?: string | null
+      description?: string | null
+      reason: string
+      version: number
+    }) => {
+      if (!token || !correctionRow) return
+      setListMessage(null)
+      setCorrectionLoading(true)
+      setCorrectionError(null)
+      try {
+        const corrected = await correctReceipt(token, correctionRow.id, payload)
+        setListRows((prev) =>
+          prev.map((item) => (item.id === correctionRow.id ? { ...item, ...corrected } : item)),
+        )
+        setCorrectionReceipt(corrected)
+        setCorrectionOpen(false)
+        setCorrectionRow(null)
+        setCorrectionError(null)
+        setListMessage(`Đã cập nhật phiếu thu ${corrected.receiptNo?.trim() || correctionRow.id}.`)
+      } catch (err) {
+        setCorrectionError(err instanceof ApiError ? err.message : 'Không điều chỉnh được phiếu thu.')
+      } finally {
+        setCorrectionLoading(false)
+      }
+    },
+    [correctionRow, token],
+  )
+
+  const handleCloseHistory = useCallback(() => {
+    setHistoryOpen(false)
+    setHistoryRow(null)
+    setHistoryItems([])
+    setHistoryError(null)
+    setHistoryLoading(false)
+  }, [])
+
+  const handleOpenHistory = useCallback(
+    async (row: ReceiptListItem) => {
+      if (!token || !row.canManage) return
+      setListMessage(null)
+      setListError(null)
+      setHistoryOpen(true)
+      setHistoryRow(row)
+      setHistoryItems([])
+      setHistoryError(null)
+      setHistoryLoading(true)
+      try {
+        const items = await fetchReceiptHistory(token, row.id)
+        setHistoryItems(items)
+      } catch (err) {
+        setHistoryError(err instanceof ApiError ? err.message : 'Không tải được lịch sử điều chỉnh.')
+      } finally {
+        setHistoryLoading(false)
       }
     },
     [token],
@@ -488,14 +629,109 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
       {
         key: 'receiptNo',
         label: 'Số chứng từ',
-        render: (row: ReceiptListItem) =>
-          row.receiptNo?.trim() ? row.receiptNo : <span className="muted">-</span>,
+        render: (row: ReceiptListItem) => {
+          const receiptNo = row.receiptNo?.trim() ?? ''
+          const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+          const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'receipt'
+
+          if (!receiptNo) {
+            return <span className="muted">-</span>
+          }
+
+          if (!customerTaxCode) {
+            return receiptNo
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                className="btn btn-ghost btn-table"
+                type="button"
+                aria-label={`Mở liên kết chứng từ ${receiptNo}`}
+                onClick={() => handleToggleReveal(row.id, 'receipt')}
+              >
+                {receiptNo}
+              </button>
+              {isRevealed && (
+                <button
+                  className="btn btn-ghost btn-table"
+                  type="button"
+                  aria-label={`Xem chứng từ ${receiptNo}`}
+                  onClick={() => navigate(buildReceiptRoute(customerTaxCode, receiptNo))}
+                >
+                  Xem
+                </button>
+              )}
+            </div>
+          )
+        },
       },
       {
         key: 'customer',
         label: 'Khách hàng',
-        render: (row: ReceiptListItem) =>
-          row.customerName ? `${row.customerName} (${row.customerTaxCode})` : row.customerTaxCode,
+        render: (row: ReceiptListItem) => {
+          const customerTaxCode = row.customerTaxCode?.trim() ?? ''
+          const customerName = row.customerName?.trim() ?? ''
+          const isRevealed = revealedCell?.rowId === row.id && revealedCell.target === 'customer'
+
+          if (!customerTaxCode) {
+            if (customerName) {
+              return customerName
+            }
+            return <span className="muted">-</span>
+          }
+
+          if (!customerName) {
+            return (
+              <div className="stacked-text">
+                <button
+                  className="table-deeplink-trigger"
+                  type="button"
+                  aria-label={`Mở liên kết khách hàng ${customerTaxCode}`}
+                  onClick={() => handleToggleReveal(row.id, 'customer')}
+                >
+                  {customerTaxCode}
+                </button>
+                {isRevealed && (
+                  <button
+                    className="btn btn-ghost btn-table"
+                    type="button"
+                    aria-label={`Xem khách hàng ${customerTaxCode}`}
+                    onClick={() => navigate(buildCustomerRoute(customerTaxCode))}
+                  >
+                    Xem
+                  </button>
+                )}
+              </div>
+            )
+          }
+
+          return (
+            <div className="stacked-text">
+              <button
+                className="table-deeplink-trigger"
+                type="button"
+                aria-label={`Mở liên kết khách hàng ${customerName}`}
+                onClick={() => handleToggleReveal(row.id, 'customer')}
+              >
+                <div className="stacked-text">
+                  <span>{customerTaxCode}</span>
+                  <span className="muted">{customerName}</span>
+                </div>
+              </button>
+              {isRevealed && (
+                <button
+                  className="btn btn-ghost btn-table"
+                  type="button"
+                  aria-label={`Xem khách hàng ${customerTaxCode}`}
+                  onClick={() => navigate(buildCustomerRoute(customerTaxCode))}
+                >
+                  Xem
+                </button>
+              )}
+            </div>
+          )
+        },
       },
       {
         key: 'amount',
@@ -546,6 +782,16 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
             <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleOpenView(row)}>
               Xem
             </button>
+            {row.canManage && row.status !== 'VOID' && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void handleOpenCorrection(row)}>
+                Sửa
+              </button>
+            )}
+            {row.canManage && (
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => void handleOpenHistory(row)}>
+                Lịch sử sửa
+              </button>
+            )}
             {row.status === 'DRAFT' && row.canManage && (
               <button className="btn btn-ghost btn-sm" type="button" onClick={() => handleOpenApprove(row)}>
                 Duyệt
@@ -575,9 +821,14 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
     ],
     [
       handleOpenApprove,
+      handleOpenCorrection,
+      handleOpenHistory,
       handleOpenView,
       handleToggleReminder,
+      handleToggleReveal,
       handleUnvoid,
+      navigate,
+      revealedCell,
       selectedReceiptIds,
       unvoidLoadingId,
     ],
@@ -663,7 +914,11 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         )
         const failedMessages = result.items
           .filter((item) => failedIds.has(item.receiptId))
-          .map((item) => item.errorMessage || item.errorCode || `Lỗi ${item.receiptId}`)
+          .map((item) => {
+            const row = selectedEligibleRows.find((r) => r.id === item.receiptId)
+            const label = row?.receiptNo?.trim() || item.receiptId
+            return `${label}: ${item.errorMessage || item.errorCode || 'Lỗi'}`
+          })
 
         setSelectedReceiptIds((prev) => prev.filter((id) => failedIds.has(id)))
         setBulkApproveOpen(false)
@@ -672,17 +927,17 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         if (result.approved > 0) {
           const successMessage = `Đã duyệt ${result.approved}/${result.total} phiếu thu đã chọn.`
           if (failedIds.size > 0) {
-            setListError(
+            setActionError(
               `${successMessage} ${failedIds.size} phiếu thu thất bại: ${failedMessages
-                .slice(0, 2)
+                .slice(0, 5)
                 .join('; ')}`,
             )
           } else {
-            setListMessage(successMessage)
+            setActionMessage(successMessage)
           }
         } else {
-          setListError(
-            `Không duyệt được phiếu thu nào: ${failedMessages.slice(0, 2).join('; ') || 'Lỗi không xác định.'}`,
+          setActionError(
+            `Không duyệt được phiếu thu nào: ${failedMessages.slice(0, 5).join('; ') || 'Lỗi không xác định.'}`,
           )
         }
       } catch (err) {
@@ -957,6 +1212,18 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
           {validationError && <div className="alert alert--error">{validationError}</div>}
           {listError && <div className="alert alert--error">{listError}</div>}
           {listMessage && <div className="alert alert--success">{listMessage}</div>}
+          {actionError && (
+            <div className="alert alert--error alert--dismissible">
+              <span>{actionError}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActionError(null)}>Đóng</button>
+            </div>
+          )}
+          {actionMessage && (
+            <div className="alert alert--success alert--dismissible">
+              <span>{actionMessage}</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActionMessage(null)}>Đóng</button>
+            </div>
+          )}
 
           <div className="filters-actions">
             <span className="muted">
@@ -1024,6 +1291,26 @@ export default function ReceiptListSection({ token, reloadSignal }: ReceiptListS
         onConfirm={handleCancelConfirm}
         loading={cancelLoading}
         error={cancelError}
+      />
+
+      <ReceiptCorrectionModal
+        open={correctionOpen}
+        receipt={correctionReceipt}
+        error={correctionError}
+        loading={correctionLoading}
+        onClose={handleCloseCorrection}
+        onSubmit={(payload) => {
+          void handleSubmitCorrection(payload)
+        }}
+      />
+
+      <ReceiptHistoryModal
+        open={historyOpen}
+        receipt={historyRow}
+        items={historyItems}
+        error={historyError}
+        loading={historyLoading}
+        onClose={handleCloseHistory}
       />
 
       <ReceiptAllocationModal

@@ -1,15 +1,19 @@
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../../api/client'
 import {
   approveAdvance,
   createAdvance,
+  fetchAdvanceHistory,
   listAdvances,
   unvoidAdvance,
   updateAdvance,
   voidAdvance,
+  type AdvanceHistoryItem,
   type AdvanceListItem,
 } from '../../api/advances'
 import {
+  createSeller,
   fetchCustomerLookup,
   fetchSellerLookup,
   mapTaxCodeOptions,
@@ -19,10 +23,15 @@ import DataTable from '../../components/DataTable'
 import LookupInput from '../../components/LookupInput'
 import MoneyInput from '../../components/MoneyInput'
 import ActionConfirmModal, { type ActionConfirmPayload } from '../../components/modals/ActionConfirmModal'
+import SellerQuickAddModal from '../../components/SellerQuickAddModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
+import AdvanceCorrectionModal from './AdvanceCorrectionModal'
+import AdvanceHistoryModal from './AdvanceHistoryModal'
 import {
   advanceStatusLabels,
   buildManualAdvanceColumns,
+  type ManualAdvanceRevealTarget,
+  type ManualAdvanceRevealedCell,
   shortAdvanceId,
 } from './manualAdvancesColumns'
 
@@ -58,6 +67,20 @@ const storeFilter = (key: string, value: string) => {
 
 const DEFAULT_SOURCE_FILTER = ''
 
+const buildCustomerRoute = (taxCode: string) => {
+  const params = new URLSearchParams({ taxCode })
+  return `/customers?${params.toString()}`
+}
+
+const buildAdvanceRoute = (taxCode: string, advanceNo: string) => {
+  const params = new URLSearchParams({
+    taxCode,
+    tab: 'advances',
+    doc: advanceNo,
+  })
+  return `/customers?${params.toString()}`
+}
+
 type ManualAdvancesSectionProps = {
   token: string
   canApprove: boolean
@@ -76,6 +99,7 @@ export default function ManualAdvancesSection({
   canApprove,
   onImportTemplate,
 }: ManualAdvancesSectionProps) {
+  const navigate = useNavigate()
   const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
   const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
   const [sellerQuery, setSellerQuery] = useState('')
@@ -84,6 +108,9 @@ export default function ManualAdvancesSection({
   const debouncedCustomerQuery = useDebouncedValue(customerQuery, 300)
   const [sellerTaxCode, setSellerTaxCode] = useState('')
   const [customerTaxCode, setCustomerTaxCode] = useState('')
+  const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
+  const [sellerCreateLoading, setSellerCreateLoading] = useState(false)
+  const [sellerCreateError, setSellerCreateError] = useState<string | null>(null)
   const [advanceNo, setAdvanceNo] = useState('')
   const [advanceDate, setAdvanceDate] = useState('')
   const [amount, setAmount] = useState('0')
@@ -111,13 +138,24 @@ export default function ManualAdvancesSection({
   const [actionError, setActionError] = useState<string | null>(null)
   const [loadingAction, setLoadingAction] = useState('')
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editingDescription, setEditingDescription] = useState('')
+  const [correctionAdvance, setCorrectionAdvance] = useState<AdvanceListItem | null>(null)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
+  const [historyAdvance, setHistoryAdvance] = useState<AdvanceListItem | null>(null)
+  const [historyItems, setHistoryItems] = useState<AdvanceHistoryItem[]>([])
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [confirmState, setConfirmState] = useState<ManualAdvanceConfirmState | null>(null)
   const [confirmError, setConfirmError] = useState<string | null>(null)
   const [selectedAdvanceIds, setSelectedAdvanceIds] = useState<string[]>([])
   const [bulkConfirmAction, setBulkConfirmAction] = useState<ManualAdvanceConfirmAction | null>(null)
   const [bulkConfirmError, setBulkConfirmError] = useState<string | null>(null)
+  const [revealedCell, setRevealedCell] = useState<ManualAdvanceRevealedCell>(null)
+
+  const handleToggleReveal = (rowId: string, target: ManualAdvanceRevealTarget) => {
+    setRevealedCell((current) =>
+      current?.rowId === rowId && current.target === target ? null : { rowId, target },
+    )
+  }
 
   useEffect(() => {
     if (!token) return
@@ -214,6 +252,7 @@ export default function ManualAdvancesSection({
         if (!isActive) return
         setListRows(result.items)
         setListTotal(result.total)
+        setRevealedCell(null)
       } catch (err) {
         if (!isActive) return
         if (err instanceof ApiError) {
@@ -444,44 +483,100 @@ export default function ManualAdvancesSection({
     }
   }
 
-  const handleStartEdit = (row: AdvanceListItem) => {
+  const handleOpenCorrection = (row: AdvanceListItem) => {
     resetMessages()
-    setEditingId(row.id)
-    setEditingDescription(row.description ?? '')
+    setCorrectionError(null)
+    setCorrectionAdvance(row)
   }
 
-  const handleCancelEdit = () => {
-    setEditingId(null)
-    setEditingDescription('')
+  const handleCloseCorrection = () => {
+    if (correctionAdvance && loadingAction === `update:${correctionAdvance.id}`) return
+    setCorrectionAdvance(null)
+    setCorrectionError(null)
   }
 
-  const handleSaveEdit = async (row: AdvanceListItem) => {
-    if (!token || !row.canManage) return
+  const handleSubmitCorrection = async (payload: {
+    advanceNo?: string | null
+    advanceDate?: string | null
+    amount?: number | null
+    description?: string | null
+    reason: string
+    version: number
+  }) => {
+    if (!token || !correctionAdvance?.canManage) return
     resetMessages()
-    setLoadingAction(`update:${row.id}`)
+    setCorrectionError(null)
+    setLoadingAction(`update:${correctionAdvance.id}`)
     try {
-      const result = await updateAdvance(token, row.id, {
-        description: editingDescription.trim() || null,
-        version: row.version,
-      })
+      const result = await updateAdvance(token, correctionAdvance.id, payload)
       setListRows((prev) =>
         prev.map((item) =>
-          item.id === row.id
-            ? { ...item, description: result.description ?? null, version: result.version }
-            : item,
+          item.id === correctionAdvance.id ? { ...item, ...result } : item,
         ),
       )
-      setActionMessage(`Đã cập nhật ghi chú cho ${shortAdvanceId(row.id)}.`)
-      setEditingId(null)
-      setEditingDescription('')
+      setActionMessage(`Đã cập nhật khoản trả hộ ${shortAdvanceId(correctionAdvance.id)}.`)
+      setCorrectionAdvance(null)
+      setListReload((value) => value + 1)
     } catch (err) {
       if (err instanceof ApiError) {
-        setActionError(err.message)
+        setCorrectionError(err.message)
       } else {
-        setActionError('Không cập nhật được ghi chú.')
+        setCorrectionError('Không cập nhật được khoản trả hộ.')
       }
     } finally {
       setLoadingAction('')
+    }
+  }
+
+  const handleCreateSeller = async (payload: Parameters<typeof createSeller>[1]) => {
+    if (!token) return
+    setSellerCreateLoading(true)
+    setSellerCreateError(null)
+    try {
+      const created = await createSeller(token, payload)
+      const nextTaxCode = created.taxCode.trim()
+      const nextLabel = `${nextTaxCode} - ${created.name}`
+      setSellerTaxCode(nextTaxCode)
+      setSellerQuery(nextTaxCode)
+      setSellerOptions((prev) => [
+        { value: nextTaxCode, label: nextLabel },
+        ...prev.filter((option) => option.value !== nextTaxCode),
+      ])
+      setFieldError('sellerTaxCode')
+      setSellerCreateOpen(false)
+    } catch (err) {
+      if (err instanceof ApiError) setSellerCreateError(err.message)
+      else setSellerCreateError('Không tạo được bên bán.')
+    } finally {
+      setSellerCreateLoading(false)
+    }
+  }
+
+  const handleCloseHistory = () => {
+    if (historyLoading) return
+    setHistoryAdvance(null)
+    setHistoryItems([])
+    setHistoryError(null)
+  }
+
+  const handleOpenHistory = async (row: AdvanceListItem) => {
+    if (!token || !row.canManage) return
+    resetMessages()
+    setHistoryAdvance(row)
+    setHistoryItems([])
+    setHistoryError(null)
+    setHistoryLoading(true)
+    try {
+      const result = await fetchAdvanceHistory(token, row.id)
+      setHistoryItems(result)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setHistoryError(err.message)
+      } else {
+        setHistoryError('Không tải được lịch sử điều chỉnh.')
+      }
+    } finally {
+      setHistoryLoading(false)
     }
   }
 
@@ -599,15 +694,16 @@ export default function ManualAdvancesSection({
   }
 
   const listColumns = buildManualAdvanceColumns({
-    editingId,
-    editingDescription,
-    setEditingDescription,
-    onStartEdit: handleStartEdit,
-    onSaveEdit: handleSaveEdit,
-    onCancelEdit: handleCancelEdit,
+    onOpenCorrection: handleOpenCorrection,
+    onOpenHistory: handleOpenHistory,
     onApprove: handleApprove,
     onVoid: handleVoid,
     onUnvoid: handleUnvoid,
+    revealedCell,
+    onToggleReveal: handleToggleReveal,
+    onOpenAdvance: (customerTaxCode, advanceNo) =>
+      navigate(buildAdvanceRoute(customerTaxCode, advanceNo)),
+    onOpenCustomer: (customerTaxCode) => navigate(buildCustomerRoute(customerTaxCode)),
     loadingAction,
   })
 
@@ -676,10 +772,6 @@ export default function ManualAdvancesSection({
               <div className="advances-section-header__copy">
                 <span className="advances-section-kicker">Tạo nhanh</span>
                 <h3>Tạo khoản trả hộ KH</h3>
-                <p className="muted advances-section-lead">
-                  Ưu tiên hoàn thành MST bên bán, MST bên mua, số chứng từ, ngày trả hộ và số tiền
-                  trước. Ghi chú giữ ở lớp thông tin phụ để thao tác nhập nhanh không bị loãng.
-                </p>
               </div>
               {onImportTemplate ? (
                 <div className="advances-section-header__actions">
@@ -704,25 +796,37 @@ export default function ManualAdvancesSection({
 
             <div className="form-grid form-grid--advance">
               <div className="advances-field-primary">
-                <LookupInput
-                  label="MST bên bán"
-                  value={sellerTaxCode}
-                  placeholder="MST bên bán"
-                  options={sellerOptions}
-                  onChange={(value) => {
-                    setSellerTaxCode(value)
-                    setSellerQuery(value)
-                    if (value.trim()) {
-                      setFieldError('sellerTaxCode')
-                    }
-                  }}
-                  onBlur={() => {
-                    if (!sellerTaxCode.trim()) {
-                      setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
-                    }
-                  }}
-                  errorText={fieldErrors.sellerTaxCode}
-                />
+                <div className="field-stack">
+                  <LookupInput
+                    label="MST bên bán"
+                    value={sellerTaxCode}
+                    placeholder="MST bên bán"
+                    options={sellerOptions}
+                    onChange={(value) => {
+                      setSellerTaxCode(value)
+                      setSellerQuery(value)
+                      if (value.trim()) {
+                        setFieldError('sellerTaxCode')
+                      }
+                    }}
+                    onBlur={() => {
+                      if (!sellerTaxCode.trim()) {
+                        setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
+                      }
+                    }}
+                    errorText={fieldErrors.sellerTaxCode}
+                  />
+                  <button
+                    className="btn btn-outline btn-table"
+                    type="button"
+                    onClick={() => {
+                      setSellerCreateError(null)
+                      setSellerCreateOpen(true)
+                    }}
+                  >
+                    Thêm bên bán
+                  </button>
+                </div>
               </div>
               <div className="advances-field-primary">
                 <LookupInput
@@ -793,7 +897,12 @@ export default function ManualAdvancesSection({
                     : 'field advances-field-secondary'
                 }
               >
-                <span>Số chứng từ</span>
+                <span className="field-label">
+                  Số chứng từ
+                  <span className="advances-required-badge" aria-hidden="true">
+                    Bắt buộc
+                  </span>
+                </span>
                 <input
                   value={advanceNo}
                   onChange={(event) => {
@@ -808,6 +917,7 @@ export default function ManualAdvancesSection({
                     }
                   }}
                   placeholder="VD: CT-001"
+                  required
                 />
                 {fieldErrors.advanceNo && <span className="field-error">{fieldErrors.advanceNo}</span>}
               </label>
@@ -824,10 +934,6 @@ export default function ManualAdvancesSection({
             {createMessage && <div className="alert alert--success" role="alert" aria-live="assertive">{createMessage}</div>}
 
             <div className="advances-submit-row">
-              <div className="advances-submit-row__copy">
-                <strong>{canApprove ? 'Tạo xong có thể chốt ngay.' : 'Tạo nháp khi chưa bật quyền duyệt.'}</strong>
-                <span className="muted">{quickCreateModeLabel}</span>
-              </div>
               <div className="advances-submit-row__buttons">
                 {canApprove ? (
                   <>
@@ -869,9 +975,6 @@ export default function ManualAdvancesSection({
           <div className="advances-section-header">
             <span className="advances-section-kicker">Danh sách xử lý</span>
             <h3>Worklist khoản trả hộ KH</h3>
-            <p className="muted advances-section-lead">
-              Tập trung các khoản cần theo dõi, phê duyệt, hủy hoặc bỏ hủy trên cùng một mặt bàn thao tác.
-            </p>
           </div>
 
           <div className="advances-mini-stats" aria-label="Tóm tắt trạng thái hiện tại">
@@ -895,13 +998,11 @@ export default function ManualAdvancesSection({
         </div>
 
         <div className="advances-filter-shell">
-          <div className="advances-filter-head">
-            <div>
-              <p className="filters-block__title">Bộ lọc vận hành</p>
-              <p className="muted">Lọc nhanh theo đối tượng, trạng thái và chỉ mở rộng khi cần truy vết sâu hơn.</p>
+          {listLoading && (
+            <div className="advances-filter-head">
+              <span className="muted">Đang tải...</span>
             </div>
-            {listLoading && <span className="muted">Đang tải...</span>}
-          </div>
+          )}
 
           <div className="filters-grid">
             <LookupInput
@@ -1158,6 +1259,26 @@ export default function ManualAdvancesSection({
         onConfirm={handleConfirmAction}
       />
 
+      <AdvanceCorrectionModal
+        open={Boolean(correctionAdvance)}
+        advance={correctionAdvance}
+        error={correctionError}
+        loading={
+          Boolean(correctionAdvance) && loadingAction === `update:${correctionAdvance?.id}`
+        }
+        onClose={handleCloseCorrection}
+        onSubmit={handleSubmitCorrection}
+      />
+
+      <AdvanceHistoryModal
+        open={Boolean(historyAdvance)}
+        advance={historyAdvance}
+        items={historyItems}
+        error={historyError}
+        loading={historyLoading}
+        onClose={handleCloseHistory}
+      />
+
       <ActionConfirmModal
         isOpen={Boolean(bulkConfirmAction)}
         title={
@@ -1183,6 +1304,18 @@ export default function ManualAdvancesSection({
           setBulkConfirmError(null)
         }}
         onConfirm={handleBulkConfirmAction}
+      />
+      <SellerQuickAddModal
+        open={sellerCreateOpen}
+        loading={sellerCreateLoading}
+        error={sellerCreateError}
+        initialTaxCode={sellerTaxCode}
+        onClose={() => {
+          if (sellerCreateLoading) return
+          setSellerCreateOpen(false)
+          setSellerCreateError(null)
+        }}
+        onSubmit={handleCreateSeller}
       />
     </div>
   )

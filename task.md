@@ -11,6 +11,227 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 144 - Safe Customer deletion feature (2026-04-14) [bead: cng-d9h]
+- [x] Lập kế hoạch và đợi phê duyệt (Đang chờ - Pending user).
+- [x] Backend: Thêm `DELETE /customers/{taxCode}` endpoint với RBAC `Admin`.
+- [x] Backend: Bổ sung guard chặn xóa khách hàng đã phát sinh công nợ (`CurrentBalance != 0` hoặc có liên kết).
+- [x] Frontend: Thêm nút Delete và ConfirmDialog trên UI quản lý KH.
+- [x] Tests/Verify: Thử nghiệm thực tế các kịch bản chặn xóa an toàn.
+
+## Phase 142 - Real Google Drive offsite provider (2026-04-12) [bead: cng-6mo]
+- [x] Hoàn thiện provider Google Drive thật cho offsite upload bằng OAuth refresh token + Drive REST API, không còn dừng ở `NullBackupOffsiteService`.
+- [x] Nối provider vào `DependencyInjection` với fallback an toàn: chỉ dùng provider thật khi config đầy đủ, còn lại giữ null provider để không phá local backup hiện tại.
+- [x] Khai báo section `BackupOffsiteGoogleDrive` trong appsettings để chốt contract cấu hình production/development.
+- [x] Bổ sung unit tests cho connect URL, callback lưu refresh token, upload success và fail khi thiếu file local.
+- [x] Cập nhật `docs/agent-notebook.md`, bead, bằng chứng verify và chạy `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-12, phase 142 / cng-6mo)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~GoogleDriveBackupOffsiteServiceTests.ProcessNextPendingUploadAsync_WhenQueuedBackupExists_UploadsAndMarksSuccess"` => pass (`1/1`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj` => pass (`222/222`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: critical` do worktree tong the dang co nhieu file ban ngoai scope phase nay; pham vi code cua phase 142 tap trung vao provider Google Drive, DI/config va unit tests backup.
+
+## Phase 143 - Google Drive env plumbing after baseline commit (2026-04-12) [bead: cng-6zj]
+- [x] Commit toàn bộ thay đổi backup/offsite hiện có trước khi tách phần env-plumbing, theo yêu cầu user.
+- [x] Bổ sung map env `BackupOffsiteGoogleDrive` vào `docker-compose.yml` để container API nhận đúng các biến Google Drive từ root `.env`.
+- [x] Cập nhật `.env.example` và `ENV_SAMPLE.md` với đầy đủ biến `BACKUP_OFFSITE_GOOGLE_DRIVE_*` / `BackupOffsiteGoogleDrive__*`.
+- [x] Cập nhật `docs/agent-notebook.md` và `task.md` để lưu trạng thái sau commit nền và nêu rõ blocker còn lại là secret thật.
+- [ ] Điền secret thật `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_ID` + `BACKUP_OFFSITE_GOOGLE_DRIVE_CLIENT_SECRET` vào môi trường chạy thực tế khi user cung cấp hoặc tự inject qua secret manager.
+- [ ] Chạy `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` cho riêng diff env-plumbing trước khi chốt.
+
+## Phase 124 - Receipt side-effects metadata/version sync (2026-04-09) [bead: cng-d1g]
+- [x] Gom helper side-effects phiếu thu dùng chung sang partial mới `ReceiptService.AllocationEffects.cs` để tránh lặp logic giữa approve/void/correct/auto-allocation.
+- [x] Cập nhật luồng `ApproveAsync`, `VoidAsync`, `CorrectAsync` và auto-allocation để mọi mutation lên `Invoice`, `Advance`, `Customer` đều touch `UpdatedAt` và increment `Version`.
+- [x] Bổ sung/chỉnh regression integration tests để khóa hành vi metadata/version cho các flow approve, void, correction và auto-allocation.
+- [x] Chạy lại verify liên quan và đối chiếu blast radius bằng GitNexus trước khi chốt.
+
+## Phase 140 - Customer create + seller quick-add flow (2026-04-11) [bead: pending - bd blocked]
+- [x] Mở backend `POST /customers` với validate tax code/name/status/payment terms/credit limit, check duplicate tax code, và verify owner/manager tồn tại trước khi ghi master mới.
+- [x] Mở backend `POST /sellers` để quick-add người bán từ UI, normalize tax code/status, trim optional fields, và chặn duplicate tax code.
+- [x] Gắn flow tạo khách hàng ngay tại `Customers` page bằng modal riêng, refresh list sau khi tạo thành công và giữ filter/search đang dùng.
+- [x] Gắn flow quick-add người bán trong `ReceiptFormSection` và `ManualAdvancesSection`, không đụng `ManualInvoicesSection`, và đồng bộ lookup state sau khi tạo.
+- [x] Bổ sung regression tests frontend cho customer create modal và seller quick-add, đồng thời thêm integration tests backend khóa 2 endpoint POST mới.
+- [x] Chạy verify mục tiêu, cập nhật bằng chứng vào phase này, và chốt lại scope bằng `gitnexus_detect_changes`.
+
+Verification evidence (2026-04-11, phase 140 / bead pending)
+- `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter CustomerSellerCreateEndpointTests` => Passed `4/4`.
+- `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.create.test.tsx src/pages/receipts/__tests__/receipt-form-section.validation.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => Passed `10/10`.
+- `gitnexus_detect_changes(scope: all)` báo `risk_level: high` ở mức worktree tổng thể do còn nhiều file bẩn ngoài scope phase này (`AGENTS.md`, `CLAUDE.md`, `src/frontend/src/pages/InvoicesPage.tsx`, `src/frontend/src/pages/invoices.css`, ...). Các process bị ảnh hưởng trực tiếp bởi diff hiện tại vẫn xoay quanh `MapCustomerEndpoints`, `handleCreate`, `handleCreateAndApprove`, `resetMessages`, `setFieldError`, phù hợp với scope customer create + seller quick-add.
+
+## Phase 141 - Customer 360 unallocated credit semantics (2026-04-11) [bead: cng-4qn]
+- [x] Chuẩn hóa summary backend `Customer 360` để tách `openOutstanding`, `unallocatedCredit`, `netPosition`, đồng thời giữ `totalOutstanding`/`netAdjustment` cho tương thích consumer hiện tại.
+- [x] Xác nhận nguồn `customer.CurrentBalance` vẫn là vị thế ròng chuẩn và để `Customer 360` đọc credit chưa phân bổ từ receipt `UnallocatedAmount` + held credit `AmountRemaining`, không vá bằng suy diễn ở UI.
+- [x] Cập nhật UI `Customer 360` đổi KPI chính sang `Vị thế ròng`, thêm `Tiền chưa phân bổ`, và dùng copy “dư tiền/chờ phân bổ” khi `netPosition < 0` thay vì biểu đạt “nợ âm”.
+- [x] Bổ sung regression tests backend/frontend cho 4 scenario summary và wording credit âm/dương trên `Customer 360`.
+- [x] Xác nhận regression import invoice sau receipt dư vẫn auto-allocate như cũ, không thay đổi thuật toán `ReceiptService.AutoAllocation`.
+- [x] Chạy verify mục tiêu và đối chiếu scope thực tế bằng `gitnexus_detect_changes` trước khi chốt.
+
+Verification evidence (2026-04-11, phase 141 / cng-4qn)
+- `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CustomerService360Tests` => Passed `6/6`.
+- `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-360-section.test.tsx` => Passed `3/3`.
+- `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter ImportCommitInvoiceAutoAllocateTests.CommitInvoice_AutoAllocates_FromOverpaidReceipts` => Passed `1/1`.
+- `gitnexus_detect_changes(scope: "all")` => `medium` do file `CustomerService.cs` keo theo nhieu symbol cung file; doi chieu `git status --short` xac nhan scope thuc te chi gom 7 file cua phase 141.
+
+## Phase 139 - Remove customer name pill background on invoices list (2026-04-10) [bead: cng-2np]
+- [x] Bỏ nền xám bo elip khỏi trigger tên công ty ở cột `Khách hàng` trên `/invoices`, giữ nguyên deeplink reveal action.
+- [x] Tách style riêng cho `InvoicesPage` thay vì sửa global `.btn-ghost`, để không ảnh hưởng các nút khác trong app.
+- [x] Bổ sung regression test khóa customer trigger không còn dùng class nền pill cũ.
+- [x] Chạy verify frontend + `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-10, phase 139 / cng-2np)
+- `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx` -> pass (`8 passed`)
+- `npm --prefix src/frontend run build` -> pass
+- `gitnexus_detect_changes(scope: "all")` -> risk `medium`, scope thực tế gom vào `InvoicesPage` / customer trigger styling + regression test
+
+## Phase 129 - Root invoices module with inline manual entry (2026-04-09) [bead: cng-0pv]
+- [x] Tạo page gốc `/invoices` theo pattern mỏng như `/advances`, gắn list/search hóa đơn hiện có và section nhập tay ngay trên cùng module.
+- [x] Cập nhật route loader, điều hướng `AppShell`, và các preferred flows để `/invoices` trở thành entry point chính cho nghiệp vụ hóa đơn.
+- [x] Tách `/imports` về đúng vai trò batch import/history, bỏ tab nhập tay hóa đơn và deep-link CTA từ `/invoices` sang `/imports?tab=batch&type=INVOICE`.
+- [x] Giữ UI compact: nhãn ngắn, hạn chế copy thừa, thêm tooltip nơi cần thiết thay vì đoạn mô tả dài.
+- [x] Cập nhật/bổ sung regression tests cho nav, route loader, `/imports`, và module hóa đơn mới; chốt bằng verify + `gitnexus_detect_changes`.
+
+## Phase 130 - Invoice list fallback + input UX rename (2026-04-09) [bead: cng-vwl]
+- [x] Sửa `InvoiceService.ListAsync()` để danh sách hóa đơn không làm mất bản ghi khi thiếu customer master; giữ đúng total count, thứ tự sort, và pagination.
+- [x] Bổ sung regression test backend khóa hành vi invoice vẫn hiển thị khi không join được customer master.
+- [x] Sửa renderer linked invoices trong `InvoicesPage` để DOM hợp lệ, không còn block element nằm trong `<span>`.
+- [x] Cập nhật UX điều hướng khu vực nhập liệu theo thứ tự và tên mới:
+  - [x] `/imports` -> `Import từ Template`
+  - [x] `/invoices` -> `Nhập hóa đơn`
+  - [x] `/advances` -> `Nhập trả hộ`
+  - [x] `/receipts` -> `Nhập phiếu thu`
+- [x] Làm rõ `/imports` là điểm vào import template, đồng thời normalize deep-link `type` không hợp lệ khi `tab=batch`.
+- [x] Cập nhật regression tests frontend cho shell, invoices page, imports page; chạy verify và đối chiếu `gitnexus_detect_changes` trước khi chốt.
+
+### Verification evidence (2026-04-09, phase 130 / cng-vwl)
+- [x] Backend verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter InvoiceServiceListTests` => pass (`2/2`).
+- [x] Frontend verify:
+  - [x] `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx` (cwd `src/frontend`) => pass (`22/22`).
+  - [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead:
+  - [x] `src/backend/Infrastructure/Services/InvoiceService.cs`
+  - [x] `src/backend/Tests.Unit/InvoiceServiceListTests.cs`
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
+  - [x] `src/frontend/src/pages/InvoicesPage.tsx`
+  - [x] `src/frontend/src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `src/frontend/src/pages/dashboard/RoleCockpitSection.tsx`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+- [x] Worktree van co file tai lieu da modified san (`AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, `task.md`); khong co commit/push trong phase nay.
+- [x] `gitnexus_detect_changes(scope: "all")` da chay; output tong the bao `high` vi worktree dirty + so symbol bi detect lon, nhung cac execution flow bi anh huong thuc te tap trung dung vao `AppShell`, `InvoicesPage`, va backend `InvoiceService` theo scope du kien.
+
+## Phase 131 - Simplify imports header copy (2026-04-10) [bead: cng-joy]
+- [x] Bỏ block header lặp trong `src/frontend/src/pages/imports/ImportsPage.tsx` để `/imports` chỉ còn một header chính.
+- [x] Chuyển copy quy trình `chuẩn bị template → tải file → xem trước → ghi dữ liệu` lên shell header của route `/imports`, thay cho mô tả vai trò mặc định.
+- [x] Loại bỏ các dòng copy dư thừa ở khu vực header imports để phần mở đầu gọn và không lặp nội dung.
+- [x] Cập nhật regression tests frontend cho `AppShell` và `ImportsPage`, rồi verify lại đúng scope thay đổi bằng GitNexus.
+
+### Verification evidence (2026-04-10, phase 131 / cng-joy)
+- [x] `npm test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx` (cwd `src/frontend`) => pass (`18/18`).
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead:
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/layouts/__tests__/app-shell.test.tsx`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+
+## Phase 134 - Advances quick create compact header + required voucher badge (2026-04-10) [bead: pending - bd create blocked]
+- [x] Bỏ đoạn copy hướng dẫn dài ở header `Tạo khoản trả hộ KH` để phần create nhanh gọn hơn.
+- [x] Rà soát rule `Số chứng từ` ở cả manual form, backend validation, và import template; xác nhận đây là trường bắt buộc.
+- [x] Thêm hiển thị `Bắt buộc` cho trường `Số chứng từ` trên form nhập tay, giữ nguyên validation hiện có.
+- [x] Cập nhật regression test frontend khóa việc ẩn copy cũ và giữ badge bắt buộc cho `Số chứng từ`.
+- [x] Ghi chú vận hành: đã thử `bd create` nhưng Beads CLI vẫn lỗi `cannot use --rig: no routes.jsonl found in any parent .beads directory`, nên phase này tạm theo dõi bằng `task.md` + `docs/agent-notebook.md`.
+
+### Verification evidence (2026-04-10, phase 134 / bead pending)
+- [x] Frontend verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass.
+- [x] Domain verification:
+  - [x] Manual form `ManualAdvancesSection` chặn submit khi thiếu `advanceNo`.
+  - [x] Backend integration test `AdvanceCreateValidationTests.CreateAsync_Rejects_EmptyAdvanceNo` xác nhận service reject khi `advanceNo` rỗng.
+  - [x] Template generator `scripts/imports/generate_import_templates.py` đánh dấu cột `advance_no` là bắt buộc.
+
+### Verification evidence (2026-04-09, phase 129 / cng-0pv)
+- [x] Backend verify:
+  - [x] `dotnet build src/backend/Api/CongNoGolden.Api.csproj` => pass.
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter InvoiceServiceListTests` => pass (`1/1`).
+- [x] Frontend verify:
+  - [x] `npm test -- --run src/pages/__tests__/invoices-page.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/__tests__/page-loaders.test.ts` (cwd `src/frontend`) => pass (`22/22`).
+  - [x] `npm run build` (cwd `src/frontend`) => pass.
+- [x] `git status --short` sau khi hoàn tất cho thay đổi trực tiếp trong bead ở các file invoices/imports/frontend route va backend list API:
+  - [x] `src/backend/Api/Endpoints/InvoiceEndpoints.cs`
+  - [x] `src/backend/Application/Invoices/IInvoiceService.cs`
+  - [x] `src/backend/Application/Invoices/InvoiceListItemDto.cs`
+  - [x] `src/backend/Application/Invoices/InvoiceListRequest.cs`
+  - [x] `src/backend/Infrastructure/Services/InvoiceService.cs`
+  - [x] `src/backend/Tests.Unit/InvoiceServiceListTests.cs`
+  - [x] `src/frontend/src/App.tsx`
+  - [x] `src/frontend/src/api/invoices.ts`
+  - [x] `src/frontend/src/layouts/AppShell.tsx`
+  - [x] `src/frontend/src/pages/InvoicesPage.tsx`
+  - [x] `src/frontend/src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `src/frontend/src/pages/__tests__/page-loaders.test.ts`
+  - [x] `src/frontend/src/pages/imports/ImportsPage.tsx`
+  - [x] `src/frontend/src/pages/imports/ManualInvoicesSection.tsx`
+  - [x] `src/frontend/src/pages/imports/__tests__/imports-page.fixed-type.test.tsx`
+  - [x] `src/frontend/src/pages/pageLoaders.ts`
+- [x] `gitnexus_detect_changes(scope: "all", base_ref: "main")` da chay; ket qua tong the bao `high` vi worktree dang co sua doi tai `AGENTS.md`, `CLAUDE.md`, `docs/agent-notebook.md`, nhung scope code cua bead van gioi han trong cum invoices/imports/backend list API nhu tren.
+
+### Verification evidence (2026-04-09, phase 124 / cng-d1g)
+- [x] GitNexus impact:
+  - [x] `ApplyAllocations` => `HIGH`
+  - [x] `ApproveAsync` => `HIGH`
+  - [x] `VoidAsync`, `RestoreInvoice`, `RestoreAdvance`, `ReverseApprovedEffectsAsync`, `CorrectAsync` => `LOW`
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReceiptLifecycleRbacTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal` => pass (`11/11`).
+- [x] `git status --short` sau khi hoàn tất chỉ ra scope sửa trực tiếp ở nhóm file receipt service/test + helper mới; worktree vốn đã bẩn sẵn với `AGENTS.md`, `.claude/`, `CLAUDE.md`.
+- [x] `gitnexus_detect_changes(scope: "all", base_ref: "main")` đã chạy; output tổng thể báo `critical` do worktree đang có thay đổi ngoài task hiện tại, nhưng phần file sửa trực tiếp vẫn giới hạn trong:
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.Void.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.Correction.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.AutoAllocation.cs`
+  - [x] `src/backend/Infrastructure/Services/ReceiptService.AllocationEffects.cs`
+  - [x] `src/backend/Tests.Integration/ReceiptLifecycleRbacTests.cs`
+  - [x] `src/backend/Tests.Integration/ReceiptCorrectionTests.cs`
+
+## Phase 120 - Merge deployed data branch back into main (2026-04-07) [bead: cng-akc]
+- [x] Merge `fix/table-scroll-hint-20260307` vào `main` bằng merge commit để giữ lại cả lịch sử nhánh fix lẫn commit dữ liệu cục bộ `9347540` trên `main`.
+- [x] Đồng bộ regression test sau merge: sửa assertion frontend cũ đang mong đợi nhãn `Xem trước` trong khi copy hiện hành là `Xem trước lần cuối`.
+- [x] Verify:
+  - [x] `git log --oneline --decorate --graph --max-count=12` => `main` ở merge commit `8e71b66`, vẫn giữ commit `9347540` và toàn bộ commit riêng của `fix/table-scroll-hint-20260307`.
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerPermissionEvaluatorTests|FullyQualifiedName~ImportPermissionEvaluatorTests|FullyQualifiedName~CurrentUserServiceTests|FullyQualifiedName~JwtTokenServiceTests" -v minimal` => pass (`20/20`).
+  - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-page.permissions.test.tsx src/pages/admin/__tests__/role-permissions-manager.test.tsx src/pages/imports/__tests__/importValidationMessages.test.ts src/pages/imports/__tests__/importBatchRecovery.test.ts` => pass (`13/13`).
+
+## Phase 121 - Customer debt sort filter (2026-04-07) [bead: cng-99r]
+- [x] Mở rộng contract danh sách khách hàng để nhận sort dư nợ từ API (`balance_asc`, `balance_desc`, `debt_oldest`, `debt_newest`).
+- [x] Bổ sung logic sort ở `CustomerService` cho 4 trường hợp: nợ tăng dần, nợ giảm dần, nợ lâu nhất, nợ mới nhất; giữ fallback mặc định theo tên/MST.
+- [x] Cập nhật `/customers` frontend với bộ lọc `Sắp xếp dư nợ` gọn hơn, đồng bộ chip filter và reset filter.
+- [x] Bổ sung regression test backend cho 4 chế độ sort và cập nhật test frontend module Customers theo UI mới.
+
+### Verification evidence (2026-04-07, phase 121 / cng-99r)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~CustomerServiceListTests|FullyQualifiedName~CustomerService360Tests" -v minimal` => pass (`6/6`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customers-modules.test.tsx` => pass (`11/11`).
+- [x] `npm --prefix src/frontend run lint` => pass (`0` error; còn `1` warning cũ, không liên quan tại `src/pages/receipts/ReceiptListSection.tsx:196`).
+
+## Phase 122 - Invoice template issue_date import bug (2026-04-07) [bead: cng-gpr]
+- [x] Tái hiện lỗi import `invoice_template.xlsx` khi cột `issue_date` có dữ liệu nhưng preview staging vẫn trả `null` và báo `Thiếu ngày phát hành`.
+- [x] Bổ sung regression test với file template hệ thống và/hoặc luồng `ImportStagingService` để khóa hành vi đúng.
+- [x] Xác định root cause trong parser / luồng staging / upload và triển khai fix tối thiểu.
+- [x] Chạy lại test liên quan, ghi nhận kết quả và cập nhật bead + `task.md`.
+- Kết quả: so khớp header trong `ImportInvoiceTemplateParser` dùng chuỗi đã normalize cho cột Excel nhưng lại dò token snake_case thô như `issue_date`, `customer_name`, `revenue_excl_vat`, khiến các cột này không được map và `issue_date` rơi về `null`.
+- Test xác nhận:
+  - `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests"`: pass.
+  - `dotnet test src\\backend\\Tests.Integration\\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests.StageInvoice_SystemTemplateFile_Preserves_IssueDate"`: pass.
+
+## Phase 123 - Audit generic import parser normalization and protect snake_case system templates (2026-04-07) [bead: cng-qf6]
+- [x] Rà lại parser import generic đang dùng cho `ADVANCE` và `RECEIPT`, xác nhận logic match header vẫn còn dò token snake_case thô trên chuỗi header đã normalize.
+- [x] Sửa `ImportTemplateParser` để normalize cả token trước khi `Contains`, đồng bộ hành vi với fix đã áp cho `ImportInvoiceTemplateParser`.
+- [x] Bổ sung regression tests dùng file template hệ thống thật (`advance_template.xlsx`, `receipt_template.xlsx`, `invoice_template.xlsx`) để khóa toàn bộ cột snake_case quan trọng.
+- [x] Mở rộng integration tests `ImportStagingDuplicateDetectionTests` để xác nhận các file template thật đi qua staging vẫn preserve đầy đủ raw field snake_case.
+- [x] Chạy verify sau thay đổi và đồng bộ lại bead + `task.md`.
+
+### Verification evidence (2026-04-07, phase 123 / cng-qf6)
+- [x] `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportTemplateParserTests" -v minimal` => pass (`12/12`).
+- [x] `dotnet test src\\backend\\Tests.Unit\\Tests.Unit.csproj --filter "FullyQualifiedName~ImportInvoiceTemplateParserTests" -v minimal` => pass (`4/4`).
+- [x] `dotnet test src\\backend\\Tests.Integration\\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests" -v minimal` => pass (`6/6`).
+
 ## Phase 96 - Customer owner/manager import from Excel (2026-04-06)
 - [x] `cng-mp9` Đối chiếu file `người phụ trách.xlsx` với `congno.customers` theo MST trong môi trường Docker đang chạy ổn định.
 - [x] Tạo mới `138` khách hàng chưa tồn tại; bổ sung/gán dữ liệu vận hành cho `238` khách hàng hiện có.
@@ -1790,3 +2011,195 @@
     - `data/backup/dumps/congno_pre_balance_cleanup_20260321_103132.dump`
     - `data/backup/dumps/congno_pre_purge_20260321_102424.dump`
 
+## Phase 124 - Stabilize full backend suite after import permission enforcement (2026-04-07) [bead: cng-3g8]
+- [x] Xác nhận root cause của full suite fail: ba integration test `ImportCommit*` vẫn seed `ICurrentUser` chỉ có `Roles`, trong khi `ImportCommitService` nay gate theo `Permissions` cụ thể cho từng loại batch.
+- [x] Cập nhật các test `ImportCommitNotificationTests` và `ImportCommitPeriodLockTests` để cấp explicit permission `import.commit.advance` / `import.commit.invoice`, bám đúng contract runtime mới thay vì dựa vào role ngầm định.
+- [x] Chạy lại targeted integration tests cho hai nhóm trên, sau đó rerun toàn bộ backend suite trước khi commit/push/deploy Docker.
+
+### Verification
+- [x] `dotnet test src\backend\Tests.Integration\CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitNotificationTests|FullyQualifiedName~ImportCommitPeriodLockTests" -v minimal` => pass `3/3`.
+- [x] `dotnet test src\backend\CongNoGolden.sln -v minimal` => pass `304/304` (`Tests.Unit 205/205`, `CongNoGolden.Tests.Integration 99/99`).
+
+## Phase 125 - Refresh docker stack after backend fix and resync persisted DB credentials (2026-04-07) [bead: cng-fo6]
+- [x] Rebuild lại Docker stack bằng `docker compose up -d --build` để `web`, `api`, `db` dùng image mới nhất sau khi backend fix đã được commit/push.
+- [x] Điều tra root cause `api` container restart loop sau rebuild: volume Postgres cũ vẫn giữ password role `congno_app` khác với `.env`, khiến kết nối nội bộ từ `api -> db` fail theo rule `scram-sha-256`.
+- [x] Đồng bộ lại password role `congno_app` trong database hiện hữu để khớp `.env`, tránh phải reset volume hay mất dữ liệu môi trường local/staging.
+- [x] Xác nhận lại trạng thái runtime sau resync: `db` healthy, `api` up, `web` up, probe `http://localhost:18080/metrics` trả `200`.
+
+### Verification
+- [x] `docker compose up -d --build` => rebuild xong `congno-api:latest`, `congno-web:latest` và recreate stack.
+- [x] `docker run --rm --network congno_congno_net -e PGPASSWORD=ChangeMe_Db_2026! postgres:16-alpine psql -h db -U congno_app -d congno_golden -Atqc "select current_user;"` => pass `congno_app`.
+- [x] `docker compose ps` => `congno-db` healthy, `congno-api` up, `congno-web` up.
+- [x] `curl.exe -s -o NUL -w "%{http_code}" http://localhost:18080/metrics` => `200`.
+- [x] `Invoke-WebRequest http://localhost:18081 -UseBasicParsing | Select-Object -ExpandProperty StatusCode` => `200`.
+
+
+## Phase 126 - Add unassigned owner filter on customers page (2026-04-07) [bead: cng-c52]
+- [x] Bổ sung lựa chọn lọc `Chưa phân công` trong dropdown `Phụ trách` tại `/customers` để tìm nhanh khách hàng chưa có nhân viên phụ trách.
+- [x] Đồng bộ logic filter frontend/backend (nếu API đã lọc server-side) để trạng thái chưa gán được xử lý rõ ràng, không phụ thuộc hiển thị `-` ở bảng.
+- [x] Bổ sung/cập nhật regression tests cho luồng lọc khách hàng theo phụ trách, bao gồm case chưa phân công.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter CustomerServiceListTests`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/customers/__tests__/customer-list-section.unassigned-filter.test.tsx`
+
+## Phase 127 - Accountant correction flow for advances and receipts with persistent work notebook (2026-04-08) [bead: cng-952]
+- [x] Tạo bead và khóa trạng thái công việc vào notebook trong repo để có thể resume đúng việc đang làm khi vô tình tắt phiên hoặc đổi tài khoản.
+- [x] Bổ sung correction flow riêng cho khoản trả hộ, cho phép kế toán sửa các trường cốt lõi có kiểm soát và audit reason bắt buộc.
+- [x] Bổ sung correction flow riêng cho phiếu thu, tách rõ sửa metadata với sửa trường ảnh hưởng phân bổ; các thay đổi ảnh hưởng phân bổ phải đưa chứng từ về `DRAFT`.
+- [x] Bổ sung history endpoint theo từng chứng từ cho khoản trả hộ và phiếu thu, dùng lại dữ liệu audit nhưng phục vụ trực tiếp UI chứng từ.
+- [x] Cập nhật UI khoản trả hộ và phiếu thu để kế toán có thể `Sửa` và `Lịch sử sửa` ngay trên chứng từ.
+- [x] Bổ sung/cập nhật test backend và frontend theo TDD cho các rule correction, reopen, audit và document history.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -v minimal`
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT`
+
+### Verification evidence (2026-04-08, phase 127 / cng-952)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj -v minimal` => pass (`206/206`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests|FullyQualifiedName~ReceiptCorrectionTests" -v minimal` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run lint` => pass.
+- [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx src/pages/receipts/__tests__/receipts-modules.test.tsx src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`21/21`).
+- [x] `npm --prefix src/frontend run build` => pass.
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => scope anh huong workspace hien tai duoc danh gia `critical` vi dang co nhieu thay doi unstaged rong hon rieng Phase 127; da doi chieu va khong thay blocker rieng cho correction flow.
+
+## Phase 128 - Finish advance correction follow-up after phase 127 (2026-04-09) [bead: cng-79p]
+- [x] Sua `AdvanceService.UpdateAsync` de correction tren khoan tra ho da `APPROVED` cap nhat lai `current_balance`, `status`, `outstanding_amount` nhat quan trong mot transaction.
+- [x] Bo sung rule tu dong dung receipt credit con ranh khi correction lam tang outstanding cua khoan tra ho dang `APPROVED`.
+- [x] Cap nhat workspace nhap lieu tra ho de reload list ngay sau khi sua, tranh stale state sau correction modal.
+- [x] Gom cum 4 action `Sua` / `Lich su sua` / `Phe duyet` / `Huy` thanh layout 2 lane gon hon va de doc trang thai hon.
+- [x] Bo sung/cap nhat regression tests backend + frontend cho balance correction, auto-reallocation, action layout va post-edit reload.
+- [x] Verify:
+  - [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal`
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx`
+  - [x] `docker compose config -q`
+  - [x] `docker compose build api web`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged`
+
+### Verification evidence (2026-04-09, phase 128 / cng-79p)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~AdvanceCorrectionTests" -v minimal` => pass (`4/4`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx` => pass (`8/8`).
+- [x] `docker compose config -q` => pass.
+- [x] `docker compose build api web` => pass (rebuild thanh cong `congno-api:latest`, `congno-web:latest`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=unstaged` => risk `high`; pham vi bi doi rong vi `AdvanceService.cs` la service dung chung va phase nay dong thoi cap nhat `task.md`/notebook, khong lo blocker moi rieng cho correction follow-up.
+
+## Phase 129 - Rebalance correction side-effects and restore receipt/advance edit history (2026-04-09) [bead: cng-lr7]
+- [x] Sua correction flow cua `AdvanceService` de khi giam amount tren khoan tra ho da duoc phan bo, he thong tu dong release bot allocation thay vi chan thao tac; dong bo lai `outstanding_amount`, `status` va receipt allocation lien quan trong cung transaction.
+- [x] Bo sung helper partial rieng de giam allocation credit tren advances, cap nhat `ReceiptAllocationStatus`, `AllocationSource`, `UpdatedAt`, `Version` cho receipt bi anh huong.
+- [x] Sua correction payload cua receipts tren frontend de gui day du metadata allocation (`allocationMode`, `appliedPeriodStart`, `allocationPriority`, `selectedTargets`) khi ghi sua, tranh lam sai logic side-effects/tong hop sau save.
+- [x] Sua backend correction cua receipts de fallback ve allocation mode hien tai neu request correction khong gui truong nay.
+- [x] Khoi phuc history endpoint cua receipts va advances bang cach chap nhan ca `Receipt`/`Advance` lan `RECEIPT`/`ADVANCE` trong audit filter, de lich su sua hoat dong tro lai voi du lieu audit da ton tai.
+- [x] Cap nhat regression tests backend/frontend cho correction payload, rebalance allocation va semantics version sau correction.
+- [x] Chay verify lien quan va doi chieu scope bang GitNexus truoc khi ket thuc.
+
+### Verification evidence (2026-04-09, phase 129 / cng-lr7)
+- [x] `npm --prefix src/frontend test -- --run src/pages/receipts/__tests__/receipt-list-section.test.tsx` => pass (`2/2`).
+- [x] `dotnet test src/backend/CongNoGolden.sln --filter "FullyQualifiedName~AdvanceCorrectionTests"` => pass (`4/4`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all base_ref=main` => risk `high`; output co ke them thay doi san co o `AGENTS.md` va `CLAUDE.md`, con scope code cua phase nay tap trung vao `AdvanceService`, `ReceiptService.Correction`, history endpoints, correction modal va test lien quan.
+
+## Phase 132 - Move imports utility actions into step 1 card (2026-04-10) [bead: cng-ljd]
+- [x] Bo hang header lap lai tren `ImportBatchSection` gom title `Nhap file, kiem tra truoc khi ghi du lieu` va dong quy trinh ben duoi.
+- [x] Dua 2 nut `Tai template` va `Lich su nhap` vao goc tren ben phai cua khu vuc `Buoc 1`, cung hang voi tieu de `Chuan bi template`.
+- [x] Don sach JSX/code thua sinh ra sau khi bo row cu va bo sung regression test frontend cho layout moi.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/imports/__tests__/imports-page.fixed-type.test.tsx src/pages/imports/__tests__/importBatchSection.dragdrop.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+## Phase 133 - Remove duplicated invoices header copy (2026-04-10) [bead: cng-ktd]
+- [x] Bo block header lap lai trong `InvoicesPage` gom title `Nhap hoa don` va dong mo ta huong dan ngay tren `ManualInvoicesSection`.
+- [x] Cap nhat shell header route `/invoices` thanh copy moi: `Theo doi danh sach HD, nhap thu cong HD hoac chuyen sang Import tu Template.` ma khong anh huong copy mac dinh cua role `Admin` tren trang khac.
+- [x] Don sach regression tests/frontend assertions lien quan den header `/invoices`.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 133 / cng-ktd)
+- [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`16/16`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => output tong the bao `high` do worktree dang co them file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) va thay doi tracking (`task.md`, `docs/agent-notebook.md`); scope code cua phase nay tap trung dung vao `AppShell`, `InvoicesPage` va regression tests frontend lien quan.
+
+## Phase 134 - Align invoices import CTA copy (2026-04-10) [bead: pending-cli-config]
+- [x] Ra soat review finding cu tren `/invoices`; xac nhan canh bao invalid DOM nesting `span > div` da stale, code hien tai khong con loi nay.
+- [x] Sua CTA trong `ManualInvoicesSection` tu `Mo import batch` thanh `Import tu Template` de dong bo voi copy tren cac trang khac.
+- [x] Cap nhat frontend tests/assertions lien quan den CTA moi tren `ManualInvoicesSection` va `InvoicesPage`.
+- [x] Ghi nhan blocker beads: `bd create` fail voi `cannot use --rig: no routes.jsonl found in any parent .beads directory`, nen phase nay tam theo doi bang `task.md` + notebook cho den khi CLI duoc sua.
+- [ ] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx`
+  - [ ] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 134 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualInvoicesSection.test.tsx src/pages/__tests__/invoices-page.test.tsx` => pass (`9/9`).
+
+## Phase 135 - Trim advances helper copy and unify required badges (2026-04-10) [bead: pending-cli-config]
+- [x] Bo block copy cuoi khu vuc `Tao khoan tra ho KH` de hang action chi con nut thao tac.
+- [x] Bo mo ta cua khu `Danh sach xu ly` va bo heading/helper copy cua `Bo loc van hanh`.
+- [x] Dong bo nhan `Bat buoc` trong form advances ve cung mot style mau xanh, co dau tieng Viet, khong con badge mau cam rieng le cho `So chung tu`.
+- [x] Cap nhat frontend regression tests cho `ManualAdvancesSection`.
+- [x] Ghi nhan tiep tuc blocker beads: phase nay van theo doi bang `task.md` + notebook vi `bd create` chua dung duoc tren workspace hien tai.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 135 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`11/11`).
+
+## Phase 136 - Update advances shell subtitle for pay-on-behalf entry (2026-04-10) [bead: pending-cli-config]
+- [x] Doi subtitle shell route `/advances` tu copy role `Admin` sang copy nghiep vu: `Nhap khoan tra ho cho khach hang vao he thong theo doi cong no`.
+- [x] Giu scope toi thieu bang cach them route guidance override rieng cho `/advances`, khong doi subtitle mac dinh cua cac trang admin khac.
+- [x] Cap nhat regression test frontend cho `AppShell` de khoa subtitle moi o route `/advances`.
+- [x] Ghi nhan khong co code thua nao an toan can loai bo them sau khi doi subtitle; giu nguyen cac override khac de tranh lan scope.
+- [x] Ghi nhan bead van tam theo doi bang `task.md` + notebook vi `bd create` truoc do van bi chan boi cau hinh CLI.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 136 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/layouts/__tests__/app-shell.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`17/17`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => output tong the bao `medium` do worktree co them thay doi tracking/doc san co; scope code cua phase nay tap trung vao `AppShell` va regression test shell route `/advances`.
+
+## Phase 137 - Compact advances worklist action buttons (2026-04-10) [bead: pending-cli-config]
+- [x] Chuyen action cell trong advances worklist tu layout 2 lane sang 1 action group xep doc gon hon, giu nguyen toan bo logic hien/enable/loading cua cac nut `Sua`, `Phe duyet`, `Lich su sua`, `Huy` / `Bo huy`.
+- [x] Tinh chinh CSS action group de giam footprint nut: min-height thap hon, padding/gap nho hon, bo lane separator va xep thanh 1 cot doc on dinh trong o `Thao tac`.
+- [x] Giữ responsive fallback cho man hinh hep ma khong lam tran layout bat thuong.
+- [x] Cap nhat regression test `manualAdvancesColumns` de bo phu thuoc vao lane markup cu va khoa action group moi.
+- [x] Ghi nhan tiep tuc blocker beads: phase nay van theo doi bang `task.md` + notebook vi `bd create` chua dung duoc tren workspace hien tai.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 137 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/imports/__tests__/manualAdvancesColumns.test.tsx src/pages/imports/__tests__/manualAdvancesSection.test.tsx src/pages/__tests__/advances-page.test.tsx` => pass (`15/15`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: low`; scope code tap trung vao `src/frontend/src/pages/imports/manualAdvancesColumns.tsx`, `src/frontend/src/pages/advances/advances.css`, va regression test lien quan. Worktree van co file tai lieu modified san (`AGENTS.md`, `CLAUDE.md`) nhung phase nay khong dung vao cac file do.
+
+## Phase 138 - Add invoice/customer deeplink reveal actions (2026-04-10) [bead: pending-cli-config]
+- [x] Them reveal action tren cot `So hoa don` de nguoi dung bam vao ma hoa don, hien nut `Xem`, va deeplink sang `/customers?taxCode=...&tab=invoices&doc=...`.
+- [x] Them reveal action tren cot `Khach hang` de nguoi dung bam vao ma so thue/ten khach hang, hien nut `Xem`, va deeplink sang `Customer 360 View` theo tax code.
+- [x] Giữ fallback plain text khi invoice row khong co `customerTaxCode`, tranh hien action deeplink sai.
+- [x] Reset reveal state moi lan tai du lieu invoice list de tranh loi stale action sau khi loc/tim kiem.
+- [x] Bo sung regression test frontend cho ca 2 luong deeplink va case khong co tax code.
+- [x] Ghi nhan bead van tam theo doi bang `task.md` vi `bd create` truoc do van bi chan boi cau hinh CLI.
+- [x] Verify:
+  - [x] `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx`
+  - [x] `npm --prefix src/frontend run build`
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-10, phase 138 / bead pending-cli-config)
+- [x] `npm --prefix src/frontend test -- --run src/pages/__tests__/invoices-page.test.tsx` => pass (`8/8`).
+- [x] `npm --prefix src/frontend run build` => pass (`tsc -b && vite build`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: medium`; scope code tap trung vao `src/frontend/src/pages/InvoicesPage.tsx` va process `InvoicesPage -> RenderReferenceChips`, con tong risk bi doi len boi worktree dang co them thay doi tai lieu san (`AGENTS.md`, `CLAUDE.md`) va file CSS da chinh truoc do (`src/frontend/src/pages/advances/advances.css`).
+
+## Phase 139 - Google Drive offsite backup hardening (2026-04-11) [bead: cng-w5p]
+- [x] Mo rong backup settings/model/contracts de ho tro offsite backup Google Drive, retention rieng, checksum va health/status.
+- [x] Bo sung persistence va service abstraction cho Google Drive OAuth user-drive, luu refresh token da ma hoa, upload job metadata va retry state.
+- [x] Chuan hoa luong backup thanh 2 pha: local dump -> enqueue offsite upload, khong lam fail nguoc local khi upload offsite loi.
+- [x] Bo sung durability/recovery cho queue/job backup + offsite upload de survive service restart va theo doi missed backup.
+- [x] Mo rong admin API/UI backup cho connect/callback/disconnect/test upload/reupload va hien thi local/offsite status tach bach.
+- [x] Cap nhat backend/frontend tests cho local flow, offsite flow, OAuth, recovery va regression restore.
+- [ ] Verify:
+  - [x] Build/test backend, frontend theo scope thay doi
+  - [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all`
+
+### Verification evidence (2026-04-11, phase 139 / cng-w5p)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --no-restore` => pass (`218/218`).
+- [x] `npm --prefix src/frontend test -- --run src/pages/admin/__tests__/admin-backup-page.test.tsx` => pass (`6/6`).
+- [x] `npm --prefix src/frontend run build` => pass (`tsc -b && vite build`).
+- [x] `mcp__gitnexus__detect_changes repo=CONG_NO_KT scope=all` => `risk_level: critical` do thay doi vao cac symbol trung tam cua backup flow (`BackupSettings`, `ConGNoDbContext`, `IBackupService`, `BackupWorkerHostedService`, `MapBackupEndpoints`) va worktree dang co san thay doi tai lieu ngoai scope (`AGENTS.md`, `CLAUDE.md`). Scope code cua phase nay van tap trung vao backup/offsite backend + admin backup UI/tests.

@@ -5,18 +5,25 @@ import type {
   BackupAuditItem,
   BackupJobDetail,
   BackupJobListItem,
+  BackupOffsiteUpload,
   BackupSettings,
 } from '../api/backup'
 import {
+  completeBackupGoogleDriveCallback,
   downloadBackupFile,
+  disconnectBackupOffsiteConnection,
   fetchBackupAudit,
   fetchBackupJob,
   fetchBackupJobs,
+  fetchBackupOffsiteUploads,
   fetchBackupSettings,
   fetchBackupStatus,
   issueBackupDownloadToken,
+  requestBackupGoogleDriveConnectUrl,
+  reuploadBackupJob,
   restoreBackup,
   runManualBackup,
+  testBackupOffsiteUpload,
   updateBackupSettings,
   uploadBackupFile,
 } from '../api/backup'
@@ -35,6 +42,11 @@ const dayOptions = [
   { value: 6, label: 'Thứ 7' },
 ]
 
+const frequencyOptions = [
+  { value: 1, label: 'Hàng ngày' },
+  { value: 2, label: 'Hàng tuần' },
+]
+
 const statusLabels: Record<string, string> = {
   queued: 'Đang xếp hàng',
   running: 'Đang chạy',
@@ -48,12 +60,28 @@ const typeLabels: Record<string, string> = {
   scheduled: 'Tự động',
 }
 
+const offsiteProviderLabels: Record<string, string> = {
+  google_drive: 'Google Drive',
+}
+
 const formatFileSize = (value?: number | null) => {
   if (!value) return '-'
   if (value < 1024) return `${value} B`
   if (value < 1024 * 1024) return `${Math.round(value / 1024)} KB`
   if (value < 1024 * 1024 * 1024) return `${Math.round(value / (1024 * 1024))} MB`
   return `${Math.round(value / (1024 * 1024 * 1024))} GB`
+}
+
+const buildGoogleDriveRedirectUri = () => `${window.location.origin}${window.location.pathname}`
+
+const clearGoogleDriveCallbackQuery = () => {
+  const url = new URL(window.location.href)
+  ;['code', 'scope', 'state', 'error', 'error_description'].forEach((key) => {
+    url.searchParams.delete(key)
+  })
+  const nextSearch = url.searchParams.toString()
+  const nextUrl = `${url.pathname}${nextSearch ? `?${nextSearch}` : ''}${url.hash}`
+  window.history.replaceState({}, document.title, nextUrl)
 }
 
 type RestoreTarget =
@@ -71,6 +99,7 @@ export default function AdminBackupPage() {
     message: null,
   })
   const [jobs, setJobs] = useState<BackupJobListItem[]>([])
+  const [offsiteUploads, setOffsiteUploads] = useState<BackupOffsiteUpload[]>([])
   const [audit, setAudit] = useState<BackupAuditItem[]>([])
   const [logJob, setLogJob] = useState<BackupJobDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -79,6 +108,9 @@ export default function AdminBackupPage() {
   const [page, setPage] = useState(1)
   const [pageSize, setPageSize] = useState(20)
   const [total, setTotal] = useState(0)
+  const [offsitePage, setOffsitePage] = useState(1)
+  const [offsitePageSize, setOffsitePageSize] = useState(10)
+  const [offsiteTotal, setOffsiteTotal] = useState(0)
   const [auditPage, setAuditPage] = useState(1)
   const [auditTotal, setAuditTotal] = useState(0)
   const [uploadFile, setUploadFile] = useState<File | null>(null)
@@ -87,6 +119,7 @@ export default function AdminBackupPage() {
   const [restoreTarget, setRestoreTarget] = useState<RestoreTarget | null>(null)
   const [restoreLoading, setRestoreLoading] = useState(false)
   const [restoreError, setRestoreError] = useState<string | null>(null)
+  const [offsiteBusy, setOffsiteBusy] = useState(false)
 
   const loadSettings = useCallback(async () => {
     const result = await fetchBackupSettings(token)
@@ -102,6 +135,17 @@ export default function AdminBackupPage() {
       setPageSize(result.pageSize)
     },
     [page, pageSize, token],
+  )
+
+  const loadOffsiteUploads = useCallback(
+    async (nextPage = offsitePage, nextSize = offsitePageSize) => {
+      const result = await fetchBackupOffsiteUploads(token, { page: nextPage, pageSize: nextSize })
+      setOffsiteUploads(result.items)
+      setOffsiteTotal(result.total)
+      setOffsitePage(result.page)
+      setOffsitePageSize(result.pageSize)
+    },
+    [offsitePage, offsitePageSize, token],
   )
 
   const loadAudit = useCallback(
@@ -127,7 +171,13 @@ export default function AdminBackupPage() {
       setLoading(true)
       setError(null)
       try {
-        await Promise.all([loadSettings(), loadJobs(1, pageSize), loadAudit(1), loadStatus()])
+        await Promise.all([
+          loadSettings(),
+          loadJobs(1, pageSize),
+          loadOffsiteUploads(1, offsitePageSize),
+          loadAudit(1),
+          loadStatus(),
+        ])
       } catch (err) {
         if (!active) return
         if (err instanceof ApiError) {
@@ -148,14 +198,80 @@ export default function AdminBackupPage() {
       active = false
       setNotice(null)
     }
-  }, [token, pageSize, loadAudit, loadJobs, loadSettings, loadStatus])
+  }, [token, pageSize, offsitePageSize, loadAudit, loadJobs, loadOffsiteUploads, loadSettings, loadStatus])
+
+  useEffect(() => {
+    if (!token) return
+
+    const url = new URL(window.location.href)
+    const code = url.searchParams.get('code')
+    const oauthError = url.searchParams.get('error')
+    const redirectUri = buildGoogleDriveRedirectUri()
+
+    if (!code && !oauthError) {
+      return
+    }
+
+    let active = true
+
+    const handleCallback = async () => {
+      setOffsiteBusy(true)
+      setError(null)
+      try {
+        if (oauthError) {
+          const description = url.searchParams.get('error_description')
+          throw new ApiError(description || 'Google Drive từ chối kết nối.', 400)
+        }
+
+        await completeBackupGoogleDriveCallback(token, {
+          code: code ?? '',
+          redirectUri,
+          googleDriveFolderId:
+            url.searchParams.get('googleDriveFolderId') ??
+            settings?.googleDriveFolderId ??
+            null,
+        })
+
+        if (active) {
+          setNotice('Đã kết nối Google Drive cho bản sao lưu offsite.')
+        }
+
+        await Promise.all([loadSettings(), loadOffsiteUploads(1, offsitePageSize)])
+      } catch (err) {
+        if (!active) return
+        if (err instanceof ApiError) {
+          setError(err.message)
+        } else {
+          setError('Không hoàn tất được kết nối Google Drive.')
+        }
+      } finally {
+        clearGoogleDriveCallbackQuery()
+        if (active) {
+          setOffsiteBusy(false)
+        }
+      }
+    }
+
+    void handleCallback()
+
+    return () => {
+      active = false
+    }
+  }, [token, settings?.googleDriveFolderId, offsitePageSize, loadOffsiteUploads, loadSettings])
 
   const handleSaveSettings = async () => {
     if (!token || !settings) return
     setError(null)
     setNotice(null)
     try {
-      const result = await updateBackupSettings(token, settings)
+      const result = await updateBackupSettings(token, {
+        ...settings,
+        provider: settings.offsiteEnabled ? settings.provider || 'google_drive' : null,
+        googleDriveFolderId: settings.offsiteEnabled
+          ? settings.googleDriveFolderId?.trim() || null
+          : null,
+        offsiteRetentionCount: Math.max(1, settings.offsiteRetentionCount || 1),
+      })
       setSettings(result)
       setNotice('Đã lưu cấu hình sao lưu.')
     } catch (err) {
@@ -164,6 +280,87 @@ export default function AdminBackupPage() {
       } else {
         setError('Không lưu được cấu hình.')
       }
+    }
+  }
+
+  const handleConnectGoogleDrive = async () => {
+    if (!token || !settings) return
+    setError(null)
+    setNotice(null)
+    setOffsiteBusy(true)
+    try {
+      const result = await requestBackupGoogleDriveConnectUrl(token, {
+        redirectUri: buildGoogleDriveRedirectUri(),
+        googleDriveFolderId: settings.googleDriveFolderId?.trim() || null,
+      })
+      window.location.assign(result.url)
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError('Không tạo được liên kết kết nối Google Drive.')
+      }
+      setOffsiteBusy(false)
+    }
+  }
+
+  const handleDisconnectGoogleDrive = async () => {
+    if (!token) return
+    setError(null)
+    setNotice(null)
+    setOffsiteBusy(true)
+    try {
+      await disconnectBackupOffsiteConnection(token)
+      await Promise.all([loadSettings(), loadOffsiteUploads(1, offsitePageSize)])
+      setNotice('Đã ngắt kết nối Google Drive.')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError('Không ngắt được kết nối Google Drive.')
+      }
+    } finally {
+      setOffsiteBusy(false)
+    }
+  }
+
+  const handleTestOffsite = async () => {
+    if (!token) return
+    setError(null)
+    setNotice(null)
+    setOffsiteBusy(true)
+    try {
+      await testBackupOffsiteUpload(token)
+      await Promise.all([loadSettings(), loadOffsiteUploads(1, offsitePageSize)])
+      setNotice('Đã xếp hàng upload kiểm tra lên Google Drive.')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError('Không tạo được upload kiểm tra.')
+      }
+    } finally {
+      setOffsiteBusy(false)
+    }
+  }
+
+  const handleReupload = async (jobId: string) => {
+    if (!token) return
+    setError(null)
+    setNotice(null)
+    setOffsiteBusy(true)
+    try {
+      await reuploadBackupJob(token, jobId)
+      await loadOffsiteUploads()
+      setNotice('Đã xếp hàng upload lại bản sao lưu lên Google Drive.')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message)
+      } else {
+        setError('Không upload lại được bản sao lưu.')
+      }
+    } finally {
+      setOffsiteBusy(false)
     }
   }
 
@@ -381,6 +578,59 @@ export default function AdminBackupPage() {
     },
   ]
 
+  const offsiteColumns = [
+    {
+      key: 'createdAt',
+      label: 'Thời gian',
+      render: (row: BackupOffsiteUpload) => formatDateTime(row.createdAt),
+    },
+    {
+      key: 'provider',
+      label: 'Đích lưu',
+      render: (row: BackupOffsiteUpload) => offsiteProviderLabels[row.provider] ?? row.provider,
+    },
+    {
+      key: 'status',
+      label: 'Trạng thái',
+      render: (row: BackupOffsiteUpload) => statusLabels[row.status] ?? row.status,
+    },
+    {
+      key: 'remoteFileSize',
+      label: 'Kích thước',
+      align: 'right' as const,
+      render: (row: BackupOffsiteUpload) => formatFileSize(row.remoteFileSize),
+    },
+    {
+      key: 'attemptCount',
+      label: 'Lần thử',
+      align: 'right' as const,
+      render: (row: BackupOffsiteUpload) => row.attemptCount,
+    },
+    {
+      key: 'errorMessage',
+      label: 'Chi tiết',
+      render: (row: BackupOffsiteUpload) => row.errorMessage ?? row.remoteFileId ?? '-',
+    },
+    {
+      key: 'actions',
+      label: 'Thao tác',
+      render: (row: BackupOffsiteUpload) => (
+        <div className="table-actions">
+          {row.backupJobId && row.status === 'failed' && (
+            <button
+              className="btn btn-ghost"
+              type="button"
+              onClick={() => handleReupload(row.backupJobId ?? '')}
+              disabled={offsiteBusy}
+            >
+              Upload lại
+            </button>
+          )}
+        </div>
+      ),
+    },
+  ]
+
   if (!settings) {
     return (
       <div className="page-stack">
@@ -400,6 +650,9 @@ export default function AdminBackupPage() {
   const hostBackupPathConfigKey = settings.hostBackupPathConfigKey?.trim() || 'BACKUP_HOST_PATH'
   const canEditBackupPath = settings.canEditBackupPath ?? !usesContainerPaths
   const canEditPgBinPath = settings.canEditPgBinPath ?? !usesContainerPaths
+  const offsiteProvider = settings.provider ?? ''
+  const offsiteConnection = settings.offsiteConnection
+  const offsiteConnected = offsiteConnection?.isConnected ?? false
 
   return (
     <div className="page-stack">
@@ -446,6 +699,24 @@ export default function AdminBackupPage() {
             </select>
           </label>
           <label className="field">
+            <span>Tần suất</span>
+            <select
+              value={settings.scheduleFrequency ?? 2}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev ? { ...prev, scheduleFrequency: Number(event.target.value) } : prev,
+                )
+              }
+            >
+              {frequencyOptions.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          {(settings.scheduleFrequency ?? 2) === 2 && (
+          <label className="field">
             <span>Ngày chạy</span>
             <select
               value={settings.scheduleDayOfWeek}
@@ -462,6 +733,7 @@ export default function AdminBackupPage() {
               ))}
             </select>
           </label>
+          )}
           <label className="field">
             <span>Giờ chạy</span>
             <input
@@ -539,6 +811,156 @@ export default function AdminBackupPage() {
       </section>
 
       <section className="card">
+        <h3>Lưu trữ offsite</h3>
+        <div className="form-grid">
+          <label className="field">
+            <span>Bật lưu trữ offsite</span>
+            <select
+              value={settings.offsiteEnabled ? 'true' : 'false'}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        offsiteEnabled: event.target.value === 'true',
+                        provider:
+                          event.target.value === 'true'
+                            ? prev.provider || 'google_drive'
+                            : null,
+                      }
+                    : prev,
+                )
+              }
+            >
+              <option value="false">Tắt</option>
+              <option value="true">Bật</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Nhà cung cấp</span>
+            <select
+              value={offsiteProvider}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        provider: event.target.value || null,
+                      }
+                    : prev,
+                )
+              }
+              disabled={!settings.offsiteEnabled}
+            >
+              <option value="">Chọn nhà cung cấp</option>
+              <option value="google_drive">Google Drive</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Google Drive Folder ID</span>
+            <input
+              value={settings.googleDriveFolderId ?? ''}
+              disabled={!settings.offsiteEnabled || offsiteProvider !== 'google_drive'}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev ? { ...prev, googleDriveFolderId: event.target.value } : prev,
+                )
+              }
+              placeholder="Thư mục đích trên Google Drive"
+            />
+          </label>
+          <label className="field">
+            <span>Số bản offsite lưu giữ</span>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              value={settings.offsiteRetentionCount}
+              disabled={!settings.offsiteEnabled}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev ? { ...prev, offsiteRetentionCount: Number(event.target.value) } : prev,
+                )
+              }
+            />
+          </label>
+          <label className="field">
+            <span>Tự upload sau khi backup local</span>
+            <select
+              value={settings.uploadAfterBackup ? 'true' : 'false'}
+              disabled={!settings.offsiteEnabled}
+              onChange={(event) =>
+                setSettings((prev) =>
+                  prev
+                    ? { ...prev, uploadAfterBackup: event.target.value === 'true' }
+                    : prev,
+                )
+              }
+            >
+              <option value="true">Bật</option>
+              <option value="false">Tắt</option>
+            </select>
+          </label>
+          <div className="field">
+            <span>Trạng thái kết nối</span>
+            <div className="form-stack">
+              <strong>
+                {offsiteConnected
+                  ? `${offsiteProviderLabels[offsiteConnection?.provider ?? ''] ?? offsiteConnection?.provider ?? 'Google Drive'} đã kết nối`
+                  : 'Chưa kết nối'}
+              </strong>
+              <small className="muted">
+                {offsiteConnection?.googleDriveFolderId
+                  ? `Folder ID: ${offsiteConnection.googleDriveFolderId}`
+                  : 'Chưa cấu hình thư mục đích.'}
+              </small>
+              <small className="muted">
+                {offsiteConnection?.lastValidatedAt
+                  ? `Kiểm tra gần nhất: ${formatDateTime(offsiteConnection.lastValidatedAt)}`
+                  : offsiteConnection?.connectedAt
+                    ? `Đã kết nối lúc: ${formatDateTime(offsiteConnection.connectedAt)}`
+                    : 'Chưa có lịch sử xác thực.'}
+              </small>
+              {offsiteConnection?.lastError && (
+                <small className="muted">Lỗi gần nhất: {offsiteConnection.lastError}</small>
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="form-actions">
+          <button className="btn btn-primary" type="button" onClick={handleSaveSettings}>
+            Lưu cấu hình offsite
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={handleConnectGoogleDrive}
+            disabled={
+              offsiteBusy || !settings.offsiteEnabled || offsiteProvider !== 'google_drive'
+            }
+          >
+            Kết nối Google Drive
+          </button>
+          <button
+            className="btn btn-ghost"
+            type="button"
+            onClick={handleTestOffsite}
+            disabled={offsiteBusy || !offsiteConnected}
+          >
+            Upload kiểm tra
+          </button>
+          <button
+            className="btn btn-danger"
+            type="button"
+            onClick={handleDisconnectGoogleDrive}
+            disabled={offsiteBusy || !offsiteConnected}
+          >
+            Ngắt kết nối
+          </button>
+        </div>
+      </section>
+
+      <section className="card">
         <h3>Sao lưu thủ công &amp; phục hồi</h3>
         <div className="form-grid">
           <label className="field">
@@ -563,6 +985,19 @@ export default function AdminBackupPage() {
           </div>
         </div>
         {uploadMessage && <p className="muted">{uploadMessage}</p>}
+      </section>
+
+      <section className="card">
+        <h3>Hàng đợi upload offsite</h3>
+        <DataTable
+          columns={offsiteColumns}
+          rows={offsiteUploads}
+          getRowKey={(row) => row.id}
+          emptyMessage={loading ? 'Đang tải...' : 'Chưa có upload offsite.'}
+          pagination={{ page: offsitePage, pageSize: offsitePageSize, total: offsiteTotal }}
+          onPageChange={(next) => loadOffsiteUploads(next, offsitePageSize)}
+          onPageSizeChange={(nextSize) => loadOffsiteUploads(1, nextSize)}
+        />
       </section>
 
       <section className="card">

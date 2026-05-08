@@ -54,6 +54,7 @@ public sealed partial class ReceiptService
         }
 
         var previousStatus = receipt.Status;
+        var now = DateTimeOffset.UtcNow;
 
         await using var tx = await _db.Database.BeginTransactionAsync(ct);
 
@@ -93,12 +94,12 @@ public sealed partial class ReceiptService
             {
                 if (allocation.InvoiceId.HasValue && invoices.TryGetValue(allocation.InvoiceId.Value, out var invoice))
                 {
-                    RestoreInvoice(invoice, allocation.Amount);
+                    RestoreInvoice(invoice, allocation.Amount, now);
                 }
 
                 if (allocation.AdvanceId.HasValue && advances.TryGetValue(allocation.AdvanceId.Value, out var advance))
                 {
-                    RestoreAdvance(advance, allocation.Amount);
+                    RestoreAdvance(advance, allocation.Amount, now);
                 }
             }
 
@@ -115,16 +116,16 @@ public sealed partial class ReceiptService
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
             if (customer is not null)
             {
-                customer.CurrentBalance += receipt.Amount;
+                AdjustCustomerBalance(customer, receipt.Amount, now);
             }
         }
 
         receipt.Status = ReceiptStatusCodes.Void;
         receipt.UnallocatedAmount = 0;
         receipt.AllocationStatus = "VOID";
-        receipt.DeletedAt = DateTimeOffset.UtcNow;
+        receipt.DeletedAt = now;
         receipt.DeletedBy = _currentUser.UserId;
-        receipt.UpdatedAt = DateTimeOffset.UtcNow;
+        receipt.UpdatedAt = now;
         receipt.Version += 1;
 
         await _db.SaveChangesAsync(ct);
@@ -272,30 +273,9 @@ public sealed partial class ReceiptService
             receipt.AllocationSuggestedAt,
             DeserializeTargets(receipt.AllocationTargets),
             receipt.Method,
+            receipt.Description,
             receipt.SellerTaxCode,
             receipt.CustomerTaxCode);
     }
 
-    private static void RestoreInvoice(Invoice invoice, decimal amount)
-    {
-        invoice.OutstandingAmount = Math.Min(invoice.TotalAmount, invoice.OutstandingAmount + amount);
-        if (invoice.OutstandingAmount <= 0)
-        {
-            invoice.Status = "PAID";
-        }
-        else if (invoice.OutstandingAmount >= invoice.TotalAmount)
-        {
-            invoice.Status = "OPEN";
-        }
-        else
-        {
-            invoice.Status = "PARTIAL";
-        }
-    }
-
-    private static void RestoreAdvance(Advance advance, decimal amount)
-    {
-        advance.OutstandingAmount = Math.Min(advance.Amount, advance.OutstandingAmount + amount);
-        advance.Status = advance.OutstandingAmount == 0 ? "PAID" : "APPROVED";
-    }
 }

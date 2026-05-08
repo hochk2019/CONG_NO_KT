@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { CustomerDetail, CustomerListItem } from '../../api/customers'
-import { fetchCustomerDetail, fetchCustomers, updateCustomer } from '../../api/customers'
+import { createCustomer, fetchCustomerDetail, fetchCustomers, updateCustomer, deleteCustomer } from '../../api/customers'
 import { ApiError } from '../../api/client'
 import {
   fetchOwnerLookup,
@@ -12,11 +12,13 @@ import DataTable from '../../components/DataTable'
 import ActionConfirmModal from '../../components/modals/ActionConfirmModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
+import CustomerCreateModal from './CustomerCreateModal'
 import CustomerEditModal from './CustomerEditModal'
 import { getDebtToneClass } from './customerDebtTone'
 type CustomerListSectionProps = {
   token: string
   canManageCustomers: boolean
+  isAdmin?: boolean
   selectedTaxCode: string | null
   selectedName: string
   onSelectCustomer: (row: CustomerListItem) => void
@@ -26,6 +28,21 @@ const customerStatusLabels: Record<string, string> = {
   ACTIVE: 'Đang hoạt động',
   INACTIVE: 'Ngừng hoạt động',
 }
+const customerDebtSortOptions = [
+  { value: '', label: 'Mặc định' },
+  { value: 'balance_asc', label: 'Nợ tăng dần' },
+  { value: 'balance_desc', label: 'Nợ giảm dần' },
+  { value: 'debt_oldest', label: 'Nợ lâu nhất' },
+  { value: 'debt_newest', label: 'Nợ mới nhất' },
+] as const
+const customerDebtSortLabels: Record<string, string> = {
+  balance_asc: 'Nợ tăng dần',
+  balance_desc: 'Nợ giảm dần',
+  debt_oldest: 'Nợ lâu nhất',
+  debt_newest: 'Nợ mới nhất',
+}
+const UNASSIGNED_OWNER_VALUE = '__unassigned__'
+const UNASSIGNED_OWNER_LABEL = 'Chưa phân công'
 const DEFAULT_PAGE_SIZE = 10
 const PAGE_SIZE_STORAGE_KEY = 'pref.table.pageSize'
 const CUSTOMER_STATUS_KEY = 'pref.customers.status'
@@ -59,6 +76,7 @@ const storeFilter = (key: string, value: string) => {
 export default function CustomerListSection({
   token,
   canManageCustomers,
+  isAdmin = false,
   selectedTaxCode,
   selectedName,
   onSelectCustomer,
@@ -72,6 +90,7 @@ export default function CustomerListSection({
   const debouncedSearch = useDebouncedValue(search, 400)
   const [status, setStatus] = useState(() => getStoredFilter(CUSTOMER_STATUS_KEY))
   const [ownerId, setOwnerId] = useState('')
+  const [sort, setSort] = useState('')
   const [ownerOptions, setOwnerOptions] = useState<LookupOption[]>([])
   const [ownerLoading, setOwnerLoading] = useState(false)
   const [ownerError, setOwnerError] = useState<string | null>(null)
@@ -86,10 +105,16 @@ export default function CustomerListSection({
   const [statusActionError, setStatusActionError] = useState<string | null>(null)
   const [statusConfirmRow, setStatusConfirmRow] = useState<CustomerListItem | null>(null)
   const [statusConfirmNextStatus, setStatusConfirmNextStatus] = useState<'ACTIVE' | 'INACTIVE' | null>(null)
+  const [deleteActionLoading, setDeleteActionLoading] = useState<string | null>(null)
+  const [deleteActionError, setDeleteActionError] = useState<string | null>(null)
+  const [deleteConfirmRow, setDeleteConfirmRow] = useState<CustomerListItem | null>(null)
 
   const [detail, setDetail] = useState<CustomerDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState<string | null>(null)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [createLoading, setCreateLoading] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [editName, setEditName] = useState('')
   const [editAddress, setEditAddress] = useState('')
@@ -104,6 +129,7 @@ export default function CustomerListSection({
   const [editSuccess, setEditSuccess] = useState<string | null>(null)
   const [editError, setEditError] = useState<string | null>(null)
   const [copyMessage, setCopyMessage] = useState<string | null>(null)
+  const isUnassignedOwnerFilter = ownerId === UNASSIGNED_OWNER_VALUE
 
   useEffect(() => {
     if (!token) return
@@ -117,8 +143,10 @@ export default function CustomerListSection({
         const result = await fetchCustomers({
           token,
           search: debouncedSearch.trim() || undefined,
-          ownerId: ownerId || undefined,
+          ownerId: isUnassignedOwnerFilter ? undefined : ownerId || undefined,
+          unassignedOnly: isUnassignedOwnerFilter || undefined,
           status: status || undefined,
+          sort: sort || undefined,
           page,
           pageSize,
         })
@@ -149,7 +177,7 @@ export default function CustomerListSection({
     return () => {
       isActive = false
     }
-  }, [token, debouncedSearch, status, ownerId, page, pageSize, listReload])
+  }, [token, debouncedSearch, status, ownerId, isUnassignedOwnerFilter, sort, page, pageSize, listReload])
   useEffect(() => {
     if (!token) return
     let isActive = true
@@ -187,7 +215,7 @@ export default function CustomerListSection({
     }
   }, [token])
   useEffect(() => {
-    if (!token || !isEditOpen) return
+    if (!token || (!isEditOpen && !isCreateOpen)) return
     let isActive = true
 
     const load = async () => {
@@ -221,7 +249,7 @@ export default function CustomerListSection({
     return () => {
       isActive = false
     }
-  }, [token, isEditOpen])
+  }, [token, isCreateOpen, isEditOpen])
   useEffect(() => {
     if (!token || !selectedTaxCode) return
     let isActive = true
@@ -271,12 +299,16 @@ export default function CustomerListSection({
     setEditManagerId(detail.managerId ?? '')
   }, [detail, isEditOpen])
 
-  const hasFilters = Boolean(search.trim() || status || ownerId)
+  const hasFilters = Boolean(search.trim() || status || ownerId || sort)
+  const selectedOwnerLabel = isUnassignedOwnerFilter
+    ? UNASSIGNED_OWNER_LABEL
+    : ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId
 
   const handleClearFilters = useCallback(() => {
     setSearch('')
     setStatus('')
     setOwnerId('')
+    setSort('')
     setPage(1)
     storeFilter(CUSTOMER_STATUS_KEY, '')
   }, [])
@@ -302,6 +334,48 @@ export default function CustomerListSection({
     setIsEditOpen(false)
     setCopyMessage(null)
   }, [])
+
+  const handleOpenCreate = useCallback(() => {
+    setCreateError(null)
+    setIsCreateOpen(true)
+  }, [])
+
+  const handleCloseCreate = useCallback(() => {
+    if (createLoading) return
+    setIsCreateOpen(false)
+    setCreateError(null)
+  }, [createLoading])
+
+  const handleCreateCustomer = useCallback(
+    async (payload: Parameters<typeof createCustomer>[1]) => {
+      if (!token) return
+      setCreateLoading(true)
+      setCreateError(null)
+      try {
+        const created = await createCustomer(token, payload)
+        setIsCreateOpen(false)
+        setListReload((value) => value + 1)
+        setDetail(created)
+        setDetailError(null)
+        onSelectCustomer({
+          taxCode: created.taxCode,
+          name: created.name,
+          ownerName: created.ownerName ?? null,
+          currentBalance: created.currentBalance,
+          status: created.status,
+        })
+      } catch (err) {
+        if (err instanceof ApiError) {
+          setCreateError(err.message)
+        } else {
+          setCreateError('Không tạo được khách hàng.')
+        }
+      } finally {
+        setCreateLoading(false)
+      }
+    },
+    [onSelectCustomer, token],
+  )
 
   const handleToggleCustomerStatus = useCallback(
     (row: CustomerListItem) => {
@@ -362,6 +436,29 @@ export default function CustomerListSection({
       setStatusActionLoading(null)
     }
   }, [token, statusConfirmRow, statusConfirmNextStatus, detail])
+
+  const handleDeleteCustomer = useCallback(async () => {
+    if (!token || !deleteConfirmRow) return
+
+    setDeleteActionLoading(deleteConfirmRow.taxCode)
+    setDeleteActionError(null)
+    try {
+      await deleteCustomer(token, deleteConfirmRow.taxCode)
+      setDeleteConfirmRow(null)
+      setListReload((value) => value + 1)
+      if (selectedTaxCode === deleteConfirmRow.taxCode) {
+        // Cập nhật ngầm
+      }
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setDeleteActionError(err.message)
+      } else {
+        setDeleteActionError('Không xóa được khách hàng.')
+      }
+    } finally {
+      setDeleteActionLoading(null)
+    }
+  }, [token, deleteConfirmRow, selectedTaxCode])
 
   const handleSaveCustomer = useCallback(async () => {
     if (!token || !selectedTaxCode) return
@@ -524,6 +621,35 @@ export default function CustomerListSection({
           </button>
         ),
       },
+      ...(isAdmin ? [{
+        key: 'delete',
+        label: 'Xóa',
+        width: '60px',
+        align: 'center' as const,
+        render: (row: CustomerListItem) => (
+          <button
+            className="btn btn-ghost btn-table"
+            type="button"
+            onClick={() => {
+              setDeleteActionError(null)
+              setDeleteConfirmRow(row)
+            }}
+            aria-label={`Xóa khách hàng ${row.name}`}
+            title="Xóa khách hàng"
+            disabled={deleteActionLoading === row.taxCode}
+            style={{ color: 'var(--color-danger, #d32f2f)' }}
+          >
+            {deleteActionLoading === row.taxCode ? '...' : (
+              <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zm2.46-7.12 1.41-1.41L12 12.59l2.12-2.12 1.41 1.41L13.41 14l2.12 2.12-1.41 1.41L12 15.41l-2.12 2.12-1.41-1.41L10.59 14l-2.12-2.12zM15.5 4l-1-1h-5l-1 1H5v2h14V4z"
+                  fill="currentColor"
+                />
+              </svg>
+            )}
+          </button>
+        ),
+      }] : []),
       {
         key: 'status',
         label: 'Trạng thái',
@@ -554,8 +680,8 @@ export default function CustomerListSection({
           const title = !canManageCustomers
             ? 'Bạn không có quyền thay đổi trạng thái'
             : isHideAction && hasBalance
-            ? 'Không thể ẩn khách hàng đang còn dư nợ'
-            : undefined
+              ? 'Không thể ẩn khách hàng đang còn dư nợ'
+              : undefined
           return (
             <button
               className={className}
@@ -628,8 +754,8 @@ export default function CustomerListSection({
             )}
           </div>
         </div>
-        <div className="filters-grid">
-          <label className="field">
+        <div className="filters-grid filters-grid--compact">
+          <label className="field field--compact">
             <span>Tìm kiếm</span>
             <input
               value={search}
@@ -640,7 +766,7 @@ export default function CustomerListSection({
               placeholder="MST hoặc tên"
             />
           </label>
-          <label className="field">
+          <label className="field field--compact">
             <span>Trạng thái</span>
             <select
               value={status}
@@ -656,7 +782,7 @@ export default function CustomerListSection({
               <option value="INACTIVE">Ngừng hoạt động</option>
             </select>
           </label>
-          <label className="field">
+          <label className="field field--compact">
             <span>Phụ trách</span>
             <select
               value={ownerId}
@@ -666,6 +792,7 @@ export default function CustomerListSection({
               }}
             >
               <option value="">Tất cả</option>
+              <option value={UNASSIGNED_OWNER_VALUE}>{UNASSIGNED_OWNER_LABEL}</option>
               {ownerOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
@@ -673,6 +800,22 @@ export default function CustomerListSection({
               ))}
             </select>
             <span className="muted">Danh sách lấy từ Admin &gt; Người dùng.</span>
+          </label>
+          <label className="field field--compact">
+            <span>Sắp xếp dư nợ</span>
+            <select
+              value={sort}
+              onChange={(event) => {
+                setSort(event.target.value)
+                setPage(1)
+              }}
+            >
+              {customerDebtSortOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="filters-actions">
@@ -686,13 +829,23 @@ export default function CustomerListSection({
               )}
               {ownerId && (
                 <span className="filter-chip">
-                  Phụ trách: {ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId}
+                  Phụ trách: {selectedOwnerLabel}
+                </span>
+              )}
+              {sort && (
+                <span className="filter-chip">
+                  Sắp xếp: {customerDebtSortLabels[sort] ?? sort}
                 </span>
               )}
             </div>
           ) : (
-            <span className="muted">Bạn có thể lọc theo trạng thái hoặc phụ trách.</span>
+            <span className="muted">Bạn có thể lọc theo trạng thái, phụ trách hoặc sắp xếp theo dư nợ.</span>
           )}
+          {canManageCustomers ? (
+            <button className="btn btn-primary btn-table" type="button" onClick={handleOpenCreate}>
+              Thêm khách hàng
+            </button>
+          ) : null}
         </div>
         {ownerError && <div className="alert alert--error" role="alert">{ownerError}</div>}
         {listError && (
@@ -726,6 +879,20 @@ export default function CustomerListSection({
           }}
         />
       </section>
+
+      <CustomerCreateModal
+        open={isCreateOpen}
+        loading={createLoading}
+        error={createError}
+        ownerOptions={ownerOptions}
+        managerOptions={managerOptions}
+        ownerLoading={ownerLoading}
+        managerLoading={managerLoading}
+        ownerError={ownerError}
+        managerError={managerError}
+        onClose={handleCloseCreate}
+        onSubmit={handleCreateCustomer}
+      />
 
       <CustomerEditModal
         open={isEditOpen}
@@ -806,6 +973,27 @@ export default function CustomerListSection({
         }}
         onConfirm={() => {
           void handleConfirmCustomerStatus()
+        }}
+      />
+
+      <ActionConfirmModal
+        isOpen={Boolean(deleteConfirmRow)}
+        title="Xóa khách hàng"
+        description={
+          deleteConfirmRow
+            ? `Cảnh báo: Hành động này KHÔNG THỂ KHÔI PHỤC được. Hệ thống sẽ ngay lập tức xóa dữ liệu kế toán và hồ sơ của khách hàng "${deleteConfirmRow.name}". Hệ thống sẽ chặn nếu khách hàng này đã phát sinh hóa đơn, phiếu thu, hoặc công nợ.`
+            : undefined
+        }
+        confirmLabel="Tiến hành xóa vĩnh viễn"
+        loading={Boolean(deleteConfirmRow && deleteActionLoading === deleteConfirmRow.taxCode)}
+        error={deleteActionError}
+        tone="danger"
+        onClose={() => {
+          setDeleteConfirmRow(null)
+          setDeleteActionError(null)
+        }}
+        onConfirm={() => {
+          void handleDeleteCustomer()
         }}
       />
     </>

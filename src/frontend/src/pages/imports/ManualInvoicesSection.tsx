@@ -1,7 +1,16 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { utils, write } from 'xlsx'
 import { ApiError } from '../../api/client'
+import {
+  fetchCustomerLookup,
+  fetchSellerLookup,
+  mapTaxCodeOptions,
+  type CustomerLookupItem,
+  type LookupOption,
+} from '../../api/lookups'
+import LookupInput from '../../components/LookupInput'
 import MoneyInput from '../../components/MoneyInput'
+import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import {
   commitImport,
   uploadImport,
@@ -12,6 +21,7 @@ import {
 type ManualInvoicesSectionProps = {
   token: string
   canCommit: boolean
+  onImportTemplate?: () => void
 }
 
 type SubmitMode = 'stage' | 'commit'
@@ -54,7 +64,16 @@ const formatNumber = (value: number) => {
   }).format(value)
 }
 
-export default function ManualInvoicesSection({ token, canCommit }: ManualInvoicesSectionProps) {
+export default function ManualInvoicesSection({
+  token,
+  canCommit,
+  onImportTemplate,
+}: ManualInvoicesSectionProps) {
+  const [sellerOptions, setSellerOptions] = useState<LookupOption[]>([])
+  const [customerOptions, setCustomerOptions] = useState<LookupOption[]>([])
+  const [customerLookupItems, setCustomerLookupItems] = useState<CustomerLookupItem[]>([])
+  const [sellerQuery, setSellerQuery] = useState('')
+  const [customerQuery, setCustomerQuery] = useState('')
   const [sellerTaxCode, setSellerTaxCode] = useState('')
   const [customerTaxCode, setCustomerTaxCode] = useState('')
   const [customerName, setCustomerName] = useState('')
@@ -76,6 +95,8 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
   const [batchId, setBatchId] = useState('')
   const [staging, setStaging] = useState<ImportStagingResult | null>(null)
   const [commitResult, setCommitResult] = useState<ImportCommitResult | null>(null)
+  const debouncedSellerQuery = useDebouncedValue(sellerQuery, 300)
+  const debouncedCustomerQuery = useDebouncedValue(customerQuery, 300)
 
   const totalAmount = useMemo(() => {
     const revenue = Number(revenueExclVat)
@@ -83,6 +104,81 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
     if (!Number.isFinite(revenue) || !Number.isFinite(vat)) return 0
     return revenue + vat
   }, [revenueExclVat, vatAmount])
+
+  useEffect(() => {
+    if (!token) {
+      setSellerOptions([])
+      return
+    }
+    let isActive = true
+
+    const loadSellers = async () => {
+      try {
+        const result = await fetchSellerLookup({
+          token,
+          search: debouncedSellerQuery || undefined,
+          limit: 200,
+        })
+        if (!isActive) return
+        setSellerOptions(mapTaxCodeOptions(result))
+      } catch {
+        if (!isActive) return
+        setSellerOptions([])
+      }
+    }
+
+    loadSellers()
+    return () => {
+      isActive = false
+    }
+  }, [token, debouncedSellerQuery])
+
+  useEffect(() => {
+    if (!token) {
+      setCustomerOptions([])
+      setCustomerLookupItems([])
+      return
+    }
+    let isActive = true
+
+    const loadCustomers = async () => {
+      try {
+        const result = await fetchCustomerLookup({
+          token,
+          search: debouncedCustomerQuery || undefined,
+          limit: 200,
+        })
+        if (!isActive) return
+        setCustomerLookupItems(result)
+        setCustomerOptions(mapTaxCodeOptions(result))
+      } catch {
+        if (!isActive) return
+        setCustomerLookupItems([])
+        setCustomerOptions([])
+      }
+    }
+
+    loadCustomers()
+    return () => {
+      isActive = false
+    }
+  }, [token, debouncedCustomerQuery])
+
+  const selectedCustomerOption = useMemo(
+    () => customerOptions.find((option) => option.value === customerTaxCode.trim()),
+    [customerOptions, customerTaxCode],
+  )
+
+  const matchedCustomer = useMemo(
+    () =>
+      customerLookupItems.find((item) => item.taxCode === customerTaxCode.trim()) ?? null,
+    [customerLookupItems, customerTaxCode],
+  )
+
+  useEffect(() => {
+    if (!matchedCustomer) return
+    setCustomerName((current) => (current === matchedCustomer.name ? current : matchedCustomer.name))
+  }, [matchedCustomer])
 
   const setFieldError = (field: string, message?: string) => {
     setFieldErrors((prev) => ({ ...prev, [field]: message ?? '' }))
@@ -240,46 +336,53 @@ export default function ManualInvoicesSection({ token, canCommit }: ManualInvoic
               nhập liệu hóa đơn.
             </p>
           </div>
+          {typeof onImportTemplate === 'function' ? (
+            <button className="btn btn-secondary" type="button" onClick={onImportTemplate}>
+              Import từ Template
+            </button>
+          ) : null}
         </div>
 
         <div className="form-grid">
-          <label className={fieldErrors.sellerTaxCode ? 'field field--error' : 'field'}>
-            <span>MST bên bán</span>
-            <input
-              value={sellerTaxCode}
-              onChange={(event) => {
-                setSellerTaxCode(event.target.value)
-                if (event.target.value.trim()) setFieldError('sellerTaxCode')
-              }}
-              onBlur={() => {
-                if (!sellerTaxCode.trim()) setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
-              }}
-              placeholder="VD: 0312345678"
-              aria-invalid={Boolean(fieldErrors.sellerTaxCode)}
-            />
-            {fieldErrors.sellerTaxCode && <span className="field-error">{fieldErrors.sellerTaxCode}</span>}
-          </label>
+          <LookupInput
+            label="MST bên bán"
+            value={sellerTaxCode}
+            placeholder="VD: 0312345678"
+            options={sellerOptions}
+            helpText="Gõ để tìm và chọn từ gợi ý."
+            errorText={fieldErrors.sellerTaxCode}
+            onChange={(value) => {
+              setSellerTaxCode(value)
+              setSellerQuery(value)
+              if (value.trim()) setFieldError('sellerTaxCode')
+            }}
+            onBlur={() => {
+              if (!sellerTaxCode.trim()) setFieldError('sellerTaxCode', 'Vui lòng nhập MST bên bán.')
+            }}
+          />
 
-          <label className={fieldErrors.customerTaxCode ? 'field field--error' : 'field'}>
-            <span>MST bên mua</span>
-            <input
-              value={customerTaxCode}
-              onChange={(event) => {
-                setCustomerTaxCode(event.target.value)
-                if (event.target.value.trim()) setFieldError('customerTaxCode')
-              }}
-              onBlur={() => {
-                if (!customerTaxCode.trim()) {
-                  setFieldError('customerTaxCode', 'Vui lòng nhập MST bên mua.')
-                }
-              }}
-              placeholder="VD: 0101234567"
-              aria-invalid={Boolean(fieldErrors.customerTaxCode)}
-            />
-            {fieldErrors.customerTaxCode && (
-              <span className="field-error">{fieldErrors.customerTaxCode}</span>
-            )}
-          </label>
+          <LookupInput
+            label="MST bên mua"
+            value={customerTaxCode}
+            placeholder="VD: 0101234567"
+            options={customerOptions}
+            helpText={
+              selectedCustomerOption?.label
+                ? `Đã chọn: ${selectedCustomerOption.label}.`
+                : 'Gõ để tìm và chọn từ gợi ý.'
+            }
+            errorText={fieldErrors.customerTaxCode}
+            onChange={(value) => {
+              setCustomerTaxCode(value)
+              setCustomerQuery(value)
+              if (value.trim()) setFieldError('customerTaxCode')
+            }}
+            onBlur={() => {
+              if (!customerTaxCode.trim()) {
+                setFieldError('customerTaxCode', 'Vui lòng nhập MST bên mua.')
+              }
+            }}
+          />
 
           <label className="field">
             <span>Tên bên mua</span>

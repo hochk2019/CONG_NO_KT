@@ -174,7 +174,7 @@ public sealed class ImportRollbackService : IImportRollbackService
         foreach (var invoice in invoices)
         {
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == invoice.CustomerTaxCode, ct);
-            if (customer is not null)
+            if (customer is not null && invoice.Status != "VOID")
             {
                 customer.CurrentBalance -= invoice.TotalAmount;
             }
@@ -186,7 +186,7 @@ public sealed class ImportRollbackService : IImportRollbackService
         foreach (var advance in advances)
         {
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == advance.CustomerTaxCode, ct);
-            if (customer is not null)
+            if (customer is not null && advance.Status != "VOID")
             {
                 customer.CurrentBalance -= advance.Amount;
             }

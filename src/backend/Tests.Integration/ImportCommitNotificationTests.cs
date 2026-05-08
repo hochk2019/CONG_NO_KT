@@ -3,6 +3,7 @@ using CongNoGolden.Application.Common.Interfaces;
 using CongNoGolden.Application.Imports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
+using CongNoGolden.Infrastructure.Security;
 using CongNoGolden.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -84,7 +85,7 @@ public sealed class ImportCommitNotificationTests
 
         await db.SaveChangesAsync();
 
-        var currentUser = new TestCurrentUser(userId);
+        var currentUser = new TestCurrentUser(userId, [AppPermissions.ImportCommitAdvance]);
         var audit = new AuditService(db, currentUser);
         var service = new ImportCommitService(db, currentUser, audit);
 
@@ -116,14 +117,16 @@ public sealed class ImportCommitNotificationTests
 
     private sealed class TestCurrentUser : ICurrentUser
     {
-        public TestCurrentUser(Guid userId)
+        public TestCurrentUser(Guid userId, IReadOnlyList<string> permissions)
         {
             UserId = userId;
+            Permissions = permissions;
         }
 
         public Guid? UserId { get; }
         public string? Username => "import_user";
         public IReadOnlyList<string> Roles => new[] { "Admin" };
+        public IReadOnlyList<string> Permissions { get; }
         public string? IpAddress => "127.0.0.1";
     }
 }

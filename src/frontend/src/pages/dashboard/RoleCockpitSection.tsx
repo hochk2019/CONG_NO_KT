@@ -75,7 +75,7 @@ const buildRoleSteps = (roleView: DashboardRoleView): CockpitStep[] => {
         title: 'Khóa hành động giảm tồn',
         detail: 'Đảm bảo phiếu thu treo được xử lý để giảm nợ treo thực tế.',
         to: '/receipts',
-        ctaLabel: 'Mở thu tiền',
+        ctaLabel: 'Mở nhập phiếu thu',
       },
       {
         id: 'director-report',
@@ -106,9 +106,9 @@ const buildRoleSteps = (roleView: DashboardRoleView): CockpitStep[] => {
       {
         id: 'manager-import',
         title: 'Đồng bộ dữ liệu nhập liệu',
-        detail: 'Theo dõi batch nhập và xử lý lỗi trong ngày.',
+        detail: 'Theo dõi Import từ Template và xử lý lỗi batch trong ngày.',
         to: '/imports',
-        ctaLabel: 'Mở nhập liệu',
+        ctaLabel: 'Mở import từ template',
       },
     ]
   }
@@ -117,16 +117,16 @@ const buildRoleSteps = (roleView: DashboardRoleView): CockpitStep[] => {
     {
       id: 'operator-import',
       title: 'Cập nhật dữ liệu phát sinh',
-      detail: 'Nhập dữ liệu hóa đơn/trả hộ đúng ngày để tránh tồn đọng.',
+      detail: 'Import từ Template hoặc nhập bổ sung hóa đơn/trả hộ đúng ngày để tránh tồn đọng.',
       to: '/imports',
-      ctaLabel: 'Mở import',
+      ctaLabel: 'Mở import từ template',
     },
     {
       id: 'operator-receipts',
       title: 'Phân bổ phiếu thu cho đúng chứng từ',
       detail: 'Xử lý nhanh danh sách phiếu thu chưa phân bổ.',
       to: '/receipts',
-      ctaLabel: 'Mở phiếu thu',
+      ctaLabel: 'Mở nhập phiếu thu',
     },
     {
       id: 'operator-customers',

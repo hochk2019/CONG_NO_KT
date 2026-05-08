@@ -43,7 +43,11 @@ public sealed class BackupSchedulerHostedService(
                 continue;
 
             var today = DateOnly.FromDateTime(DateTime.Now);
-            if (_lastRunDate == today)
+
+            // Daily (1): run every day regardless of _lastRunDate
+            // Weekly (2): only run once per day
+            var isDaily = schedule.ScheduleFrequency == 1;
+            if (!isDaily && _lastRunDate == today)
                 continue;
 
             if (!await _mutex.WaitAsync(0, stoppingToken))

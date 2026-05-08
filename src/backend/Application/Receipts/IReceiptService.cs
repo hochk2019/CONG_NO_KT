@@ -9,6 +9,7 @@ public interface IReceiptService
     Task<ReceiptDto> GetAsync(Guid receiptId, CancellationToken ct);
     Task<ReceiptDto> CreateAsync(ReceiptCreateRequest request, CancellationToken ct);
     Task<ReceiptDto> UpdateDraftAsync(Guid receiptId, ReceiptDraftUpdateRequest request, CancellationToken ct);
+    Task<ReceiptDto> CorrectAsync(Guid receiptId, ReceiptCorrectionRequest request, CancellationToken ct);
     Task<IReadOnlyList<ReceiptOpenItemDto>> ListOpenItemsAsync(string sellerTaxCode, string customerTaxCode, CancellationToken ct);
     Task<ReceiptPreviewResult> PreviewAsync(ReceiptPreviewRequest request, CancellationToken ct);
     Task<ReceiptPreviewResult> ApproveAsync(Guid receiptId, ReceiptApproveRequest request, CancellationToken ct);

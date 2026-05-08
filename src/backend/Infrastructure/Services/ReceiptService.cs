@@ -393,6 +393,7 @@ public sealed partial class ReceiptService : IReceiptService
             receipt.AllocationSuggestedAt,
             DeserializeTargets(receipt.AllocationTargets),
             receipt.Method,
+            receipt.Description,
             receipt.SellerTaxCode,
             receipt.CustomerTaxCode);
     }
@@ -475,19 +476,20 @@ public sealed partial class ReceiptService : IReceiptService
                 targets);
 
             var allocatedTotal = allocation.Lines.Sum(l => l.Amount);
+            var now = DateTimeOffset.UtcNow;
 
-            await ApplyAllocations(receipt, allocation.Lines, ct);
+            await ApplyAllocations(receipt, allocation.Lines, now, ct);
 
             var customer = await _db.Customers.FirstOrDefaultAsync(c => c.TaxCode == receipt.CustomerTaxCode, ct);
             if (customer is not null)
             {
-                customer.CurrentBalance -= receipt.Amount;
+                AdjustCustomerBalance(customer, -receipt.Amount, now);
             }
 
             var finalTargets = request.SelectedTargets ?? DeserializeTargets(receipt.AllocationTargets);
 
             receipt.Status = ReceiptStatusCodes.Approved;
-            receipt.ApprovedAt = DateTimeOffset.UtcNow;
+            receipt.ApprovedAt = now;
             receipt.ApprovedBy = _currentUser.UserId;
             receipt.UnallocatedAmount = allocation.UnallocatedAmount;
             receipt.AllocationStatus = allocation.UnallocatedAmount > 0
@@ -498,7 +500,7 @@ public sealed partial class ReceiptService : IReceiptService
             {
                 receipt.AllocationSource = "MANUAL";
             }
-            receipt.UpdatedAt = DateTimeOffset.UtcNow;
+            receipt.UpdatedAt = now;
             receipt.Version += 1;
 
             await _db.SaveChangesAsync(ct);
@@ -669,47 +671,6 @@ public sealed partial class ReceiptService : IReceiptService
         }
 
         return mapped;
-    }
-
-    private async Task ApplyAllocations(Receipt receipt, IReadOnlyList<AllocationLine> lines, CancellationToken ct)
-    {
-        if (lines.Count == 0)
-        {
-            return;
-        }
-
-        var invoiceIds = lines.Where(l => l.TargetType == AllocationTargetType.Invoice).Select(l => l.TargetId).ToList();
-        var advanceIds = lines.Where(l => l.TargetType == AllocationTargetType.Advance).Select(l => l.TargetId).ToList();
-
-        var invoices = await _db.Invoices.Where(i => invoiceIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, ct);
-        var advances = await _db.Advances.Where(a => advanceIds.Contains(a.Id)).ToDictionaryAsync(a => a.Id, ct);
-
-        foreach (var line in lines)
-        {
-            if (line.TargetType == AllocationTargetType.Invoice && invoices.TryGetValue(line.TargetId, out var invoice))
-            {
-                invoice.OutstandingAmount = Math.Max(0, invoice.OutstandingAmount - line.Amount);
-                invoice.Status = invoice.OutstandingAmount == 0 ? "PAID" : "PARTIAL";
-            }
-
-            if (line.TargetType == AllocationTargetType.Advance && advances.TryGetValue(line.TargetId, out var advance))
-            {
-                advance.OutstandingAmount = Math.Max(0, advance.OutstandingAmount - line.Amount);
-                advance.Status = advance.OutstandingAmount == 0 ? "PAID" : "APPROVED";
-            }
-
-            _db.ReceiptAllocations.Add(new ReceiptAllocation
-            {
-                Id = Guid.NewGuid(),
-                ReceiptId = receipt.Id,
-                TargetType = line.TargetType == AllocationTargetType.Invoice ? "INVOICE" : "ADVANCE",
-                InvoiceId = line.TargetType == AllocationTargetType.Invoice ? line.TargetId : null,
-                AdvanceId = line.TargetType == AllocationTargetType.Advance ? line.TargetId : null,
-                Amount = line.Amount,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-        }
-
     }
 
     private static string NormalizeAllocationPriority(string? priority)

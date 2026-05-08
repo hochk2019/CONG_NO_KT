@@ -7,6 +7,7 @@ import {
   type ReceiptTargetRef,
 } from '../../api/receipts'
 import {
+  createSeller,
   fetchCustomerLookup,
   fetchSellerLookup,
   mapTaxCodeOptions,
@@ -14,6 +15,7 @@ import {
 } from '../../api/lookups'
 import LookupInput from '../../components/LookupInput'
 import MoneyInput from '../../components/MoneyInput'
+import SellerQuickAddModal from '../../components/SellerQuickAddModal'
 import { useDebouncedValue } from '../../hooks/useDebouncedValue'
 import { formatMoney } from '../../utils/format'
 import { ApiError } from '../../api/client'
@@ -45,6 +47,9 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
 
     const [sellerTaxCode, setSellerTaxCode] = useState('')
     const [customerTaxCode, setCustomerTaxCode] = useState('')
+    const [sellerCreateOpen, setSellerCreateOpen] = useState(false)
+    const [sellerCreateLoading, setSellerCreateLoading] = useState(false)
+    const [sellerCreateError, setSellerCreateError] = useState<string | null>(null)
     const [receiptNo, setReceiptNo] = useState('')
     const [receiptDate, setReceiptDate] = useState('')
     const [amount, setAmount] = useState('')
@@ -236,6 +241,36 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
       setModalOpen(false)
     }
 
+    const handleCreateSeller = useCallback(
+      async (payload: Parameters<typeof createSeller>[1]) => {
+        if (!token) return
+        setSellerCreateLoading(true)
+        setSellerCreateError(null)
+        try {
+          const created = await createSeller(token, payload)
+          const nextTaxCode = created.taxCode.trim()
+          const nextLabel = `${nextTaxCode} - ${created.name}`
+          setSellerTaxCode(nextTaxCode)
+          setSellerQuery(nextTaxCode)
+          setSellerOptions((prev) => [
+            { value: nextTaxCode, label: nextLabel },
+            ...prev.filter((option) => option.value !== nextTaxCode),
+          ])
+          clearFieldError('sellerTaxCode')
+          setSellerCreateOpen(false)
+        } catch (err) {
+          if (err instanceof ApiError) {
+            setSellerCreateError(err.message)
+          } else {
+            setSellerCreateError('Không tạo được bên bán.')
+          }
+        } finally {
+          setSellerCreateLoading(false)
+        }
+      },
+      [clearFieldError, token],
+    )
+
     const validate = useCallback(() => {
       const amountNumber = Number(amount)
       const nextErrors: Partial<Record<FieldErrorKey, string>> = {}
@@ -355,22 +390,34 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
             </div>
           </div>
         </div>
-        <div className="form-grid form-grid--receipt">
-          <LookupInput
-            label="MST bên bán"
-            value={sellerTaxCode}
-            placeholder="VD: 2301098313"
-            options={sellerOptions}
-            helpText="Gõ để tìm và chọn từ gợi ý."
-            errorText={fieldErrors.sellerTaxCode}
-            onChange={(value) => {
-              setSellerTaxCode(value)
-              setSellerQuery(value)
-              clearFieldError('sellerTaxCode')
-            }}
-          />
-          <LookupInput
-            label="MST bên mua"
+            <div className="form-grid form-grid--receipt">
+              <div className="field-stack">
+                <LookupInput
+                  label="MST bên bán"
+                  value={sellerTaxCode}
+                  placeholder="VD: 2301098313"
+                  options={sellerOptions}
+                  helpText="Gõ để tìm và chọn từ gợi ý."
+                  errorText={fieldErrors.sellerTaxCode}
+                  onChange={(value) => {
+                    setSellerTaxCode(value)
+                    setSellerQuery(value)
+                    clearFieldError('sellerTaxCode')
+                  }}
+                />
+                <button
+                  className="btn btn-outline btn-table"
+                  type="button"
+                  onClick={() => {
+                    setSellerCreateError(null)
+                    setSellerCreateOpen(true)
+                  }}
+                >
+                  Thêm bên bán
+                </button>
+              </div>
+              <LookupInput
+                label="MST bên mua"
             value={customerTaxCode}
             placeholder="VD: 2300328765"
             options={customerOptions}
@@ -576,6 +623,18 @@ export default function ReceiptFormSection({ token, onReload }: ReceiptFormSecti
           setAdvancedOpen(false)
         }}
         onClose={() => setAdvancedOpen(false)}
+      />
+      <SellerQuickAddModal
+        open={sellerCreateOpen}
+        loading={sellerCreateLoading}
+        error={sellerCreateError}
+        initialTaxCode={sellerTaxCode}
+        onClose={() => {
+          if (sellerCreateLoading) return
+          setSellerCreateOpen(false)
+          setSellerCreateError(null)
+        }}
+        onSubmit={handleCreateSeller}
       />
     </>
   )

@@ -29,6 +29,12 @@ export type CustomerDetail = {
 
 export type Customer360Summary = {
   totalOutstanding: number
+  invoiceOutstanding: number
+  advanceOutstanding: number
+  openOutstanding: number
+  unallocatedCredit: number
+  netPosition: number
+  netAdjustment: number
   overdueAmount: number
   overdueRatio: number
   maxDaysPastDue: number
@@ -83,6 +89,19 @@ export type Customer360 = {
 }
 
 export type CustomerUpdateRequest = {
+  name: string
+  address?: string | null
+  email?: string | null
+  phone?: string | null
+  status: string
+  paymentTermsDays: number
+  creditLimit?: number | null
+  ownerId?: string | null
+  managerId?: string | null
+}
+
+export type CustomerCreateRequest = {
+  taxCode: string
   name: string
   address?: string | null
   email?: string | null
@@ -171,7 +190,9 @@ export const fetchCustomers = async (params: {
   token: string
   search?: string
   ownerId?: string
+  unassignedOnly?: boolean
   status?: string
+  sort?: string
   page: number
   pageSize: number
 }) => {
@@ -181,7 +202,9 @@ export const fetchCustomers = async (params: {
   })
   if (params.search) query.append('search', params.search)
   if (params.ownerId) query.append('ownerId', params.ownerId)
+  if (params.unassignedOnly) query.append('unassignedOnly', 'true')
   if (params.status) query.append('status', params.status)
+  if (params.sort) query.append('sort', params.sort)
 
   return apiFetch<PagedResult<CustomerListItem>>(`/customers?${query.toString()}`, {
     token: params.token,
@@ -196,6 +219,7 @@ export const fetchCustomer360 = async (token: string, taxCode: string) => {
   return apiFetch<Customer360>(`/customers/${taxCode}/360`, { token })
 }
 
+
 export const updateCustomer = async (
   token: string,
   taxCode: string,
@@ -203,6 +227,21 @@ export const updateCustomer = async (
 ) => {
   return apiFetch<void>(`/customers/${taxCode}`, {
     method: 'PUT',
+    token,
+    body: payload,
+  })
+}
+
+export const deleteCustomer = async (token: string, taxCode: string) => {
+  return apiFetch<void>(`/customers/${taxCode}`, {
+    method: 'DELETE',
+    token,
+  })
+}
+
+export const createCustomer = async (token: string, payload: CustomerCreateRequest) => {
+  return apiFetch<CustomerDetail>('/customers', {
+    method: 'POST',
     token,
     body: payload,
   })

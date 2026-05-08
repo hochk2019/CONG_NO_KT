@@ -1,4 +1,5 @@
 using CongNoGolden.Application.Backups;
+using TimeZoneConverter;
 
 namespace CongNoGolden.Api.Services;
 
@@ -39,13 +40,14 @@ public sealed class BackupSchedulerHostedService : BackgroundService
 
                 var timezone = ResolveTimezone(settings.Timezone);
                 var now = DateTimeOffset.UtcNow;
-                var nextRun = BackupScheduleCalculator.GetNextRunAt(
+                var lastExpectedRun = BackupScheduleCalculator.GetLastExpectedRunAt(
                     now,
+                    settings.ScheduleFrequency,
                     (DayOfWeek)settings.ScheduleDayOfWeek,
                     scheduleTime,
                     timezone);
 
-                if (settings.LastRunAt.HasValue && settings.LastRunAt.Value >= nextRun)
+                if (settings.LastRunAt.HasValue && settings.LastRunAt.Value >= lastExpectedRun)
                 {
                     continue;
                 }
@@ -55,10 +57,7 @@ public sealed class BackupSchedulerHostedService : BackgroundService
                     continue;
                 }
 
-                if (now >= nextRun)
-                {
-                    await service.EnqueueScheduledBackupAsync(stoppingToken);
-                }
+                await service.EnqueueScheduledBackupAsync(stoppingToken);
             }
             catch (Exception ex)
             {
@@ -76,7 +75,7 @@ public sealed class BackupSchedulerHostedService : BackgroundService
 
         try
         {
-            return TimeZoneInfo.FindSystemTimeZoneById(timezone);
+            return TZConvert.GetTimeZoneInfo(timezone);
         }
         catch
         {

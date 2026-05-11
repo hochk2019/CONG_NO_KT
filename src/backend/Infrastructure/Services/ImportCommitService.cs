@@ -226,7 +226,7 @@ public sealed class ImportCommitService : IImportCommitService
             {
                 var receipt = ImportCommitBuilders.BuildReceipt(raw, batch.Id, sellerSet);
                 receipt.CreatedBy = _currentUser.UserId;
-                await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
+                var customer = await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
 
                 if (request.AutoApprove)
                 {
@@ -235,6 +235,11 @@ public sealed class ImportCommitService : IImportCommitService
                     receipt.ApprovedAt = now;
                     receipt.AutoAllocateEnabled = true;
                     receipt.UnallocatedAmount = receipt.Amount;
+
+                    if (customer != null)
+                    {
+                        customer.CurrentBalance -= receipt.Amount;
+                    }
                 }
 
                 _db.Receipts.Add(receipt);

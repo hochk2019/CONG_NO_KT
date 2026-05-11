@@ -226,7 +226,7 @@ public sealed class ImportCommitService : IImportCommitService
             {
                 var receipt = ImportCommitBuilders.BuildReceipt(raw, batch.Id, sellerSet);
                 receipt.CreatedBy = _currentUser.UserId;
-                await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
+                var customer = await ImportCommitCustomers.EnsureCustomer(_db, raw, customerCache, ct);
 
                 if (request.AutoApprove)
                 {
@@ -234,6 +234,12 @@ public sealed class ImportCommitService : IImportCommitService
                     receipt.ApprovedBy = _currentUser.UserId;
                     receipt.ApprovedAt = now;
                     receipt.AutoAllocateEnabled = true;
+                    receipt.UnallocatedAmount = receipt.Amount;
+
+                    if (customer != null)
+                    {
+                        customer.CurrentBalance -= receipt.Amount;
+                    }
                 }
 
                 _db.Receipts.Add(receipt);
@@ -692,7 +698,9 @@ public sealed class ImportCommitService : IImportCommitService
             allocatedTotal += allocated;
         }
 
-        receipt.AllocationStatus = receipt.UnallocatedAmount == 0 ? "ALLOCATED" : "PARTIAL";
+        receipt.AllocationStatus = receipt.UnallocatedAmount == 0 
+            ? "ALLOCATED" 
+            : (receipt.UnallocatedAmount == receipt.Amount ? "UNALLOCATED" : "PARTIAL");
 
         return allocatedTotal;
     }

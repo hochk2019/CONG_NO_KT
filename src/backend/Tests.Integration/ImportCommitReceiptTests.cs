@@ -54,6 +54,37 @@ public class ImportCommitReceiptTests
     }
 
     [Fact]
+    public async Task CommitReceipt_AutoApprove_SetsUnallocatedAmountAndAllocationStatus()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db);
+        var batch = await SeedReceiptBatchAsync(
+            db,
+            customerTaxCode: "CUSTNEW",
+            customerName: "Customer New");
+
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitReceipt]);
+        var audit = new AuditService(db, user);
+        var service = new ImportCommitService(db, user, audit);
+
+        var result = await service.CommitAsync(batch.Id, new ImportCommitRequest(null, AutoApprove: true), CancellationToken.None);
+
+        Assert.Equal(1, result.InsertedReceipts);
+
+        var receipt = await db.Receipts.AsNoTracking().SingleAsync(r => r.SourceBatchId == batch.Id);
+
+        Assert.Equal("APPROVED", receipt.Status);
+        Assert.True(receipt.AutoAllocateEnabled);
+        Assert.Equal(500_000m, receipt.Amount);
+        Assert.Equal(500_000m, receipt.UnallocatedAmount); // Should match amount because no targets exist
+        Assert.Equal("UNALLOCATED", receipt.AllocationStatus);
+    }
+
+    [Fact]
     public async Task CommitReceipt_Skips_Duplicate_Document_Number_Already_In_System()
     {
         await using var db = _fixture.CreateContext();

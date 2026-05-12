@@ -85,6 +85,41 @@ public class ImportCommitReceiptTests
     }
 
     [Fact]
+    public async Task CommitReceipt_AutoApprove_FifoAllocates_ToExistingInvoice_InSameCommit()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db);
+        await SeedCustomerAsync(db, "CUST01", "Customer 01", 500_000m);
+        var invoiceId = await SeedInvoiceAsync(db, "SELLER01", "CUST01", "INV-001", 500_000m);
+        var batch = await SeedReceiptBatchAsync(db);
+
+        var user = new TestCurrentUser(
+            ["Accountant"],
+            [AppPermissions.ImportCommitReceipt]);
+        var audit = new AuditService(db, user);
+        var service = new ImportCommitService(db, user, audit);
+
+        var result = await service.CommitAsync(batch.Id, new ImportCommitRequest(null, AutoApprove: true), CancellationToken.None);
+
+        Assert.Equal(1, result.InsertedReceipts);
+
+        var receipt = await db.Receipts.AsNoTracking().SingleAsync(r => r.SourceBatchId == batch.Id);
+        var invoice = await db.Invoices.AsNoTracking().SingleAsync(i => i.Id == invoiceId);
+        var allocation = await db.ReceiptAllocations.AsNoTracking().SingleAsync(a => a.ReceiptId == receipt.Id);
+        var customer = await db.Customers.AsNoTracking().SingleAsync(c => c.TaxCode == "CUST01");
+
+        Assert.Equal("ALLOCATED", receipt.AllocationStatus);
+        Assert.Equal(0m, receipt.UnallocatedAmount);
+        Assert.Equal("PAID", invoice.Status);
+        Assert.Equal(0m, invoice.OutstandingAmount);
+        Assert.Equal(invoiceId, allocation.InvoiceId);
+        Assert.Equal(500_000m, allocation.Amount);
+        Assert.Equal(0m, customer.CurrentBalance);
+    }
+
+    [Fact]
     public async Task CommitReceipt_Skips_Duplicate_Document_Number_Already_In_System()
     {
         await using var db = _fixture.CreateContext();
@@ -116,6 +151,7 @@ public class ImportCommitReceiptTests
             "congno.audit_logs, " +
             "congno.receipt_allocations, " +
             "congno.receipts, " +
+            "congno.invoices, " +
             "congno.import_staging_rows, " +
             "congno.import_batches, " +
             "congno.customers, " +
@@ -136,6 +172,56 @@ public class ImportCommitReceiptTests
         });
 
         await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedCustomerAsync(
+        ConGNoDbContext db,
+        string customerTaxCode,
+        string name,
+        decimal currentBalance)
+    {
+        db.Customers.Add(new Customer
+        {
+            TaxCode = customerTaxCode,
+            Name = name,
+            Status = "ACTIVE",
+            CurrentBalance = currentBalance,
+            PaymentTermsDays = 30,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task<Guid> SeedInvoiceAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        string invoiceNo,
+        decimal amount)
+    {
+        var invoice = new Invoice
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            InvoiceNo = invoiceNo,
+            IssueDate = new DateOnly(2026, 1, 10),
+            RevenueExclVat = amount,
+            VatAmount = 0,
+            TotalAmount = amount,
+            OutstandingAmount = amount,
+            InvoiceType = "NORMAL",
+            Status = "OPEN",
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        };
+        db.Invoices.Add(invoice);
+        await db.SaveChangesAsync();
+        return invoice.Id;
     }
 
     private static async Task<ImportBatch> SeedReceiptBatchAsync(

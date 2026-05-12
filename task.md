@@ -11,6 +11,20 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 147 - Receipt import FIFO allocation FK fix (2026-05-12) [bead: cng-ksq]
+- [x] Dò log API và batch `822d76e8-81b3-41ba-8ae6-6cc43b8a7a8f`: staging OK, MST đúng `0106733173`, không có receipt nào đã ghi; lỗi gốc là FK `receipt_allocations_receipt_id_fkey` khi auto FIFO tạo phân bổ cho phiếu thu import.
+- [x] Chạy GitNexus impact: `ImportCommitService` risk `HIGH` do nhiều integration tests; `ConGNoDbContext` risk `HIGH` vì là model trung tâm.
+- [x] Sửa EF mapping cho `ReceiptAllocation` / `ReceiptHeldCredit` để EF biết quan hệ FK với `Receipt`, `Invoice`, `Advance`, `ReceiptHeldCredit`, từ đó save đúng thứ tự principal/dependent trong cùng transaction.
+- [x] Bổ sung regression test import phiếu thu auto approve/FIFO có hóa đơn mở và tạo allocation trong cùng commit.
+- [x] Verify, deploy Docker, test ghi batch thật, commit và push.
+
+### Verification evidence (2026-05-12, phase 147 / cng-ksq)
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitReceiptTests" -v minimal` => pass (`4/4`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportCommitReceiptTests|FullyQualifiedName~ImportCommitInvoiceAutoAllocateTests|FullyQualifiedName~ImportCommitAdvanceAutoAllocateTests|FullyQualifiedName~InvoiceCreditReconcileServiceTests|FullyQualifiedName~ReceiptDraftAndBulkApproveTests" -v minimal` => pass (`24/24`).
+- [x] `git diff --check` => pass; chi co warning LF/CRLF.
+- [x] `docker compose up -d --build api` => build/recreate API thanh cong, `/health` tra `200`.
+- [x] Test ghi batch that `822d76e8-81b3-41ba-8ae6-6cc43b8a7a8f` qua API: insertedReceipts `1`, committedRows `1`; DB xac nhan batch `COMMITTED`, receipt `MJ-test1205` status `APPROVED`, allocation `ALLOCATED`, unallocated `0`, co `1` allocation.
+
 ## Phase 146 - Dashboard/report total parity and receipt import hardening (2026-05-12) [bead: cng-y53]
 - [x] Đối chiếu read-only trên DB deploy: tổng current balance theo customers là `28.630.851.742,24`; ảnh cộng tay đang thiếu `61.560.000` ở nhóm `Trang - Hải phòng`, còn dashboard/reports lệch thêm `590.000` do chưa net phiếu thu chưa phân bổ `50.000` và hóa đơn âm `540.000`.
 - [x] Sửa KPI tổng công nợ dashboard/reports ưu tiên dùng `customers.current_balance` khi có dữ liệu số dư khách hàng, trong khi các card dư hóa đơn/dư trả hộ/phiếu thu treo vẫn giữ số chứng từ để đối soát.

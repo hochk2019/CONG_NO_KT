@@ -215,12 +215,47 @@ public sealed class ConGNoDbContext : DbContext
         {
             entity.ToTable("receipt_allocations");
             entity.HasKey(x => x.Id);
+            entity.HasOne<Receipt>()
+                .WithMany()
+                .HasForeignKey(x => x.ReceiptId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("receipt_allocations_receipt_id_fkey");
+            entity.HasOne<Invoice>()
+                .WithMany()
+                .HasForeignKey(x => x.InvoiceId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("receipt_allocations_invoice_id_fkey");
+            entity.HasOne<Advance>()
+                .WithMany()
+                .HasForeignKey(x => x.AdvanceId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("receipt_allocations_advance_id_fkey");
+            entity.HasOne<ReceiptHeldCredit>()
+                .WithMany()
+                .HasForeignKey(x => x.HeldCreditId)
+                .OnDelete(DeleteBehavior.SetNull)
+                .HasConstraintName("fk_receipt_allocations_held_credit");
         });
 
         modelBuilder.Entity<ReceiptHeldCredit>(entity =>
         {
             entity.ToTable("receipt_held_credits");
             entity.HasKey(x => x.Id);
+            entity.HasOne<Receipt>()
+                .WithMany()
+                .HasForeignKey(x => x.ReceiptId)
+                .OnDelete(DeleteBehavior.Cascade)
+                .HasConstraintName("receipt_held_credits_receipt_id_fkey");
+            entity.HasOne<Invoice>()
+                .WithMany()
+                .HasForeignKey(x => x.OriginalInvoiceId)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("receipt_held_credits_original_invoice_id_fkey");
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(x => x.CreatedBy)
+                .OnDelete(DeleteBehavior.NoAction)
+                .HasConstraintName("receipt_held_credits_created_by_fkey");
         });
 
         modelBuilder.Entity<PeriodLock>(entity =>

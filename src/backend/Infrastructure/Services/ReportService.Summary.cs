@@ -13,6 +13,7 @@ WITH invoice AS (
            SUM(outstanding_amount) AS outstanding_invoice
     FROM congno.invoices
     WHERE deleted_at IS NULL
+      AND status <> 'VOID'
       AND (@from IS NULL OR issue_date >= @from)
       AND (@to IS NULL OR issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -25,6 +26,7 @@ advance AS (
            SUM(outstanding_amount) AS outstanding_advance
     FROM congno.advances
     WHERE deleted_at IS NULL
+      AND status IN ('APPROVED','PAID')
       AND (@from IS NULL OR advance_date >= @from)
       AND (@to IS NULL OR advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -67,6 +69,7 @@ WITH invoice AS (
            SUM(outstanding_amount) AS outstanding_invoice
     FROM congno.invoices
     WHERE deleted_at IS NULL
+      AND status <> 'VOID'
       AND (@from IS NULL OR issue_date >= @from)
       AND (@to IS NULL OR issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -79,6 +82,7 @@ advance AS (
            SUM(outstanding_amount) AS outstanding_advance
     FROM congno.advances
     WHERE deleted_at IS NULL
+      AND status IN ('APPROVED','PAID')
       AND (@from IS NULL OR advance_date >= @from)
       AND (@to IS NULL OR advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -123,6 +127,7 @@ WITH invoice AS (
            SUM(outstanding_amount) AS outstanding_invoice
     FROM congno.invoices
     WHERE deleted_at IS NULL
+      AND status <> 'VOID'
       AND (@from IS NULL OR issue_date >= @from)
       AND (@to IS NULL OR issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -135,6 +140,7 @@ advance AS (
            SUM(outstanding_amount) AS outstanding_advance
     FROM congno.advances
     WHERE deleted_at IS NULL
+      AND status IN ('APPROVED','PAID')
       AND (@from IS NULL OR advance_date >= @from)
       AND (@to IS NULL OR advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -176,6 +182,7 @@ WITH invoice AS (
            SUM(outstanding_amount) AS outstanding_invoice
     FROM congno.invoices
     WHERE deleted_at IS NULL
+      AND status <> 'VOID'
       AND (@from IS NULL OR issue_date >= @from)
       AND (@to IS NULL OR issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -188,6 +195,7 @@ advance AS (
            SUM(outstanding_amount) AS outstanding_advance
     FROM congno.advances
     WHERE deleted_at IS NULL
+      AND status IN ('APPROVED','PAID')
       AND (@from IS NULL OR advance_date >= @from)
       AND (@to IS NULL OR advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
@@ -232,6 +240,7 @@ WITH invoice AS (
     FROM congno.invoices i
     JOIN congno.customers c ON c.tax_code = i.customer_tax_code
     WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
       AND (@from IS NULL OR i.issue_date >= @from)
       AND (@to IS NULL OR i.issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
@@ -246,6 +255,7 @@ advance AS (
     FROM congno.advances a
     JOIN congno.customers c ON c.tax_code = a.customer_tax_code
     WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
       AND (@from IS NULL OR a.advance_date >= @from)
       AND (@to IS NULL OR a.advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR a.seller_tax_code = @sellerTaxCode)
@@ -296,6 +306,7 @@ WITH invoice AS (
     FROM congno.invoices i
     JOIN congno.customers c ON c.tax_code = i.customer_tax_code
     WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
       AND (@from IS NULL OR i.issue_date >= @from)
       AND (@to IS NULL OR i.issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
@@ -310,6 +321,7 @@ advance AS (
     FROM congno.advances a
     JOIN congno.customers c ON c.tax_code = a.customer_tax_code
     WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
       AND (@from IS NULL OR a.advance_date >= @from)
       AND (@to IS NULL OR a.advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR a.seller_tax_code = @sellerTaxCode)
@@ -372,6 +384,7 @@ FROM (
            0::numeric AS receipted_total
     FROM congno.invoices i
     WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
       AND (@from IS NULL OR i.issue_date >= @from)
       AND (@to IS NULL OR i.issue_date <= @to)
       AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
@@ -392,6 +405,7 @@ FROM (
            0::numeric AS receipted_total
     FROM congno.advances a
     WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
       AND (@from IS NULL OR a.advance_date >= @from)
       AND (@to IS NULL OR a.advance_date <= @to)
       AND (@sellerTaxCode IS NULL OR a.seller_tax_code = @sellerTaxCode)
@@ -446,6 +460,7 @@ WITH base AS (
                0::numeric AS receipted_total
         FROM congno.invoices i
         WHERE i.deleted_at IS NULL
+          AND i.status <> 'VOID'
           AND (@from IS NULL OR i.issue_date >= @from)
           AND (@to IS NULL OR i.issue_date <= @to)
           AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
@@ -466,6 +481,7 @@ WITH base AS (
                0::numeric AS receipted_total
         FROM congno.advances a
         WHERE a.deleted_at IS NULL
+          AND a.status IN ('APPROVED','PAID')
           AND (@from IS NULL OR a.advance_date >= @from)
           AND (@to IS NULL OR a.advance_date <= @to)
           AND (@sellerTaxCode IS NULL OR a.seller_tax_code = @sellerTaxCode)

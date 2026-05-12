@@ -49,6 +49,19 @@ on_time AS (
       AND outstanding_due <= total_due * @onTimeThreshold
 )
 SELECT
+    CASE WHEN @useCustomerBalance THEN COALESCE((
+        SELECT SUM(c.current_balance)
+        FROM congno.customers c
+        WHERE (@customerTaxCode IS NULL OR c.tax_code = @customerTaxCode)
+          AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+    ), 0) ELSE 0 END AS customerBalanceTotal,
+    CASE WHEN @useCustomerBalance THEN COALESCE((
+        SELECT COUNT(*)
+        FROM congno.customers c
+        WHERE c.current_balance <> 0
+          AND (@customerTaxCode IS NULL OR c.tax_code = @customerTaxCode)
+          AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+    ), 0) ELSE 0 END AS customerBalanceCount,
     (SELECT outstanding_invoice FROM period_outstanding) AS outstandingInvoice,
     (SELECT outstanding_advance FROM period_outstanding) AS outstandingAdvance,
     (SELECT amount FROM unallocated_receipts) AS unallocatedReceiptsAmount,
@@ -77,7 +90,8 @@ SELECT
             sellerTaxCode = request.SellerTaxCode,
             customerTaxCode = request.CustomerTaxCode,
             ownerId = request.OwnerId,
-            onTimeThreshold = 0.95m
+            onTimeThreshold = 0.95m,
+            useCustomerBalance = string.IsNullOrWhiteSpace(request.SellerTaxCode)
         };
 
         await using var connection = _connectionFactory.CreateRead();
@@ -86,7 +100,7 @@ SELECT
         var row = await connection.QuerySingleAsync<ReportKpiRow>(
             new CommandDefinition(ReportKpiSql, parameters, cancellationToken: ct));
 
-        var totalOutstanding = row.OutstandingInvoice + row.OutstandingAdvance;
+        var totalOutstanding = ResolveTotalOutstanding(row);
 
         return new ReportKpiDto(
             totalOutstanding,
@@ -103,6 +117,8 @@ SELECT
 
     private sealed class ReportKpiRow
     {
+        public decimal CustomerBalanceTotal { get; init; }
+        public int CustomerBalanceCount { get; init; }
         public decimal OutstandingInvoice { get; init; }
         public decimal OutstandingAdvance { get; init; }
         public decimal UnallocatedReceiptsAmount { get; init; }
@@ -112,5 +128,12 @@ SELECT
         public decimal DueSoonAmount { get; init; }
         public int DueSoonCustomers { get; init; }
         public int OnTimeCustomers { get; init; }
+    }
+
+    private static decimal ResolveTotalOutstanding(ReportKpiRow row)
+    {
+        return row.CustomerBalanceCount > 0
+            ? row.CustomerBalanceTotal
+            : row.OutstandingInvoice + row.OutstandingAdvance;
     }
 }

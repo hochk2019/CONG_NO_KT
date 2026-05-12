@@ -139,7 +139,16 @@ public static class ImportTemplateParser
 
     private static string GetCell(IXLRow row, Dictionary<string, int> map, string key)
     {
-        return map.TryGetValue(key, out var col) ? row.Cell(col).GetString().Trim() : string.Empty;
+        if (!map.TryGetValue(key, out var col))
+        {
+            return string.Empty;
+        }
+
+        var cell = row.Cell(col);
+        var formatted = cell.GetFormattedString().Trim();
+        return string.IsNullOrWhiteSpace(formatted)
+            ? cell.GetString().Trim()
+            : formatted;
     }
 
     private static IXLCell? GetCellCell(IXLRow row, Dictionary<string, int> map, string key)

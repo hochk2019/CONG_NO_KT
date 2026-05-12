@@ -1,4 +1,5 @@
 using System.Collections;
+using CongNoGolden.Application.Reports;
 using CongNoGolden.Infrastructure.Data;
 using CongNoGolden.Infrastructure.Data.Entities;
 using CongNoGolden.Infrastructure.Services;
@@ -143,6 +144,87 @@ public sealed class ReportPagedTests
         Assert.Equal(150m, GetProperty<decimal>(linesPage2[0], "RunningBalance"));
     }
 
+    [Fact]
+    public async Task Summary_Excludes_Void_Invoices_And_NonApproved_Advances()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var seller = await SeedSellerAsync(db, "SELLER03", "Seller 03");
+        var customer = await SeedCustomerAsync(db, "CUST-SUM", "Khach Summary", 0m);
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-5));
+        var to = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-OK", from.AddDays(1), 100m);
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-VOID", from.AddDays(1), 500m, "VOID");
+        await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-OK", from.AddDays(1), 70m, "APPROVED");
+        await SeedAdvanceAsync(db, seller.SellerTaxCode, customer.TaxCode, "ADV-DRAFT", from.AddDays(1), 30m, "DRAFT");
+
+        DapperTypeHandlers.Register();
+        var service = new ReportService(new NpgsqlConnectionFactory(_fixture.ConnectionString));
+
+        var rows = await service.GetSummaryAsync(
+            new ReportSummaryRequest(from, to, "customer", seller.SellerTaxCode, customer.TaxCode, null),
+            CancellationToken.None);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(100m, row.InvoicedTotal);
+        Assert.Equal(100m, row.OutstandingInvoice);
+        Assert.Equal(70m, row.AdvancedTotal);
+        Assert.Equal(70m, row.OutstandingAdvance);
+    }
+
+    [Fact]
+    public async Task Statement_Includes_Unallocated_Approved_Receipt_In_Balance()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var seller = await SeedSellerAsync(db, "SELLER04", "Seller 04");
+        var customer = await SeedCustomerAsync(db, "CUST-RCPT", "Khach Receipt", -50m);
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-5));
+        var to = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-RCPT", from.AddDays(1), 100m);
+        await SeedReceiptAsync(db, seller.SellerTaxCode, customer.TaxCode, "PT-UNALLOC", from.AddDays(2), 150m, 150m);
+
+        DapperTypeHandlers.Register();
+        var service = new ReportService(new NpgsqlConnectionFactory(_fixture.ConnectionString));
+
+        var result = await service.GetStatementAsync(
+            new ReportStatementRequest(customer.TaxCode, from, to, seller.SellerTaxCode),
+            CancellationToken.None);
+
+        Assert.Equal(-50m, result.ClosingBalance);
+        Assert.Contains(result.Lines, line => line.Type == "RECEIPT" && line.Decrease == 150m);
+    }
+
+    [Fact]
+    public async Task Kpis_TotalOutstanding_Uses_Customer_CurrentBalance_When_NoSellerFilter()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var seller = await SeedSellerAsync(db, "SELLER05", "Seller 05");
+        var customer = await SeedCustomerAsync(db, "CUST-KPI", "Khach KPI", -50m);
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(-2));
+        var to = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, "INV-KPI", from, 100m);
+        await SeedReceiptAsync(db, seller.SellerTaxCode, customer.TaxCode, "PT-KPI", to, 150m, 150m);
+
+        DapperTypeHandlers.Register();
+        var service = new ReportService(new NpgsqlConnectionFactory(_fixture.ConnectionString));
+
+        var result = await service.GetKpisAsync(
+            new ReportKpiRequest(from, to, to, null, null, null, 5),
+            CancellationToken.None);
+
+        Assert.Equal(-50m, result.TotalOutstanding);
+        Assert.Equal(100m, result.OutstandingInvoice);
+        Assert.Equal(150m, result.UnallocatedReceiptsAmount);
+    }
+
     private static Type RequireType(string typeName)
     {
         var type = Type.GetType(typeName);
@@ -247,7 +329,8 @@ public sealed class ReportPagedTests
         string customerTaxCode,
         string invoiceNo,
         DateOnly issueDate,
-        decimal amount)
+        decimal amount,
+        string status = "OPEN")
     {
         db.Invoices.Add(new Invoice
         {
@@ -261,7 +344,66 @@ public sealed class ReportPagedTests
             TotalAmount = amount,
             OutstandingAmount = amount,
             InvoiceType = "NORMAL",
-            Status = "OPEN",
+            Status = status,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedAdvanceAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        string advanceNo,
+        DateOnly advanceDate,
+        decimal amount,
+        string status)
+    {
+        db.Advances.Add(new Advance
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            AdvanceNo = advanceNo,
+            AdvanceDate = advanceDate,
+            Amount = amount,
+            OutstandingAmount = amount,
+            Description = advanceNo,
+            Status = status,
+            CreatedAt = DateTimeOffset.UtcNow,
+            UpdatedAt = DateTimeOffset.UtcNow,
+            Version = 0
+        });
+
+        await db.SaveChangesAsync();
+    }
+
+    private static async Task SeedReceiptAsync(
+        ConGNoDbContext db,
+        string sellerTaxCode,
+        string customerTaxCode,
+        string receiptNo,
+        DateOnly receiptDate,
+        decimal amount,
+        decimal unallocatedAmount)
+    {
+        db.Receipts.Add(new Receipt
+        {
+            Id = Guid.NewGuid(),
+            SellerTaxCode = sellerTaxCode,
+            CustomerTaxCode = customerTaxCode,
+            ReceiptNo = receiptNo,
+            ReceiptDate = receiptDate,
+            Amount = amount,
+            Method = "BANK",
+            AllocationMode = "MANUAL",
+            AllocationStatus = unallocatedAmount == amount ? "UNALLOCATED" : "PARTIAL",
+            AllocationPriority = "ISSUE_DATE",
+            Status = "APPROVED",
+            UnallocatedAmount = unallocatedAmount,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0

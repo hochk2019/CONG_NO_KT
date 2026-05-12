@@ -11,6 +11,28 @@
 > Các phase có mốc ngày **<= 2026-01-29** là nhật ký lịch sử để truy vết.
 > Nguồn vận hành hiện hành ưu tiên: `DEPLOYMENT_GUIDE_DOCKER.md`, `RUNBOOK.md`, `docs/OPS_ADMIN_CONSOLE.md`.
 
+## Phase 146 - Dashboard/report total parity and receipt import hardening (2026-05-12) [bead: cng-y53]
+- [x] Đối chiếu read-only trên DB deploy: tổng current balance theo customers là `28.630.851.742,24`; ảnh cộng tay đang thiếu `61.560.000` ở nhóm `Trang - Hải phòng`, còn dashboard/reports lệch thêm `590.000` do chưa net phiếu thu chưa phân bổ `50.000` và hóa đơn âm `540.000`.
+- [x] Sửa KPI tổng công nợ dashboard/reports ưu tiên dùng `customers.current_balance` khi có dữ liệu số dư khách hàng, trong khi các card dư hóa đơn/dư trả hộ/phiếu thu treo vẫn giữ số chứng từ để đối soát.
+- [x] Sửa parser/staging phiếu thu/trả hộ để giữ MST theo định dạng Excel và tự chuẩn hóa MST đã mất số 0 đầu về MST khách hàng/người bán đang tồn tại trước khi dò trùng/ghi staging.
+- [x] Verify backend tests liên quan import, dashboard và reports.
+- [x] GitNexus/diff scope check, dọn file mẫu thừa, commit và cập nhật Docker deployment.
+
+### Verification evidence (2026-05-12, phase 146 / cng-y53)
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportTemplateParserTests" -v minimal` => pass (`14/14`).
+- [x] `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ImportStagingDuplicateDetectionTests|FullyQualifiedName~ImportCommitReceiptTests|FullyQualifiedName~ReportPagedTests|FullyQualifiedName~DashboardOverviewTests|FullyQualifiedName~ReportAgingTests" -v minimal` => pass (`24/24`).
+- [x] `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ErpIntegrationServiceTests|FullyQualifiedName~ReportExportOverviewTemplateTests|FullyQualifiedName~ReportPdfExportTests" -v minimal` => pass (`7/7`).
+- [x] `git diff --check` => pass; chi co warning line-ending LF/CRLF.
+- [x] GitNexus `status` up-to-date; `impact` cho `ImportStagingService` risk `MEDIUM`, `DashboardService`/`ReportService` risk `LOW`, method `GetKpisAsync` risk `HIGH` do anh huong endpoint/export/schedule/ERP nen da bo sung test export/ERP.
+
+## Phase 145 - Reports/Dashboard debt calculation reconciliation (2026-05-12) [bead: cng-3in]
+- [x] Cập nhật GitNexus index cho repo `CONG_NO_KT` trước khi sửa code; CLI `detect_changes` không có trong bản GitNexus hiện tại nên dùng `status`, `impact`, `context`, `query` và diff/test để đối chiếu scope.
+- [x] Sửa summary/report statement/export để loại hóa đơn `VOID`, chỉ tính khoản trả hộ `APPROVED/PAID`, và trừ toàn bộ phiếu thu đã duyệt kể cả phần chưa phân bổ.
+- [x] Sửa Dashboard/Reports aging/KPI base SQL để trừ `invoice_reduction_applications`, tránh hóa đơn âm đã import vẫn làm cộng sai công nợ mở.
+- [x] Bổ sung regression tests cho summary, sao kê, aging, dashboard reduction invoice và parser ngày phiếu thu `dd/MM/yyyy` không bị đảo tháng/ngày.
+- [x] Verify: `dotnet test src/backend/Tests.Unit/Tests.Unit.csproj --filter "FullyQualifiedName~ImportTemplateParserTests" -v minimal` => pass (`13/13`).
+- [x] Verify: `dotnet test src/backend/Tests.Integration/CongNoGolden.Tests.Integration.csproj --filter "FullyQualifiedName~ReportPagedTests|FullyQualifiedName~ReportAgingTests|FullyQualifiedName~DashboardOverviewTests" -v minimal` => pass (`12/12`).
+
 ## Phase 144 - Safe Customer deletion feature (2026-04-14) [bead: cng-d9h]
 - [x] Lập kế hoạch và đợi phê duyệt (Đang chờ - Pending user).
 - [x] Backend: Thêm `DELETE /customers/{taxCode}` endpoint với RBAC `Admin`.

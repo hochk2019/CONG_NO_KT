@@ -212,6 +212,99 @@ public sealed class DashboardOverviewTests
         Assert.Equal(-50m, result.KpiMoM.TotalOutstanding.DeltaPercent);
     }
 
+    [Fact]
+    public async Task Overview_Subtracts_Imported_Reduction_Invoices_From_Open_Debt()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+        var asOf = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var originalId = Guid.NewGuid();
+        var reductionId = Guid.NewGuid();
+
+        db.Invoices.AddRange(
+            new Invoice
+            {
+                Id = originalId,
+                SellerTaxCode = seller.SellerTaxCode,
+                CustomerTaxCode = customer.TaxCode,
+                InvoiceNo = "INV-REDUCED",
+                IssueDate = asOf.AddDays(-5),
+                RevenueExclVat = 1_000_000,
+                VatAmount = 0,
+                TotalAmount = 1_000_000,
+                OutstandingAmount = 400_000,
+                InvoiceType = "NORMAL",
+                Status = "PARTIAL",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Version = 0
+            },
+            new Invoice
+            {
+                Id = reductionId,
+                SellerTaxCode = seller.SellerTaxCode,
+                CustomerTaxCode = customer.TaxCode,
+                InvoiceNo = "ADJ-REDUCTION",
+                IssueDate = asOf.AddDays(-1),
+                RevenueExclVat = -600_000,
+                VatAmount = 0,
+                TotalAmount = -600_000,
+                OutstandingAmount = 0,
+                InvoiceType = "ADJUSTMENT_REDUCTION",
+                Status = "PAID",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Version = 0
+            });
+        db.InvoiceReductionApplications.Add(new InvoiceReductionApplication
+        {
+            Id = Guid.NewGuid(),
+            ReductionInvoiceId = reductionId,
+            AppliedInvoiceId = originalId,
+            Amount = 600_000,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(new[] { "Admin" });
+        var service = new DashboardService(new NpgsqlConnectionFactory(_fixture.ConnectionString), currentUser);
+
+        var result = await service.GetOverviewAsync(
+            new DashboardOverviewRequest(asOf.AddDays(-10), asOf, 1, 5, null, null),
+            CancellationToken.None);
+
+        Assert.Equal(400_000, result.Kpis.TotalOutstanding);
+        Assert.Contains(result.TopOutstanding, item => item.CustomerTaxCode == customer.TaxCode && item.Amount == 400_000);
+    }
+
+    [Fact]
+    public async Task Overview_TotalOutstanding_Uses_Customer_CurrentBalance_When_Available()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db, currentBalance: -50_000);
+        var asOf = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+
+        await SeedInvoiceAsync(db, seller.SellerTaxCode, customer.TaxCode, 100_000, asOf);
+        await SeedReceiptAsync(db, seller.SellerTaxCode, customer.TaxCode, "UNALLOCATED", 150_000, 150_000);
+
+        DapperTypeHandlers.Register();
+        var currentUser = new TestCurrentUser(new[] { "Admin" });
+        var service = new DashboardService(new NpgsqlConnectionFactory(_fixture.ConnectionString), currentUser);
+
+        var result = await service.GetOverviewAsync(
+            new DashboardOverviewRequest(asOf, asOf, 1, 5, null, null),
+            CancellationToken.None);
+
+        Assert.Equal(-50_000, result.Kpis.TotalOutstanding);
+        Assert.Equal(100_000, result.Kpis.OutstandingInvoice);
+        Assert.Equal(150_000, result.Kpis.UnallocatedReceiptsAmount);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(
@@ -225,7 +318,9 @@ public sealed class DashboardOverviewTests
             "RESTART IDENTITY CASCADE;");
     }
 
-    private static async Task<(Seller seller, Customer customer)> SeedMasterAsync(ConGNoDbContext db)
+    private static async Task<(Seller seller, Customer customer)> SeedMasterAsync(
+        ConGNoDbContext db,
+        decimal currentBalance = 0)
     {
         var seller = new Seller
         {
@@ -241,6 +336,7 @@ public sealed class DashboardOverviewTests
             TaxCode = "CUST01",
             Name = "Customer 01",
             Status = "ACTIVE",
+            CurrentBalance = currentBalance,
             CreatedAt = DateTimeOffset.UtcNow,
             UpdatedAt = DateTimeOffset.UtcNow,
             Version = 0

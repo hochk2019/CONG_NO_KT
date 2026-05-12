@@ -44,6 +44,74 @@ public sealed class ReportAgingTests
         Assert.Equal(1000m, row.Overdue);
     }
 
+    [Fact]
+    public async Task Aging_Subtracts_Imported_Reduction_Invoices()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        var (seller, customer) = await SeedMasterAsync(db);
+        var asOf = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var originalId = Guid.NewGuid();
+        var reductionId = Guid.NewGuid();
+
+        db.Invoices.AddRange(
+            new Invoice
+            {
+                Id = originalId,
+                SellerTaxCode = seller.SellerTaxCode,
+                CustomerTaxCode = customer.TaxCode,
+                InvoiceNo = "INV-REDUCED",
+                IssueDate = asOf.AddDays(-10),
+                RevenueExclVat = 1_000m,
+                VatAmount = 0,
+                TotalAmount = 1_000m,
+                OutstandingAmount = 400m,
+                InvoiceType = "NORMAL",
+                Status = "PARTIAL",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Version = 0
+            },
+            new Invoice
+            {
+                Id = reductionId,
+                SellerTaxCode = seller.SellerTaxCode,
+                CustomerTaxCode = customer.TaxCode,
+                InvoiceNo = "ADJ-REDUCTION",
+                IssueDate = asOf.AddDays(-1),
+                RevenueExclVat = -600m,
+                VatAmount = 0,
+                TotalAmount = -600m,
+                OutstandingAmount = 0,
+                InvoiceType = "ADJUSTMENT_REDUCTION",
+                Status = "PAID",
+                CreatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTimeOffset.UtcNow,
+                Version = 0
+            });
+        db.InvoiceReductionApplications.Add(new InvoiceReductionApplication
+        {
+            Id = Guid.NewGuid(),
+            ReductionInvoiceId = reductionId,
+            AppliedInvoiceId = originalId,
+            Amount = 600m,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
+        await db.SaveChangesAsync();
+
+        DapperTypeHandlers.Register();
+        var service = new ReportService(new NpgsqlConnectionFactory(_fixture.ConnectionString));
+
+        var rows = await service.GetAgingAsync(
+            new ReportAgingRequest(asOf, seller.SellerTaxCode, customer.TaxCode, null),
+            CancellationToken.None);
+
+        var row = Assert.Single(rows);
+        Assert.Equal(400m, row.Total);
+        Assert.Equal(400m, row.Overdue);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(

@@ -12,6 +12,15 @@ WITH invoice_alloc AS (
       AND r.receipt_date <= @asOf
     GROUP BY ra.invoice_id
 ),
+invoice_reduction_alloc AS (
+    SELECT ira.applied_invoice_id AS invoice_id, SUM(ira.amount) AS allocated
+    FROM congno.invoice_reduction_applications ira
+    JOIN congno.invoices ri ON ri.id = ira.reduction_invoice_id
+    WHERE ri.deleted_at IS NULL
+      AND ri.status <> 'VOID'
+      AND ri.issue_date <= @asOf
+    GROUP BY ira.applied_invoice_id
+),
 advance_alloc AS (
     SELECT ra.advance_id, SUM(ra.amount) AS allocated
     FROM congno.receipt_allocations ra
@@ -25,13 +34,15 @@ invoice_out AS (
     SELECT i.customer_tax_code,
            c.name AS customer_name,
            c.accountant_owner_id AS owner_id,
-           (i.total_amount - COALESCE(a.allocated, 0)) AS outstanding,
+           (i.total_amount - COALESCE(a.allocated, 0) - COALESCE(red.allocated, 0)) AS outstanding,
            (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
     FROM congno.invoices i
     JOIN congno.customers c ON c.tax_code = i.customer_tax_code
     LEFT JOIN invoice_alloc a ON a.invoice_id = i.id
+    LEFT JOIN invoice_reduction_alloc red ON red.invoice_id = i.id
     WHERE i.deleted_at IS NULL
       AND i.status <> 'VOID'
+      AND i.invoice_type <> 'ADJUSTMENT_REDUCTION'
       AND i.issue_date <= @asOf
       AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
 ),
@@ -84,6 +95,15 @@ WITH invoice_alloc AS (
       AND r.receipt_date <= @asOf
     GROUP BY ra.invoice_id
 ),
+invoice_reduction_alloc AS (
+    SELECT ira.applied_invoice_id AS invoice_id, SUM(ira.amount) AS allocated
+    FROM congno.invoice_reduction_applications ira
+    JOIN congno.invoices ri ON ri.id = ira.reduction_invoice_id
+    WHERE ri.deleted_at IS NULL
+      AND ri.status <> 'VOID'
+      AND ri.issue_date <= @asOf
+    GROUP BY ira.applied_invoice_id
+),
 advance_alloc AS (
     SELECT ra.advance_id, SUM(ra.amount) AS allocated
     FROM congno.receipt_allocations ra
@@ -96,14 +116,16 @@ advance_alloc AS (
 invoice_period AS (
     SELECT i.customer_tax_code,
            c.name AS customer_name,
-           (i.total_amount - COALESCE(a.allocated, 0)) AS outstanding,
+           (i.total_amount - COALESCE(a.allocated, 0) - COALESCE(red.allocated, 0)) AS outstanding,
            i.total_amount AS issued_amount,
            (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
     FROM congno.invoices i
     JOIN congno.customers c ON c.tax_code = i.customer_tax_code
     LEFT JOIN invoice_alloc a ON a.invoice_id = i.id
+    LEFT JOIN invoice_reduction_alloc red ON red.invoice_id = i.id
     WHERE i.deleted_at IS NULL
       AND i.status <> 'VOID'
+      AND i.invoice_type <> 'ADJUSTMENT_REDUCTION'
       AND i.issue_date >= @from
       AND i.issue_date <= @to
       AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
@@ -146,6 +168,17 @@ agg AS (
 
     private const string DashboardKpiSql = AgingBaseCte + @"
 SELECT
+    CASE WHEN @useCustomerBalance THEN COALESCE((
+        SELECT SUM(c.current_balance)
+        FROM congno.customers c
+        WHERE (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+    ), 0) ELSE 0 END AS customerBalanceTotal,
+    CASE WHEN @useCustomerBalance THEN COALESCE((
+        SELECT COUNT(*)
+        FROM congno.customers c
+        WHERE c.current_balance <> 0
+          AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+    ), 0) ELSE 0 END AS customerBalanceCount,
     COALESCE((
         SELECT SUM(CASE WHEN outstanding > 0 THEN outstanding ELSE 0 END)
         FROM invoice_out

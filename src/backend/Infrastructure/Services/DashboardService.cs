@@ -95,7 +95,8 @@ public sealed partial class DashboardService : IDashboardService
             trendSeriesTo,
             trendFilterFrom,
             trendFilterTo,
-            trendGranularity
+            trendGranularity,
+            useCustomerBalance = true
         };
         var previousParameters = new
         {
@@ -109,7 +110,8 @@ public sealed partial class DashboardService : IDashboardService
             trendSeriesTo,
             trendFilterFrom,
             trendFilterTo,
-            trendGranularity
+            trendGranularity,
+            useCustomerBalance = false
         };
 
         await using var connection = _connectionFactory.CreateRead();
@@ -126,7 +128,7 @@ public sealed partial class DashboardService : IDashboardService
             new CommandDefinition(DashboardOnTimeCountSql, previousParameters, cancellationToken: ct));
 
         var kpis = new DashboardKpiDto(
-            kpiSnapshot.OutstandingInvoice + kpiSnapshot.OutstandingAdvance,
+            ResolveTotalOutstanding(kpiSnapshot),
             kpiSnapshot.OutstandingInvoice,
             kpiSnapshot.OutstandingAdvance,
             kpiSnapshot.OverdueTotal,
@@ -358,8 +360,8 @@ public sealed partial class DashboardService : IDashboardService
         DashboardKpiRow previous,
         int previousOnTimeCustomers)
     {
-        var currentTotalOutstanding = current.OutstandingInvoice + current.OutstandingAdvance;
-        var previousTotalOutstanding = previous.OutstandingInvoice + previous.OutstandingAdvance;
+        var currentTotalOutstanding = ResolveTotalOutstanding(current);
+        var previousTotalOutstanding = ResolveTotalOutstanding(previous);
 
         return new DashboardKpiMoMDto(
             CreateDelta(currentTotalOutstanding, previousTotalOutstanding),
@@ -422,6 +424,13 @@ public sealed partial class DashboardService : IDashboardService
     private static DashboardKpiDeltaDto CreateDelta(int current, int previous) =>
         CreateDelta((decimal)current, (decimal)previous);
 
+    private static decimal ResolveTotalOutstanding(DashboardKpiRow row)
+    {
+        return row.CustomerBalanceCount > 0
+            ? row.CustomerBalanceTotal
+            : row.OutstandingInvoice + row.OutstandingAdvance;
+    }
+
     private static string DescribeDelta(decimal value)
     {
         if (value > 0)
@@ -439,6 +448,8 @@ public sealed partial class DashboardService : IDashboardService
 
     private sealed class DashboardKpiRow
     {
+        public decimal CustomerBalanceTotal { get; set; }
+        public int CustomerBalanceCount { get; set; }
         public decimal OutstandingInvoice { get; set; }
         public decimal OutstandingAdvance { get; set; }
         public decimal OverdueTotal { get; set; }

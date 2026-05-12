@@ -245,6 +245,40 @@ public class ImportStagingDuplicateDetectionTests
         Assert.Equal("Thu cong no thang 01/2026", ReadRawString(row.RawData, "description"));
     }
 
+    [Fact]
+    public async Task StageReceipt_Normalizes_Known_CustomerTaxCode_With_Missing_LeadingZero()
+    {
+        await using var db = _fixture.CreateContext();
+        await ResetAsync(db);
+
+        await SeedSellerAsync(db, "2300328765");
+        await SeedCustomerAsync(db, "0106733173", "Cong ty Can Giu So Khong");
+
+        var batch = new ImportBatch
+        {
+            Id = Guid.NewGuid(),
+            Type = "RECEIPT",
+            Source = "UPLOAD",
+            Status = "STAGING",
+            CreatedAt = DateTimeOffset.UtcNow
+        };
+        db.ImportBatches.Add(batch);
+        await db.SaveChangesAsync();
+
+        await using var stream = BuildReceiptWorkbook("2300328765", "106733173", "MJ-test1205");
+        var service = new ImportStagingService(db);
+
+        var result = await service.StageAsync(batch.Id, "RECEIPT", stream, CancellationToken.None);
+
+        Assert.Equal(1, result.TotalRows);
+
+        var row = await db.ImportStagingRows.AsNoTracking().SingleAsync(r => r.BatchId == batch.Id);
+
+        Assert.Equal(ImportStagingHelpers.StatusOk, row.ValidationStatus);
+        Assert.Equal("0106733173", ReadRawString(row.RawData, "customer_tax_code"));
+        Assert.Contains("0106733173", row.DedupKey, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static async Task ResetAsync(ConGNoDbContext db)
     {
         await db.Database.ExecuteSqlRawAsync(

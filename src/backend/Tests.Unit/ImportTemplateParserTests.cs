@@ -105,6 +105,52 @@ public class ImportTemplateParserTests
     }
 
     [Fact]
+    public void Receipt_Ambiguous_Vietnamese_Date_String_Is_Not_Swapped()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Receipt");
+        WriteReceiptHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "SELLER01";
+        sheet.Cell(2, 2).Value = "CUST01";
+        sheet.Cell(2, 3).Value = "PT-AMBIG";
+        sheet.Cell(2, 4).Value = "07/04/2026";
+        sheet.Cell(2, 5).Value = "01/04/2026";
+        sheet.Cell(2, 6).Value = 1000;
+        sheet.Cell(2, 7).Value = "BANK";
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusOk, rows[0].ValidationStatus);
+        Assert.Equal("2026-04-07", ReadRawString(rows[0].RawData, "receipt_date"));
+        Assert.Equal("2026-04-01", ReadRawString(rows[0].RawData, "applied_period_start"));
+    }
+
+    [Fact]
+    public void Receipt_Formatted_Tax_Code_Cell_Preserves_Leading_Zero()
+    {
+        using var workbook = new XLWorkbook();
+        var sheet = workbook.AddWorksheet("Receipt");
+        WriteReceiptHeader(sheet);
+
+        sheet.Cell(2, 1).Value = "2300328765";
+        sheet.Cell(2, 2).Value = 106733173;
+        sheet.Cell(2, 2).Style.NumberFormat.Format = "0000000000";
+        sheet.Cell(2, 3).Value = "PT-ZERO";
+        sheet.Cell(2, 4).Value = "11/05/2026";
+        sheet.Cell(2, 5).Value = "01/05/2026";
+        sheet.Cell(2, 6).Value = 1000;
+        sheet.Cell(2, 7).Value = "BANK";
+
+        var rows = ImportTemplateParser.ParseSimpleTemplate(sheet, Guid.NewGuid(), ImportTemplateType.Receipt);
+
+        Assert.Single(rows);
+        Assert.Equal(ImportStagingHelpers.StatusOk, rows[0].ValidationStatus);
+        Assert.Equal("0106733173", ReadRawString(rows[0].RawData, "customer_tax_code"));
+    }
+
+    [Fact]
     public void Receipt_Missing_DocumentNo_Returns_Error()
     {
         using var workbook = new XLWorkbook();

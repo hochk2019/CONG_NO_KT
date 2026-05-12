@@ -10,6 +10,7 @@ WITH invoices AS (
     SELECT SUM(total_amount) AS total
     FROM congno.invoices
     WHERE deleted_at IS NULL
+      AND status <> 'VOID'
       AND customer_tax_code = @customerTaxCode
       AND (@sellerTaxCode IS NULL OR seller_tax_code = @sellerTaxCode)
       AND issue_date < @from
@@ -24,9 +25,8 @@ advances AS (
       AND advance_date < @from
 ),
 receipts AS (
-    SELECT SUM(ra.amount) AS total
-    FROM congno.receipt_allocations ra
-    JOIN congno.receipts r ON r.id = ra.receipt_id
+    SELECT SUM(r.amount) AS total
+    FROM congno.receipts r
     WHERE r.deleted_at IS NULL
       AND r.status = 'APPROVED'
       AND r.customer_tax_code = @customerTaxCode
@@ -65,6 +65,7 @@ SELECT i.issue_date AS document_date,
 FROM congno.invoices i
 JOIN congno.customers c ON c.tax_code = i.customer_tax_code
 WHERE i.deleted_at IS NULL
+  AND i.status <> 'VOID'
   AND (@customerTaxCode IS NULL OR i.customer_tax_code = @customerTaxCode)
   AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
   AND i.issue_date >= @from AND i.issue_date <= @to
@@ -110,22 +111,20 @@ SELECT r.receipt_date AS document_date,
        0::numeric AS revenue,
        0::numeric AS vat,
        0::numeric AS increase,
-       COALESCE(ra.allocated, 0) AS decrease,
+       r.amount AS decrease,
        0::numeric AS running_balance,
        COALESCE(u_created.full_name, u_created.username) AS created_by,
        COALESCE(u_approved.full_name, u_approved.username) AS approved_by,
        r.source_batch_id::text AS batch
 FROM congno.receipts r
 JOIN congno.customers c ON c.tax_code = r.customer_tax_code
-LEFT JOIN receipt_alloc ra ON ra.receipt_id = r.id
 LEFT JOIN congno.users u_created ON u_created.id = r.created_by
 LEFT JOIN congno.users u_approved ON u_approved.id = r.approved_by
 WHERE r.deleted_at IS NULL
   AND r.status = 'APPROVED'
   AND (@customerTaxCode IS NULL OR r.customer_tax_code = @customerTaxCode)
   AND (@sellerTaxCode IS NULL OR r.seller_tax_code = @sellerTaxCode)
-  AND r.receipt_date >= @from AND r.receipt_date <= @to
-  AND COALESCE(ra.allocated, 0) > 0;
+  AND r.receipt_date >= @from AND r.receipt_date <= @to;
 ";
 
 private const string StatementPagedBaseSql = @"
@@ -156,6 +155,7 @@ lines AS (
     FROM congno.invoices i
     JOIN congno.customers c ON c.tax_code = i.customer_tax_code
     WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
       AND (@customerTaxCode IS NULL OR i.customer_tax_code = @customerTaxCode)
       AND (@sellerTaxCode IS NULL OR i.seller_tax_code = @sellerTaxCode)
       AND i.issue_date >= @from AND i.issue_date <= @to
@@ -200,13 +200,12 @@ lines AS (
            0::numeric AS revenue,
            0::numeric AS vat,
            0::numeric AS increase,
-           COALESCE(ra.allocated, 0) AS decrease,
+           r.amount AS decrease,
            COALESCE(u_created.full_name, u_created.username) AS created_by,
            COALESCE(u_approved.full_name, u_approved.username) AS approved_by,
            r.source_batch_id::text AS batch
     FROM congno.receipts r
     JOIN congno.customers c ON c.tax_code = r.customer_tax_code
-    LEFT JOIN receipt_alloc ra ON ra.receipt_id = r.id
     LEFT JOIN congno.users u_created ON u_created.id = r.created_by
     LEFT JOIN congno.users u_approved ON u_approved.id = r.approved_by
     WHERE r.deleted_at IS NULL
@@ -214,7 +213,6 @@ lines AS (
       AND (@customerTaxCode IS NULL OR r.customer_tax_code = @customerTaxCode)
       AND (@sellerTaxCode IS NULL OR r.seller_tax_code = @sellerTaxCode)
       AND r.receipt_date >= @from AND r.receipt_date <= @to
-      AND COALESCE(ra.allocated, 0) > 0
 ),
 ordered AS (
     SELECT *,

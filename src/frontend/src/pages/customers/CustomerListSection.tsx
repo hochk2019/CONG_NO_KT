@@ -90,7 +90,7 @@ export default function CustomerListSection({
   const debouncedSearch = useDebouncedValue(search, 400)
   const [status, setStatus] = useState(() => getStoredFilter(CUSTOMER_STATUS_KEY))
   const [ownerId, setOwnerId] = useState('')
-  const [sort, setSort] = useState('')
+  const [sort, setSort] = useState('balance_desc')
   const [ownerOptions, setOwnerOptions] = useState<LookupOption[]>([])
   const [ownerLoading, setOwnerLoading] = useState(false)
   const [ownerError, setOwnerError] = useState<string | null>(null)
@@ -299,7 +299,7 @@ export default function CustomerListSection({
     setEditManagerId(detail.managerId ?? '')
   }, [detail, isEditOpen])
 
-  const hasFilters = Boolean(search.trim() || status || ownerId || sort)
+  const hasFilters = Boolean(search.trim() || status || ownerId || sort !== 'balance_desc')
   const selectedOwnerLabel = isUnassignedOwnerFilter
     ? UNASSIGNED_OWNER_LABEL
     : ownerOptions.find((option) => option.value === ownerId)?.label ?? ownerId
@@ -308,7 +308,7 @@ export default function CustomerListSection({
     setSearch('')
     setStatus('')
     setOwnerId('')
-    setSort('')
+    setSort('balance_desc')
     setPage(1)
     storeFilter(CUSTOMER_STATUS_KEY, '')
   }, [])
@@ -832,9 +832,9 @@ export default function CustomerListSection({
                   Phụ trách: {selectedOwnerLabel}
                 </span>
               )}
-              {sort && (
+              {sort !== 'balance_desc' && (
                 <span className="filter-chip">
-                  Sắp xếp: {customerDebtSortLabels[sort] ?? sort}
+                  Sắp xếp: {sort ? (customerDebtSortLabels[sort] ?? sort) : 'Mặc định'}
                 </span>
               )}
             </div>

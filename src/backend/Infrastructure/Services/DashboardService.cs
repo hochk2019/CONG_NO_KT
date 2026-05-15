@@ -160,6 +160,17 @@ public sealed partial class DashboardService : IDashboardService
             .ToList();
         var cashflowForecast = BuildCashflowForecast(trend, trendGranularity, trendSeriesTo);
 
+        var actual30Days = await connection.QuerySingleAsync<decimal>(
+            new CommandDefinition(Dashboard30DayActualSql, parameters, cancellationToken: ct));
+        var expected30DaysPast = await connection.QuerySingleAsync<decimal>(
+            new CommandDefinition(Dashboard30DayExpectedPastSql, parameters, cancellationToken: ct));
+        var expected30DaysNext = await connection.QuerySingleAsync<decimal>(
+            new CommandDefinition(Dashboard30DayExpectedNextSql, parameters, cancellationToken: ct));
+        var onTime30Days = await connection.QuerySingleAsync<int>(
+            new CommandDefinition(Dashboard30DayOnTimeSql, parameters, cancellationToken: ct));
+        var thirtyDayMetrics = new Dashboard30DayMetricsDto(
+            actual30Days, expected30DaysPast, expected30DaysNext, onTime30Days);
+
         var topOutstanding = (await connection.QueryAsync<DashboardTopRow>(
             new CommandDefinition(DashboardTopOutstandingSql, parameters, cancellationToken: ct)))
             .Select(MapTopItem)
@@ -205,6 +216,7 @@ public sealed partial class DashboardService : IDashboardService
             topOverdueDays,
             agingBuckets,
             allocationStatuses,
+            thirtyDayMetrics,
             lastUpdated);
     }
 
@@ -500,5 +512,10 @@ public sealed partial class DashboardService : IDashboardService
         public decimal OverdueAmount { get; set; }
         public decimal OverdueRatio { get; set; }
         public int OverdueCustomers { get; set; }
+    }
+
+    private sealed class Dashboard30DayRow
+    {
+        public decimal Total { get; set; }
     }
 }

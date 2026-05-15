@@ -93,6 +93,12 @@ const buildOverview = (): DashboardOverview => ({
   topOverdueDays: [],
   agingBuckets: [],
   allocationStatuses: [],
+  thirtyDayMetrics: {
+    actual30Days: 2_000_000,
+    expected30DaysPast: 2_600_000,
+    expected30DaysNext: 3_000_000,
+    onTimeCustomers30Days: 5,
+  },
   lastUpdatedAt: new Date().toISOString(),
 })
 

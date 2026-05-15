@@ -1,4 +1,4 @@
-import { useState, type MouseEvent } from 'react'
+import { useState, type MouseEvent, type ReactNode } from 'react'
 import EmptyState from '../../components/EmptyState'
 import Skeleton from '../../components/Skeleton'
 
@@ -36,6 +36,7 @@ type DashboardCashflowChartProps = {
   onChangeUnit: (value: UnitScale) => void
   formatMoney: (value: number) => string
   formatUnitValue: (value: number, unit: UnitScale) => string
+  rangeSelector?: ReactNode
 }
 
 type TooltipState = {
@@ -58,6 +59,7 @@ export default function DashboardCashflowChart({
   onChangeUnit,
   formatMoney,
   formatUnitValue,
+  rangeSelector,
 }: DashboardCashflowChartProps) {
   const [tooltip, setTooltip] = useState<TooltipState | null>(null)
 
@@ -89,6 +91,9 @@ export default function DashboardCashflowChart({
           <p className="muted">Theo dõi kỳ vọng thu hồi, thực thu và chênh lệch theo từng kỳ.</p>
         </div>
         <div className="chart-controls chart-controls--cashflow">
+          {rangeSelector ? (
+            <div className="chart-controls__group">{rangeSelector}</div>
+          ) : null}
           <div className="unit-toggle chart-controls__group" role="group" aria-label="Chế độ kỳ biểu đồ">
             <button
               className={`unit-toggle__btn ${trendGranularity === 'week' ? 'unit-toggle__btn--active' : ''}`}

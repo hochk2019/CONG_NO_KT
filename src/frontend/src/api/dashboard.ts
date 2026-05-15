@@ -74,6 +74,13 @@ export type DashboardAllocationStatus = {
   amount: number
 }
 
+export type Dashboard30DayMetrics = {
+  actual30Days: number
+  expected30DaysPast: number
+  expected30DaysNext: number
+  onTimeCustomers30Days: number
+}
+
 export type DashboardOverview = {
   trendFrom: string
   trendTo: string
@@ -87,6 +94,7 @@ export type DashboardOverview = {
   topOverdueDays: DashboardTopItem[]
   agingBuckets: DashboardAgingBucket[]
   allocationStatuses: DashboardAllocationStatus[]
+  thirtyDayMetrics: Dashboard30DayMetrics
   lastUpdatedAt: string
 }
 

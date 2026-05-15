@@ -435,4 +435,180 @@ SELECT GREATEST(
     COALESCE((SELECT MAX(locked_at) FROM congno.period_locks), to_timestamp(0))
 ) AS lastUpdatedAt;
 ";
+
+    private const string Dashboard30DayActualSql = @"
+SELECT COALESCE(SUM(r.amount), 0) AS total
+FROM congno.receipts r
+JOIN congno.customers c ON c.tax_code = r.customer_tax_code
+WHERE r.deleted_at IS NULL
+  AND r.status = 'APPROVED'
+  AND COALESCE(r.approved_at, r.receipt_date::timestamp)::date >= CURRENT_DATE - INTERVAL '30 days'
+  AND COALESCE(r.approved_at, r.receipt_date::timestamp)::date <= CURRENT_DATE
+  AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId);
+";
+
+    private const string Dashboard30DayExpectedPastSql = @"
+WITH invoice_due AS (
+    SELECT SUM(i.total_amount) AS total
+    FROM congno.invoices i
+    JOIN congno.customers c ON c.tax_code = i.customer_tax_code
+    WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
+      AND i.invoice_type <> 'ADJUSTMENT_REDUCTION'
+      AND (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date
+          BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE - INTERVAL '1 day'
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+),
+advance_due AS (
+    SELECT SUM(a.amount) AS total
+    FROM congno.advances a
+    JOIN congno.customers c ON c.tax_code = a.customer_tax_code
+    WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
+      AND (a.advance_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date
+          BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE - INTERVAL '1 day'
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+)
+SELECT COALESCE((SELECT total FROM invoice_due), 0) + COALESCE((SELECT total FROM advance_due), 0) AS total;
+";
+
+    private const string Dashboard30DayExpectedNextSql = @"
+WITH invoice_alloc AS (
+    SELECT ra.invoice_id, SUM(ra.amount) AS allocated
+    FROM congno.receipt_allocations ra
+    JOIN congno.receipts r ON r.id = ra.receipt_id
+    WHERE r.deleted_at IS NULL
+      AND r.status = 'APPROVED'
+      AND r.receipt_date <= CURRENT_DATE
+    GROUP BY ra.invoice_id
+),
+invoice_reduction_alloc AS (
+    SELECT ira.applied_invoice_id AS invoice_id, SUM(ira.amount) AS allocated
+    FROM congno.invoice_reduction_applications ira
+    JOIN congno.invoices ri ON ri.id = ira.reduction_invoice_id
+    WHERE ri.deleted_at IS NULL
+      AND ri.status <> 'VOID'
+      AND ri.issue_date <= CURRENT_DATE
+    GROUP BY ira.applied_invoice_id
+),
+advance_alloc AS (
+    SELECT ra.advance_id, SUM(ra.amount) AS allocated
+    FROM congno.receipt_allocations ra
+    JOIN congno.receipts r ON r.id = ra.receipt_id
+    WHERE r.deleted_at IS NULL
+      AND r.status = 'APPROVED'
+      AND r.receipt_date <= CURRENT_DATE
+    GROUP BY ra.advance_id
+),
+invoice_out AS (
+    SELECT (i.total_amount - COALESCE(a.allocated, 0) - COALESCE(red.allocated, 0)) AS outstanding,
+           (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
+    FROM congno.invoices i
+    JOIN congno.customers c ON c.tax_code = i.customer_tax_code
+    LEFT JOIN invoice_alloc a ON a.invoice_id = i.id
+    LEFT JOIN invoice_reduction_alloc red ON red.invoice_id = i.id
+    WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
+      AND i.invoice_type <> 'ADJUSTMENT_REDUCTION'
+      AND i.issue_date <= CURRENT_DATE
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+),
+advance_out AS (
+    SELECT (a.amount - COALESCE(alloc.allocated, 0)) AS outstanding,
+           (a.advance_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
+    FROM congno.advances a
+    JOIN congno.customers c ON c.tax_code = a.customer_tax_code
+    LEFT JOIN advance_alloc alloc ON alloc.advance_id = a.id
+    WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
+      AND a.advance_date <= CURRENT_DATE
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+),
+combined AS (
+    SELECT outstanding, due_date FROM invoice_out
+    UNION ALL
+    SELECT outstanding, due_date FROM advance_out
+)
+SELECT COALESCE(SUM(outstanding), 0) AS total
+FROM combined
+WHERE outstanding > 0
+  AND due_date >= CURRENT_DATE
+  AND due_date <= CURRENT_DATE + INTERVAL '30 days';
+";
+
+    private const string Dashboard30DayOnTimeSql = @"
+WITH invoice_alloc AS (
+    SELECT ra.invoice_id, SUM(ra.amount) AS allocated
+    FROM congno.receipt_allocations ra
+    JOIN congno.receipts r ON r.id = ra.receipt_id
+    WHERE r.deleted_at IS NULL
+      AND r.status = 'APPROVED'
+      AND r.receipt_date <= CURRENT_DATE
+    GROUP BY ra.invoice_id
+),
+invoice_reduction_alloc AS (
+    SELECT ira.applied_invoice_id AS invoice_id, SUM(ira.amount) AS allocated
+    FROM congno.invoice_reduction_applications ira
+    JOIN congno.invoices ri ON ri.id = ira.reduction_invoice_id
+    WHERE ri.deleted_at IS NULL
+      AND ri.status <> 'VOID'
+      AND ri.issue_date <= CURRENT_DATE
+    GROUP BY ira.applied_invoice_id
+),
+advance_alloc AS (
+    SELECT ra.advance_id, SUM(ra.amount) AS allocated
+    FROM congno.receipt_allocations ra
+    JOIN congno.receipts r ON r.id = ra.receipt_id
+    WHERE r.deleted_at IS NULL
+      AND r.status = 'APPROVED'
+      AND r.receipt_date <= CURRENT_DATE
+    GROUP BY ra.advance_id
+),
+invoice_period AS (
+    SELECT i.customer_tax_code,
+           (i.total_amount - COALESCE(a.allocated, 0) - COALESCE(red.allocated, 0)) AS outstanding,
+           i.total_amount AS issued_amount,
+           (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
+    FROM congno.invoices i
+    JOIN congno.customers c ON c.tax_code = i.customer_tax_code
+    LEFT JOIN invoice_alloc a ON a.invoice_id = i.id
+    LEFT JOIN invoice_reduction_alloc red ON red.invoice_id = i.id
+    WHERE i.deleted_at IS NULL
+      AND i.status <> 'VOID'
+      AND i.invoice_type <> 'ADJUSTMENT_REDUCTION'
+      AND (i.issue_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date
+          BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE - INTERVAL '1 day'
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+),
+advance_period AS (
+    SELECT a.customer_tax_code,
+           (a.amount - COALESCE(alloc.allocated, 0)) AS outstanding,
+           a.amount AS issued_amount,
+           (a.advance_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date AS due_date
+    FROM congno.advances a
+    JOIN congno.customers c ON c.tax_code = a.customer_tax_code
+    LEFT JOIN advance_alloc alloc ON alloc.advance_id = a.id
+    WHERE a.deleted_at IS NULL
+      AND a.status IN ('APPROVED','PAID')
+      AND (a.advance_date + (COALESCE(c.payment_terms_days, 0) || ' days')::interval)::date
+          BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE - INTERVAL '1 day'
+      AND (@ownerId IS NULL OR c.accountant_owner_id = @ownerId)
+),
+combined AS (
+    SELECT customer_tax_code, outstanding, issued_amount, due_date FROM invoice_period
+    UNION ALL
+    SELECT customer_tax_code, outstanding, issued_amount, due_date FROM advance_period
+),
+agg AS (
+    SELECT customer_tax_code,
+           SUM(issued_amount) AS total_due,
+           SUM(outstanding) AS outstanding_due
+    FROM combined
+    GROUP BY customer_tax_code
+)
+SELECT COUNT(*) AS count
+FROM agg
+WHERE total_due > 0
+  AND outstanding_due <= total_due * 0.05;
+";
 }

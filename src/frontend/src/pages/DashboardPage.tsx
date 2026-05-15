@@ -485,24 +485,21 @@ export default function DashboardPage() {
   }, [cashflowPoints.length])
 
   const periodTotals = useMemo(() => {
-    const totals = overview?.trend.reduce(
-      (acc, point) => ({
-        invoiced: acc.invoiced + point.invoicedTotal,
-        advanced: acc.advanced + point.advancedTotal,
-        expected: acc.expected + point.expectedTotal,
-        actual: acc.actual + point.actualTotal,
-      }),
-      { invoiced: 0, advanced: 0, expected: 0, actual: 0 },
-    )
-
-    if (!totals) {
-      return { invoiced: 0, advanced: 0, expected: 0, actual: 0, variance: 0, actualRatio: 0 }
+    const m = overview?.thirtyDayMetrics;
+    if (!m) {
+      return { expected: 0, expectedNext: 0, actual: 0, variance: 0, actualRatio: 0, onTimeCustomers: 0 };
     }
-
-    const variance = totals.actual - totals.expected
+    const variance = m.actual30Days - m.expected30DaysPast;
     const actualRatio =
-      totals.expected > 0 ? Math.round((totals.actual / totals.expected) * 1000) / 10 : 0
-    return { ...totals, variance, actualRatio }
+      m.expected30DaysPast > 0 ? Math.round((m.actual30Days / m.expected30DaysPast) * 1000) / 10 : 0;
+    return {
+      expected: m.expected30DaysPast,
+      expectedNext: m.expected30DaysNext,
+      actual: m.actual30Days,
+      variance,
+      actualRatio,
+      onTimeCustomers: m.onTimeCustomers30Days,
+    };
   }, [overview])
 
   const allocationSummary = useMemo<AllocationSummary>(
@@ -555,6 +552,17 @@ export default function DashboardPage() {
           onChangeUnit={setUnit}
           formatMoney={formatMoney}
           formatUnitValue={formatUnitValue}
+          rangeSelector={
+            <label className="field">
+              <select title="Chọn khoảng thời gian cho kỳ biểu đồ" value={range} onChange={(event) => setRange(event.target.value)}>
+                {rangeOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          }
         />
 
         <AllocationDonutCard summary={allocationSummary} onDrilldown={handleAllocationDrilldown} />
@@ -589,16 +597,6 @@ export default function DashboardPage() {
           )}
         </div>
         <div className="dashboard-filters">
-          <label className="field">
-            <span>Kỳ hiển thị</span>
-            <select value={range} onChange={(event) => setRange(event.target.value)}>
-              {rangeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
           <DashboardWidgetSettings
             order={widgetOrder}
             hiddenWidgets={hiddenWidgets}

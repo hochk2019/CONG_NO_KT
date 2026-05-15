@@ -13,4 +13,5 @@ public sealed record DashboardOverviewDto(
     IReadOnlyList<DashboardTopItem> TopOverdueDays,
     IReadOnlyList<DashboardAgingBucketDto> AgingBuckets,
     IReadOnlyList<DashboardAllocationStatusDto> AllocationStatuses,
+    Dashboard30DayMetricsDto ThirtyDayMetrics,
     DateTime LastUpdatedAt);

@@ -6,9 +6,11 @@ type KpiDeltaDirection = 'higher-better' | 'lower-better'
 
 type PeriodTotals = {
   expected: number
+  expectedNext: number
   actual: number
   variance: number
   actualRatio: number
+  onTimeCustomers: number
 }
 
 type DashboardKpiSectionProps = {
@@ -44,9 +46,9 @@ export default function DashboardKpiSection({
         <section className="kpi-stack__group" aria-labelledby="kpi-performance-heading">
           <div className="kpi-stack__header">
             <h3 id="kpi-performance-heading" className="subsection-title">
-              Hiệu suất thu hồi theo kỳ
+              Hiệu suất / Kỳ vọng 30 ngày
             </h3>
-            <p className="muted">So sánh kỳ vọng và thực thu để theo dõi chất lượng thu hồi công nợ.</p>
+            <p className="muted">Đánh giá hiệu suất thu hồi và dự báo trong 30 ngày.</p>
           </div>
           <StatCardSkeleton count={5} className="stat-grid--secondary" />
         </section>
@@ -99,36 +101,36 @@ export default function DashboardKpiSection({
       <section className="kpi-stack__group" aria-labelledby="kpi-performance-heading">
         <div className="kpi-stack__header">
           <h3 id="kpi-performance-heading" className="subsection-title">
-            Hiệu suất thu hồi theo kỳ
+            Hiệu suất / Kỳ vọng 30 ngày
           </h3>
-          <p className="muted">So sánh kỳ vọng và thực thu để theo dõi chất lượng thu hồi công nợ.</p>
+          <p className="muted">Đánh giá hiệu suất thu hồi và dự báo trong 30 ngày.</p>
         </div>
         <div className="stat-grid stat-grid--secondary">
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Thu thực tế trong kỳ</div>
+            <div className="stat-card__label">Thu thực tế 30 ngày</div>
             <div className="stat-card__value">{formatMoney(periodTotals.actual)}</div>
-            <div className="stat-card__meta">Theo kỳ đã chọn</div>
+            <div className="stat-card__meta">Phiếu thu đã duyệt 30 ngày qua</div>
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">KH trả đúng hạn</div>
-            <div className="stat-card__value">{overview?.kpis.onTimeCustomers ?? 0}</div>
-            <div className="stat-card__meta">≥95% khoản đến hạn trong kỳ</div>
+            <div className="stat-card__label">KH trả đúng hạn 30 ngày</div>
+            <div className="stat-card__value">{periodTotals.onTimeCustomers}</div>
+            <div className="stat-card__meta">≥95% khoản đến hạn trong 30 ngày qua</div>
             {renderMomBadge(overview?.kpiMoM?.onTimeCustomers, 'higher-better')}
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Thu kỳ vọng</div>
-            <div className="stat-card__value">{formatMoney(periodTotals.expected)}</div>
-            <div className="stat-card__meta">Invoice + trả hộ</div>
+            <div className="stat-card__label">Thu kỳ vọng 30 ngày tới</div>
+            <div className="stat-card__value">{formatMoney(periodTotals.expectedNext)}</div>
+            <div className="stat-card__meta">Dư nợ đến hạn trong 30 ngày tới</div>
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Chênh lệch (Actual - Expected)</div>
+            <div className="stat-card__label">Chênh lệch thực tế trong 30 ngày</div>
             <div className="stat-card__value">{formatMoney(periodTotals.variance)}</div>
-            <div className="stat-card__meta">{periodTotals.variance >= 0 ? 'Thu vượt kỳ vọng' : 'Thu thấp hơn kỳ vọng'}</div>
+            <div className="stat-card__meta">{periodTotals.variance >= 0 ? 'Thu vượt kỳ vọng 30 ngày' : 'Thu thấp hơn kỳ vọng 30 ngày'}</div>
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">% Actual/Expected</div>
+            <div className="stat-card__label">% Thực tế / Kỳ vọng</div>
             <div className="stat-card__value">{periodTotals.actualRatio}%</div>
-            <div className="stat-card__meta">Hiệu suất thu hồi trong kỳ</div>
+            <div className="stat-card__meta">Hiệu suất thu hồi trong 30 ngày qua</div>
           </div>
         </div>
       </section>

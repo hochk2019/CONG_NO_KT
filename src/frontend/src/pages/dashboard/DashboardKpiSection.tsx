@@ -31,6 +31,23 @@ export default function DashboardKpiSection({
   renderMomBadge,
   formatMoney,
 }: DashboardKpiSectionProps) {
+  const kpis = overview?.kpis ?? {
+    totalOutstanding: 0,
+    outstandingInvoice: 0,
+    outstandingAdvance: 0,
+    unallocatedReceiptsAmount: 0,
+    unallocatedReceiptsCount: 0,
+    overdueTotal: 0,
+    overdueCustomers: 0,
+  }
+  const actual = periodTotals.actual
+  const expected = periodTotals.expected
+  const openDebt = Math.max(0, expected - actual)
+  const overdue = kpis.overdueTotal || 0
+  const dueToday = Math.max(0, openDebt - overdue)
+
+  const targetTooltip = `Tổng khối lượng nợ cần xử lý:\n• Dư nợ tồn đọng hiện tại: ${formatMoney(openDebt)}\n   - Đến hạn hôm nay: ${formatMoney(dueToday)}\n   - Đang quá hạn: ${formatMoney(overdue)}\n• Đã thu thành công 30 ngày qua: ${formatMoney(actual)}`
+
   if (isLoading) {
     return (
       <section className="kpi-stack" aria-label="Đang tải chỉ số KPI" role="status">
@@ -57,10 +74,10 @@ export default function DashboardKpiSection({
   }
 
   return (
-    <section className="kpi-stack">
-      <section className="kpi-stack__group" aria-labelledby="kpi-overview-heading">
+    <section className="kpi-stack" aria-label="Chỉ số KPI chính">
+      <section className="kpi-stack__group" aria-labelledby="kpi-overview-heading-loaded">
         <div className="kpi-stack__header">
-          <h3 id="kpi-overview-heading" className="subsection-title">
+          <h3 id="kpi-overview-heading-loaded" className="subsection-title">
             Công nợ tổng quan
           </h3>
           <p className="muted">Tập trung vào quy mô dư nợ, quá hạn và trạng thái phân bổ phiếu thu.</p>
@@ -68,48 +85,70 @@ export default function DashboardKpiSection({
         <div className="stat-grid stat-grid--primary">
           <div className="stat-card">
             <div className="stat-card__label">Tổng dư công nợ</div>
-            <div className="stat-card__value">{formatMoney(overview?.kpis.totalOutstanding ?? 0)}</div>
+            <div className="stat-card__value">{formatMoney(kpis.totalOutstanding)}</div>
             <div className="stat-card__meta">Gồm hóa đơn + trả hộ</div>
             {renderMomBadge(overview?.kpiMoM?.totalOutstanding, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Dư hóa đơn</div>
-            <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingInvoice ?? 0)}</div>
+            <div className="stat-card__value">{formatMoney(kpis.outstandingInvoice)}</div>
             <div className="stat-card__meta">Chưa phân bổ hết</div>
             {renderMomBadge(overview?.kpiMoM?.outstandingInvoice, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Dư trả hộ</div>
-            <div className="stat-card__value">{formatMoney(overview?.kpis.outstandingAdvance ?? 0)}</div>
+            <div className="stat-card__value">{formatMoney(kpis.outstandingAdvance)}</div>
             <div className="stat-card__meta">Khoản trả hộ còn lại</div>
             {renderMomBadge(overview?.kpiMoM?.outstandingAdvance, 'lower-better')}
           </div>
           <div className="stat-card">
             <div className="stat-card__label">Đã thu chưa phân bổ</div>
-            <div className="stat-card__value">{formatMoney(overview?.kpis.unallocatedReceiptsAmount ?? 0)}</div>
-            <div className="stat-card__meta">{overview?.kpis.unallocatedReceiptsCount ?? 0} phiếu thu treo</div>
+            <div className="stat-card__value">{formatMoney(kpis.unallocatedReceiptsAmount)}</div>
+            <div className="stat-card__meta">
+              {kpis.unallocatedReceiptsCount} phiếu thu treo
+            </div>
             {renderMomBadge(overview?.kpiMoM?.unallocatedReceiptsAmount, 'lower-better')}
           </div>
-          <div className={`stat-card${(overview?.kpis.overdueTotal ?? 0) > 0 ? ' stat-card--danger' : ''}`}>
+          <div className="stat-card stat-card--danger">
             <div className="stat-card__label">Quá hạn</div>
-            <div className="stat-card__value">{formatMoney(overview?.kpis.overdueTotal ?? 0)}</div>
-            <div className="stat-card__meta">{overview?.kpis.overdueCustomers ?? 0} khách hàng đang quá hạn</div>
+            <div className="stat-card__value">{formatMoney(kpis.overdueTotal)}</div>
+            <div className="stat-card__meta">
+              {kpis.overdueCustomers} khách hàng đang quá hạn
+            </div>
             {renderMomBadge(overview?.kpiMoM?.overdueTotal, 'lower-better')}
           </div>
         </div>
       </section>
-      <section className="kpi-stack__group" aria-labelledby="kpi-performance-heading">
+      <section className="kpi-stack__group" aria-labelledby="kpi-performance-heading-loaded">
         <div className="kpi-stack__header">
-          <h3 id="kpi-performance-heading" className="subsection-title">
+          <h3 id="kpi-performance-heading-loaded" className="subsection-title">
             Hiệu suất / Kỳ vọng 30 ngày
           </h3>
           <p className="muted">Đánh giá hiệu suất thu hồi và dự báo trong 30 ngày.</p>
         </div>
         <div className="stat-grid stat-grid--secondary">
+          <div className="stat-card stat-card--secondary" title={targetTooltip}>
+            <div className="stat-card__label">Mục tiêu thu 30 ngày qua</div>
+            <div className="stat-card__value">{formatMoney(periodTotals.expected)}</div>
+            <div className="stat-card__meta">Rê chuột để xem chi tiết</div>
+          </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Thu thực tế 30 ngày</div>
+            <div className="stat-card__label">Đã thu 30 ngày qua</div>
             <div className="stat-card__value">{formatMoney(periodTotals.actual)}</div>
             <div className="stat-card__meta">Phiếu thu đã duyệt 30 ngày qua</div>
+          </div>
+          <div 
+            className="stat-card stat-card--secondary" 
+            title={`Hiệu suất thu hồi 30 ngày qua:\n• Mục tiêu cần thu: ${formatMoney(periodTotals.expected)}\n• Thực tế đã thu: ${formatMoney(periodTotals.actual)}\n--------------------------\nThực thu so với mục tiêu: ${periodTotals.variance >= 0 ? '+' : ''}${formatMoney(periodTotals.variance)}`}
+          >
+            <div className="stat-card__label">Hiệu suất hoàn thành mục tiêu</div>
+            <div className="stat-card__value">
+              {periodTotals.actualRatio}% 
+              <span className={`kpi-variance--${periodTotals.variance >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '0.8em', marginLeft: '8px', fontWeight: 'normal' }}>
+                ({periodTotals.variance >= 0 ? '+' : ''}{formatMoney(periodTotals.variance)})
+              </span>
+            </div>
+            <div className="stat-card__meta">Rê chuột để xem chi tiết</div>
           </div>
           <div className="stat-card stat-card--secondary">
             <div className="stat-card__label">KH trả đúng hạn 30 ngày</div>
@@ -118,19 +157,9 @@ export default function DashboardKpiSection({
             {renderMomBadge(overview?.kpiMoM?.onTimeCustomers, 'higher-better')}
           </div>
           <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Thu kỳ vọng 30 ngày tới</div>
+            <div className="stat-card__label">Mục tiêu cần thu 30 ngày tới</div>
             <div className="stat-card__value">{formatMoney(periodTotals.expectedNext)}</div>
-            <div className="stat-card__meta">Dư nợ đến hạn trong 30 ngày tới</div>
-          </div>
-          <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">Chênh lệch thực tế trong 30 ngày</div>
-            <div className="stat-card__value">{formatMoney(periodTotals.variance)}</div>
-            <div className="stat-card__meta">{periodTotals.variance >= 0 ? 'Thu vượt kỳ vọng 30 ngày' : 'Thu thấp hơn kỳ vọng 30 ngày'}</div>
-          </div>
-          <div className="stat-card stat-card--secondary">
-            <div className="stat-card__label">% Thực tế / Kỳ vọng</div>
-            <div className="stat-card__value">{periodTotals.actualRatio}%</div>
-            <div className="stat-card__meta">Hiệu suất thu hồi trong 30 ngày qua</div>
+            <div className="stat-card__meta">Dư nợ sẽ đến hạn trong 30 ngày tới</div>
           </div>
         </div>
       </section>
